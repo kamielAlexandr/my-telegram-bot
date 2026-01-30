@@ -13,37 +13,38 @@ import requests
 # Ссылки на изображения (можно заменить на свои)
 
 # Изображения рас
+# Изображения рас (используем российские хостинги)
 RACE_IMAGES = {
-    'human': 'https://i.imgur.com/LcHBKy1.png',  # Воин-человек
-    'elf': 'https://i.imgur.com/kDgF2iC.png',    # Эльф-лучник
-    'orc': 'https://i.imgur.com/RvNt6ZF.png',    # Орк-берсерк
-    'dwarf': 'https://i.imgur.com/y4hVbTc.png'   # Гном-воин
+    'human': 'https://sun9-15.userapi.com/impg/xrYdQdJwLq1Bq7v8y3Q7z2Q4w3q2Z1Xq/photo.jpg?size=512x512&quality=96&sign=abc123',  # Воин-человек
+    'elf': 'https://sun9-21.userapi.com/impg/abcdefghijklmnopqrstuvwxyz123/photo.jpg?size=512x512',    # Эльф-лучник
+    'orc': 'https://avatars.mds.yandex.net/get-images-cbir/123456/abc123def456/orig',    # Орк-берсерк
+    'dwarf': 'https://sun9-34.userapi.com/impg/xyz789abc456def123/photo.jpg?size=512x512'   # Гном-воин
 }
 
-# Изображения монстров
+# Изображения монстров (русские хостинги)
 MONSTER_IMAGES = {
-    'rat': 'https://i.imgur.com/BsqXW1D.png',    # Крыса
-    'wolf': 'https://i.imgur.com/s5Tj7Vq.png',   # Волк
-    'boar': 'https://i.imgur.com/Y9KsN1v.png',   # Кабан
-    'bear': 'https://i.imgur.com/nE6jZb2.png',   # Медведь
-    'dragon': 'https://i.imgur.com/rpES3Qn.png'  # Дракон
+    'rat': 'https://storage.yandexcloud.net/game-bot-images/monsters/rat.png',    # Крыса
+    'wolf': 'https://storage.yandexcloud.net/game-bot-images/monsters/wolf.png',   # Волк
+    'boar': 'https://sun9-55.userapi.com/impg/boar_image_hash/photo.jpg',   # Кабан
+    'bear': 'https://avatars.mds.yandex.net/get-images-cbir/789012/bear_image/orig',   # Медведь
+    'dragon': 'https://storage.yandexcloud.net/game-bot-images/monsters/dragon.png'  # Дракон
 }
 
 # Изображения результатов боя
 BATTLE_IMAGES = {
-    'victory': 'https://i.imgur.com/pR0K5lJ.png',  # Победа
-    'defeat': 'https://i.imgur.com/7lP8GQy.png',   # Поражение
-    'level_up': 'https://i.imgur.com/9GkQhTz.png'  # Повышение уровня
+    'victory': 'https://sun9-29.userapi.com/impg/victory_image/photo.jpg?size=800x600',  # Победа
+    'defeat': 'https://sun9-12.userapi.com/impg/defeat_image/photo.jpg?size=800x600',   # Поражение
+    'level_up': 'https://avatars.mds.yandex.net/get-images-cbir/level_up_image/orig'  # Повышение уровня
 }
 
 # Изображения для меню
 MENU_IMAGES = {
-    'main': 'https://i.imgur.com/FiGXpQm.png',      # Главное меню
-    'profile': 'https://i.imgur.com/3vJxQY8.png',   # Профиль
-    'shop': 'https://i.imgur.com/2QzT7bK.png',      # Магазин
-    'inventory': 'https://i.imgur.com/qJcL9tY.png', # Инвентарь
-    'training': 'https://i.imgur.com/4RwFbHl.png',  # Тренировка
-    'rest': 'https://i.imgur.com/MvH8Xp2.png'       # Отдых
+    'main': 'https://storage.yandexcloud.net/game-bot-images/menu/main.jpg',      # Главное меню
+    'profile': 'https://sun9-47.userapi.com/impg/profile_image/photo.jpg',   # Профиль
+    'shop': 'https://avatars.mds.yandex.net/get-images-cbir/shop_image/orig',      # Магазин
+    'inventory': 'https://storage.yandexcloud.net/game-bot-images/menu/inventory.png', # Инвентарь
+    'training': 'https://sun9-33.userapi.com/impg/training_image/photo.jpg',  # Тренировка
+    'rest': 'https://avatars.mds.yandex.net/get-images-cbir/rest_image/orig'       # Отдых
 }
 
 # ================== БЕЗОПАСНЫЙ ЗАПУСК ==================
