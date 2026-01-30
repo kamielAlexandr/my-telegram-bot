@@ -566,7 +566,7 @@ def start_command(message):
 def help_command(message):
     """Обработчик команды /help"""
     help_text = """
-🎮 *Прокачка Героя* - RPG игра в Telegram!
+🎮 *Hero's Path* - RPG игра в Telegram!
 
 *Основные возможности:*
 ⚔️ *Охота* - сражайтесь с монстрами, получайте опыт и золото (макс. 5 раз в день)
@@ -1252,7 +1252,7 @@ def show_stats(message):
 # ================== ЗАПУСК БОТА ==================
 def main():
     print("=" * 50)
-    print("🎮 БОТ 'ПРОКАЧКА ГЕРОЯ' ЗАПУЩЕН")
+    print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print(f"🤖 Используется SQLite база данных")
     print("=" * 50)
     
