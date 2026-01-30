@@ -33,8 +33,16 @@ logger = logging.getLogger(__name__)
 # Получаем токен из переменных окружения Replit
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-bot = telebot.TeleBot(BOT_TOKEN)
 
+# КРИТИЧЕСКИ ВАЖНО: если токена нет, бот должен остановиться с понятной ошибкой
+if BOT_TOKEN is None or BOT_TOKEN == "":
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения 'BOT_TOKEN' не найдена или пуста.")
+    print("   Убедитесь, что вы добавили её в настройки проекта Railway (вкладка Variables).")
+    exit(1)  # Завершаем выполнение с кодом ошибки
+
+# Если мы здесь, токен есть
+print("✅ Токен бота успешно загружен из переменных окружения.")
+bot = telebot.TeleBot(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ ==================
 def load_data():
