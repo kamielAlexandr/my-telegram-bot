@@ -15,10 +15,10 @@ import requests
 # Изображения рас
 # Изображения рас (используем российские хостинги)
 RACE_IMAGES = {
-    'human': 'https://i126.fastpic.org/thumb/2026/0130/70/_e672ecd64ab4d42f7fc8aa82e9611a70.jpeg',  # Воин-человек
-    'elf': 'https://i126.fastpic.org/thumb/2026/0130/d1/_bff1d098aa6e666bbb088bd7db9bbfd1.jpeg',    # Эльф-лучник
-    'orc': 'https://i126.fastpic.org/thumb/2026/0130/74/_519f46688034bf7fe7ecef7bab2ccd74.jpeg',    # Орк-берсерк
-    'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/ae/_8dc2ca25215ff9ce15c3e662cfd514ae.jpeg'   # Гном-воин
+    'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',  # Воин-человек
+    'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',    # Эльф-лучник
+    'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',    # Орк-берсерк
+    'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg'   # Гном-воин
 }
 
 # Изображения монстров (русские хостинги)
