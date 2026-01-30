@@ -31,32 +31,9 @@ try:
 
 # ================== НАСТРОЙКИ ==================
 # Получаем токен из переменных окружения Replit
+
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-
-# Если токена нет в окружении, попробуем другой способ
-if not BOT_TOKEN:
-    try:
-        # Читаем из файла .env (если есть)
-        with open('.env', 'r') as f:
-            for line in f:
-                if line.startswith('BOT_TOKEN='):
-                    BOT_TOKEN = line.strip().split('=', 1)[1]
-    except:
-        pass
-
-if not BOT_TOKEN:
-    print("❌ ОШИБКА: BOT_TOKEN не найден!")
-    print("Добавьте токен в Secrets (⚙️ Tools → Secrets)")
-    print("Key: BOT_TOKEN, Value: ваш_токен_бота")
-    # Можно использовать временный токен для теста
-    BOT_TOKEN = '8321608631:AAH-CF9to3DAt74uXOH32Gqr2oNDzehzQHc'  # ⚠️ ЗАМЕНИТЕ!
-
 bot = telebot.TeleBot(BOT_TOKEN)
-
-#BOT_TOKEN = '8321608631:AAH-CF9to3DAt74uXOH32Gqr2oNDzehzQHc'
-DATA_FILE = 'users_data.json'
-
-#bot = telebot.TeleBot(BOT_TOKEN)
 
 
 # ================== БАЗА ДАННЫХ ==================
