@@ -490,6 +490,29 @@ class Database:
         except Exception as e:
             print(f"❌ Ошибка при регенерации здоровья: {e}")
             return False, 0
+    
+    def get_top_players(self, limit=5):
+        """Получение топа игроков по уровню и опыту"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT character_name, race, level, exp, coins, attack, defense
+                FROM users 
+                WHERE character_name IS NOT NULL 
+                ORDER BY level DESC, exp DESC, coins DESC
+                LIMIT ?
+            ''', (limit,))
+            
+            top_players = cursor.fetchall()
+            return [dict(player) for player in top_players]
+        except Exception as e:
+            print(f"❌ Ошибка при получении топа игроков: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
 
 # Создаем экземпляр базы данных
 db = Database()
@@ -1174,6 +1197,9 @@ def show_stats(message):
         cursor.execute('SELECT race, COUNT(*) as count FROM users WHERE race IS NOT NULL GROUP BY race')
         races = cursor.fetchall()
         
+        # Получаем топ 5 игроков
+        top_players = db.get_top_players(5)
+        
         race_stats = ""
         for race in races:
             race_name = {
@@ -1183,6 +1209,23 @@ def show_stats(message):
                 'dwarf': '🧙 Гномы'
             }.get(race['race'], race['race'])
             race_stats += f"{race_name}: {race['count']}\n"
+        
+        # Формируем текст топа игроков
+        top_players_text = ""
+        if top_players:
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+            for i, player in enumerate(top_players):
+                race_emoji = {
+                    'human': '👨',
+                    'elf': '🧝', 
+                    'orc': '👹',
+                    'dwarf': '🧙'
+                }.get(player.get('race', 'human'), '👤')
+                
+                medal = medals[i] if i < len(medals) else f"{i+1}."
+                top_players_text += f"{medal} {race_emoji} {player['character_name']} - {player['level']} ур. ({player['coins']}💰)\n"
+        else:
+            top_players_text = "Пока нет игроков в топе\n"
         
         stats_text = f"""
 📊 *СТАТИСТИКА СЕРВЕРА*
@@ -1194,6 +1237,8 @@ def show_stats(message):
 *Распределение рас:*
 {race_stats}
 
+🏆 *ТОП-5 ИГРОКОВ:*
+{top_players_text}
 🎮 Бот работает стабильно!
         """
         
@@ -1343,13 +1388,13 @@ def hunt_monster(call, monster_type):
 ❤️ Осталось здоровья: {player_health}
         """
         
-       # if level_up:
-           # result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️"
-            # Отправляем изображение повышения уровня
-        #    send_battle_result_image(call.message.chat.id, 'level_up', result_text)
-    #    else:
-            # Отправляем изображение победы
-       #     send_battle_result_image(call.message.chat.id, 'victory', result_text)
+        # if level_up:
+        #     result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️"
+        #     # Отправляем изображение повышения уровня
+        #     send_battle_result_image(call.message.chat.id, 'level_up', result_text)
+        # else:
+        #     # Отправляем изображение победы
+        #     send_battle_result_image(call.message.chat.id, 'victory', result_text)
         
         # Добавляем лог боя
         battle_log_text = "\n\n*📜 ХРОНИКА БИТВЫ:*\n" + "\n".join(battle_log[:6])
