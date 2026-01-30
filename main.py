@@ -6,6 +6,37 @@ import datetime
 import logging
 import sys
 import random
+import time
+import requests
+
+# ================== БЕЗОПАСНЫЙ ЗАПУСК ==================
+def safe_bot_start(token):
+    """Безопасный запуск бота с предотвращением конфликтов"""
+    
+    # 1. Удаляем все вебхуки
+    try:
+        delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true"
+        response = requests.get(delete_url, timeout=10)
+        print(f"🗑️ Удаление вебхуков: {response.status_code}")
+        time.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Ошибка при удалении вебхуков: {e}")
+    
+    # 2. Проверяем соединение с Telegram API
+    try:
+        test_url = f"https://api.telegram.org/bot{token}/getMe"
+        response = requests.get(test_url, timeout=10)
+        if response.status_code == 200:
+            print("✅ Соединение с Telegram API установлено")
+        else:
+            print(f"❌ Ошибка соединения с Telegram API: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Ошибка проверки соединения: {e}")
+    
+    # 3. Создаем экземпляр бота
+    bot = telebot.TeleBot(token)
+    
+    return bot
 
 # ================== НАСТРОЙКИ ==================
 logging.basicConfig(
@@ -13,6 +44,22 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+print("=" * 60)
+print("🚀 ПОДГОТОВКА К ЗАПУСКУ БОТА")
+print("=" * 60)
+
+# Получаем токен
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+if not BOT_TOKEN:
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения 'BOT_TOKEN' не найдена.")
+    exit(1)
+
+print(f"✅ Токен бота получен (длина: {len(BOT_TOKEN)} символов)")
+
+# Безопасный запуск бота
+bot = safe_bot_start(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ SQLite ==================
 class Database:
@@ -204,7 +251,7 @@ class Database:
             print(f"❌ Ошибка при добавлении монет: {e}")
             return False
     
-    def get_race_description(race):
+    def get_race_description(self, race):
         """Получить описание расы"""
         descriptions = {
             'human': "👨 *Человек* - ⚖️ Сбалансированная раса\n+2 к атаке, +2 к защите, +20 к здоровью",
@@ -213,22 +260,9 @@ class Database:
             'dwarf': "🧙 *Гном* - 🛡️ Непробиваемые защитники\n+3 к атаке, +8 к защите, +25 к здоровью"
         }
         return descriptions.get(race, "Неизвестная раса")
+
 # Создаем экземпляр базы данных
 db = Database()
-
-# ================== НАСТРОЙКИ БОТА ==================
-print("=== Railway Environment Debug ===")
-print(f"Python version: {sys.version}")
-print(f"Current directory: {os.getcwd()}")
-
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-
-if not BOT_TOKEN:
-    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения 'BOT_TOKEN' не найдена.")
-    exit(1)
-
-print(f"✅ Токен бота успешно загружен. Длина: {len(BOT_TOKEN)} символов")
-bot = telebot.TeleBot(BOT_TOKEN)
 
 # Хранилище временных данных для создания персонажа
 temp_user_data = {}
@@ -253,7 +287,7 @@ def get_race_keyboard():
     btn2 = types.InlineKeyboardButton('🧝 Эльф', callback_data='race_elf')
     btn3 = types.InlineKeyboardButton('👹 Орк', callback_data='race_orc')
     btn4 = types.InlineKeyboardButton('🧙 Гном', callback_data='race_dwarf')
-    markup.add(btn1, btn2, btn3, btn4)  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
+    markup.add(btn1, btn2, btn3, btn4)
     return markup
 
 def get_hunt_keyboard():
@@ -265,7 +299,7 @@ def get_hunt_keyboard():
     btn4 = types.InlineKeyboardButton('🏆 Босс', callback_data='hunt_boss')
     btn5 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
     markup.add(btn1, btn2, btn3, btn4)
-    markup.add(btn5)  # Отдельный ряд для кнопки "Назад"
+    markup.add(btn5)
     return markup
 
 def get_training_keyboard():
@@ -276,9 +310,8 @@ def get_training_keyboard():
     btn3 = types.InlineKeyboardButton('❤️ Выносливость', callback_data='train_health')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
     markup.add(btn1, btn2, btn3)
-    markup.add(btn4)  # Отдельный ряд для кнопки "Назад"
+    markup.add(btn4)
     return markup
-
 
 def get_shop_keyboard():
     """Клавиатура магазина"""
@@ -288,7 +321,7 @@ def get_shop_keyboard():
     btn3 = types.InlineKeyboardButton('❤️ Зелье здоровья', callback_data='buy_potion')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
     markup.add(btn1, btn2, btn3)
-    markup.add(btn4)  # Отдельный ряд для кнопки "Назад"
+    markup.add(btn4)
     return markup
 
 # ================== ОБРАБОТЧИКИ КОМАНД ==================
@@ -393,21 +426,27 @@ def handle_text(message):
             temp_user_data[user_id]['character_name'] = character_name
             temp_user_data[user_id]['step'] = 'waiting_race'
             
-            # Предлагаем выбрать расу
+            # Создаем сообщение с кнопками
             race_text = f"""
-Отлично, {character_name}! Теперь выберите расу:
+Отлично, *{character_name}*! 
+
+*Выберите расу своего персонажа:*
 
 {db.get_race_description('human')}
+
 {db.get_race_description('elf')}
+
 {db.get_race_description('orc')}
+
 {db.get_race_description('dwarf')}
 
-Выберите расу с помощью кнопок ниже:
-            """
+Нажмите на кнопку ниже, чтобы выбрать расу:
+"""
             
             bot.send_message(
                 message.chat.id,
                 race_text,
+                parse_mode='Markdown',
                 reply_markup=get_race_keyboard()
             )
             return
@@ -508,6 +547,7 @@ def callback_handler(call):
                 )
             else:
                 bot.answer_callback_query(call.id, "❌ Ошибка при создании персонажа!")
+        
         elif call.data.startswith('hunt_'):
             # Охота
             difficulty = call.data.replace('hunt_', '')
@@ -559,7 +599,7 @@ def show_profile(message):
     health_bar = "❤️" * int(health_percent / 20) + "♡" * (5 - int(health_percent / 20))
     
     profile_text = f"""
-📊 *ПРОФИЛЬ ПЕРСОНАЖА*
+📊 *ПРОФИЛЬ ПЕРОНАЖА*
 
 👤 *{user_data['character_name']}*
 🏹 *Раса:* {user_data['race'].capitalize() if user_data['race'] else 'Не выбрана'}
@@ -661,7 +701,6 @@ def show_shop_menu(message):
         reply_markup=get_shop_keyboard()
     )
 
-# ================== ИГРОВЫЕ ФУНКЦИИ ==================
 def hunt_monster(call, difficulty):
     """Охота на монстра"""
     user_id = call.from_user.id
@@ -925,7 +964,11 @@ def main():
         print(f"📝 Имя бота: {bot_info.first_name}")
         
         print("🔄 Бот запускает polling...")
-        bot.infinity_polling()
+        bot.infinity_polling(
+            skip_pending=True,
+            timeout=20,
+            long_polling_timeout=5
+        )
         
     except Exception as e:
         print(f"❌ Критическая ошибка при запуске бота: {e}")
