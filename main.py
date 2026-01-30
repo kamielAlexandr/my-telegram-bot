@@ -548,7 +548,7 @@ def start_command(message):
         )
         
         welcome_text = """
-🎮 Добро пожаловать в игру "Прокачка Героя"!
+🎮 Добро пожаловать в игру "Hero's Path"!
 
 Для начала нужно создать персонажа.
 Как будут звать вашего героя?
@@ -1018,8 +1018,8 @@ def hunt_monster(call, monster_type):
 ❤️ Осталось здоровья: {player_health}
         """
         
-        if level_up:
-            result_text += "\n🎊 *Вы повысили уровень! Получено 1 очко навыка!*"
+      #  if level_up:
+        #    result_text += "\n🎊 *Вы повысили уровень! Получено 1 очко навыка!*"
         
         # Добавляем лог боя
         result_text += "\n\n*Ход боя:*\n" + "\n".join(battle_log[:6])
