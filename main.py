@@ -15,10 +15,10 @@ import requests
 # Изображения рас
 # Изображения рас (используем российские хостинги)
 RACE_IMAGES = {
-    'human': 'https://2.downloader.disk.yandex.ru/preview/128dea6e66b94eea605f16b6378a4d58dfea0d437422c402da497555b7fef08e/inf/Linyb19LRVTmKprFQcwIOxK6HhfH4bVND758m6UhBinWQEj8fZoVrOvxnp5zEoEp05AU2YAouvMC3h2dILX2DQ%3D%3D?uid=2123653878&filename=Human.png&disposition=inline&hash=&limit=0&content_type=image%2Fpng&owner_uid=2123653878&tknv=v3&size=1351x641',  # Воин-человек
-    'elf': 'https://3.downloader.disk.yandex.ru/preview/60cb728456f8c4dad249a1e2604bd51eaa1d7e698d70c687a34ba17af564ff80/inf/CJyGE5iml8HdtJtgdgS01J7_figPO07FHUi-osayHitr0XdCLug6gHModehTjncm_C3Rr8-bsbmE52exRHyIJQ%3D%3D?uid=2123653878&filename=Elfi.png&disposition=inline&hash=&limit=0&content_type=image%2Fpng&owner_uid=2123653878&tknv=v3&size=1351x641',    # Эльф-лучник
-    'orc': 'https://4.downloader.disk.yandex.ru/preview/25a54337d6fefa4e4c70ba29c251fa35bc98167cda7f378fba70e9f127f903eb/inf/v_ES7KvM8PMZw5F6vVBM2FhwBqMCDI8-Lk9Me2t--98-vJYS-Ws34kEwibB0fERmAn71vLCWcAqswzy-ckBIfg%3D%3D?uid=2123653878&filename=Orc.png&disposition=inline&hash=&limit=0&content_type=image%2Fpng&owner_uid=2123653878&tknv=v3&size=1351x641',    # Орк-берсерк
-    'dwarf': 'https://4.downloader.disk.yandex.ru/preview/47119b4315211992044ce00783c4c3034813a52efac0988dde41b46ad9baac5a/inf/DELDESPDkUbpkLFieVVrqxK6HhfH4bVND758m6UhBincTNA8T_aqkQw8VS0OL0JD7Gchy1sg5L2CjJuu_2QGpw%3D%3D?uid=2123653878&filename=Gnom.png&disposition=inline&hash=&limit=0&content_type=image%2Fpng&owner_uid=2123653878&tknv=v3&size=1351x641'   # Гном-воин
+    'human': 'https://fastpic.org/view/126/2026/0130/_519f46688034bf7fe7ecef7bab2ccd74.png.html',  # Воин-человек
+    'elf': 'https://fastpic.org/view/126/2026/0130/_bff1d098aa6e666bbb088bd7db9bbfd1.png.html',    # Эльф-лучник
+    'orc': 'https://fastpic.org/view/126/2026/0130/_8dc2ca25215ff9ce15c3e662cfd514ae.png.html',    # Орк-берсерк
+    'dwarf': 'https://fastpic.org/view/126/2026/0130/_e672ecd64ab4d42f7fc8aa82e9611a70.png.html'   # Гном-воин
 }
 
 # Изображения монстров (русские хостинги)
