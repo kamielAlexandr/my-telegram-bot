@@ -204,15 +204,15 @@ class Database:
             print(f"❌ Ошибка при добавлении монет: {e}")
             return False
     
-    def get_race_description(self, race):
-        """Получить описание расы"""
-        descriptions = {
-            'human': "⚖️ Сбалансированная раса\n+2 к атаке, +2 к защите, +20 к здоровью",
-            'elf': "🏹 Мастера стрельбы\n+5 к атаке, +10 к здоровью",
-            'orc': "⚔️ Сильные воины\n+8 к атаке, +3 к защите, +30 к здоровью",
-            'dwarf': "🛡️ Непробиваемые защитники\n+3 к атаке, +8 к защите, +25 к здоровью"
-        }
-        return descriptions.get(race, "Неизвестная раса")
+    def get_race_description(race):
+    """Получить описание расы"""
+    descriptions = {
+        'human': "👨 *Человек* - ⚖️ Сбалансированная раса\n+2 к атаке, +2 к защите, +20 к здоровью",
+        'elf': "🧝 *Эльф* - 🏹 Мастера стрельбы\n+5 к атаке, +10 к здоровью",
+        'orc': "👹 *Орк* - ⚔️ Сильные воины\n+8 к атаке, +3 к защите, +30 к здоровью",
+        'dwarf': "🧙 *Гном* - 🛡️ Непробиваемые защитники\n+3 к атаке, +8 к защите, +25 к здоровью"
+    }
+    return descriptions.get(race, "Неизвестная раса")
 
 # Создаем экземпляр базы данных
 db = Database()
@@ -254,6 +254,7 @@ def get_race_keyboard():
     btn2 = types.InlineKeyboardButton('🧝 Эльф', callback_data='race_elf')
     btn3 = types.InlineKeyboardButton('👹 Орк', callback_data='race_orc')
     btn4 = types.InlineKeyboardButton('🧙 Гном', callback_data='race_dwarf')
+    markup.add(btn1, btn2, btn3, btn4)  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
     return markup
 
 def get_hunt_keyboard():
@@ -264,7 +265,8 @@ def get_hunt_keyboard():
     btn3 = types.InlineKeyboardButton('🐉 Сложная охота', callback_data='hunt_hard')
     btn4 = types.InlineKeyboardButton('🏆 Босс', callback_data='hunt_boss')
     btn5 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
-    markup.add(btn1, btn2, btn3, btn4, btn5)
+    markup.add(btn1, btn2, btn3, btn4)
+    markup.add(btn5)  # Отдельный ряд для кнопки "Назад"
     return markup
 
 def get_training_keyboard():
@@ -274,8 +276,10 @@ def get_training_keyboard():
     btn2 = types.InlineKeyboardButton('🛡️ Защита', callback_data='train_defense')
     btn3 = types.InlineKeyboardButton('❤️ Выносливость', callback_data='train_health')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
-    markup.add(btn1, btn2, btn3, btn4)
+    markup.add(btn1, btn2, btn3)
+    markup.add(btn4)  # Отдельный ряд для кнопки "Назад"
     return markup
+
 
 def get_shop_keyboard():
     """Клавиатура магазина"""
@@ -284,7 +288,8 @@ def get_shop_keyboard():
     btn2 = types.InlineKeyboardButton('🛡️ Щит (+5 защиты)', callback_data='buy_shield')
     btn3 = types.InlineKeyboardButton('❤️ Зелье здоровья', callback_data='buy_potion')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
-    markup.add(btn1, btn2, btn3, btn4)
+    markup.add(btn1, btn2, btn3)
+    markup.add(btn4)  # Отдельный ряд для кнопки "Назад"
     return markup
 
 # ================== ОБРАБОТЧИКИ КОМАНД ==================
@@ -442,7 +447,13 @@ def callback_handler(call):
         if call.data.startswith('race_'):
             # Выбор расы
             race = call.data.replace('race_', '')
-            character_name = temp_user_data[user_id]['character_name']
+            
+            # Проверяем, есть ли данные пользователя
+            if user_id not in temp_user_data:
+                bot.answer_callback_query(call.id, "❌ Ошибка: данные сессии потеряны. Начните с /start")
+                return
+                
+            character_name = temp_user_data[user_id].get('character_name', 'Герой')
             
             # Завершаем создание персонажа
             if db.complete_character_creation(user_id, character_name, race):
@@ -451,18 +462,20 @@ def callback_handler(call):
                     del temp_user_data[user_id]
                 
                 # Показываем приветствие
-                race_name = {
-                    'human': 'Человек',
-                    'elf': 'Эльф',
-                    'orc': 'Орк',
-                    'dwarf': 'Гном'
-                }.get(race, race)
+                race_names = {
+                    'human': '👨 Человек',
+                    'elf': '🧝 Эльф',
+                    'orc': '👹 Орк',
+                    'dwarf': '🧙 Гном'
+                }
+                
+                race_name_display = race_names.get(race, race.capitalize())
                 
                 welcome_text = f"""
 🎉 Персонаж создан!
 
 👤 Имя: {character_name}
-🏹 Раса: {race_name}
+🏹 Раса: {race_name_display}
 
 {db.get_race_description(race)}
 
@@ -470,20 +483,32 @@ def callback_handler(call):
 Используйте меню ниже для управления персонажем.
                 """
                 
-                bot.edit_message_text(
-                    welcome_text,
-                    chat_id,
-                    message_id
-                )
+                # Удаляем старое сообщение с кнопками
+                try:
+                    bot.delete_message(chat_id, message_id)
+                except:
+                    pass
                 
+                # Отправляем новое сообщение
                 bot.send_message(
                     chat_id,
-                    "Главное меню:",
+                    welcome_text,
                     reply_markup=get_main_menu()
+                )
+                
+                # Отправляем подсказку
+                time.sleep(1)
+                bot.send_message(
+                    chat_id,
+                    "🎮 *Используйте кнопки меню для игры!*\n\n"
+                    "⚔️ *Охота* - сражайтесь с монстрами\n"
+                    "🏋️ *Тренировка* - улучшайте характеристики\n"
+                    "🛒 *Магазин* - покупайте снаряжение\n"
+                    "📊 *Профиль* - просматривайте статистику",
+                    parse_mode='Markdown'
                 )
             else:
                 bot.answer_callback_query(call.id, "❌ Ошибка при создании персонажа!")
-        
         elif call.data.startswith('hunt_'):
             # Охота
             difficulty = call.data.replace('hunt_', '')
