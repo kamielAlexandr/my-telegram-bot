@@ -15,19 +15,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 # ================== НАСТРОЙКИ ==================
 # Используем переменную окружения
-try:
-    from flask import Flask
-    from threading import Thread
+#try:
+#   from flask import Flask
+ #   from threading import Thread
+#
+ #   app = Flask('')
 
-    app = Flask('')
+ #   @app.route('/')
+#    def home():
+  #      return "✅ Бот активен! 🎮 Прокачка Героя работает!"
 
-    @app.route('/')
-    def home():
-        return "✅ Бот активен! 🎮 Прокачка Героя работает!"
-
-    def run():
-        app.run(host='0.0.0.0', port=8080)
-
+   # def run():
+    #    app.run(host='0.0.0.0', port=8080)
+#
 
 # ================== НАСТРОЙКИ ==================
 # Получаем токен из переменных окружения Replit
