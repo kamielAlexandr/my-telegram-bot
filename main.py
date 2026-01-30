@@ -13,7 +13,6 @@ import requests
 def safe_bot_start(token):
     """Безопасный запуск бота с предотвращением конфликтов"""
     
-    # 1. Удаляем все вебхуки
     try:
         delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true"
         response = requests.get(delete_url, timeout=10)
@@ -22,20 +21,15 @@ def safe_bot_start(token):
     except Exception as e:
         print(f"⚠️ Ошибка при удалении вебхуков: {e}")
     
-    # 2. Проверяем соединение с Telegram API
     try:
         test_url = f"https://api.telegram.org/bot{token}/getMe"
         response = requests.get(test_url, timeout=10)
         if response.status_code == 200:
             print("✅ Соединение с Telegram API установлено")
-        else:
-            print(f"❌ Ошибка соединения с Telegram API: {response.status_code}")
     except Exception as e:
         print(f"❌ Ошибка проверки соединения: {e}")
     
-    # 3. Создаем экземпляр бота
     bot = telebot.TeleBot(token)
-    
     return bot
 
 # ================== НАСТРОЙКИ ==================
@@ -49,16 +43,12 @@ print("=" * 60)
 print("🚀 ПОДГОТОВКА К ЗАПУСКУ БОТА")
 print("=" * 60)
 
-# Получаем токен
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
-
 if not BOT_TOKEN:
     print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения 'BOT_TOKEN' не найдена.")
     exit(1)
 
 print(f"✅ Токен бота получен (длина: {len(BOT_TOKEN)} символов)")
-
-# Безопасный запуск бота
 bot = safe_bot_start(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ SQLite ==================
@@ -90,13 +80,29 @@ class Database:
                     race TEXT,
                     level INTEGER DEFAULT 1,
                     exp INTEGER DEFAULT 0,
+                    exp_to_next_level INTEGER DEFAULT 100,
+                    skill_points INTEGER DEFAULT 0,
                     coins INTEGER DEFAULT 100,
                     health INTEGER DEFAULT 100,
                     max_health INTEGER DEFAULT 100,
                     attack INTEGER DEFAULT 10,
                     defense INTEGER DEFAULT 5,
+                    daily_hunts INTEGER DEFAULT 0,
+                    last_hunt_date DATE DEFAULT CURRENT_DATE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Таблица инвентаря
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    item_type TEXT,
+                    item_name TEXT,
+                    quantity INTEGER DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             ''')
             
@@ -114,14 +120,9 @@ class Database:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
             cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
             user = cursor.fetchone()
-            
-            if user:
-                return dict(user)
-            return None
-            
+            return dict(user) if user else None
         except Exception as e:
             print(f"❌ Ошибка при получении пользователя: {e}")
             return None
@@ -130,21 +131,18 @@ class Database:
                 conn.close()
     
     def create_user(self, user_id, username="", first_name="", last_name=""):
-        """Создание нового пользователя с базовыми значениями"""
+        """Создание нового пользователя"""
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
             cursor.execute('''
                 INSERT INTO users 
-                (user_id, username, first_name, last_name, level, exp, coins, health, max_health, attack, defense, last_active)
-                VALUES (?, ?, ?, ?, 1, 0, 100, 100, 100, 10, 5, CURRENT_TIMESTAMP)
+                (user_id, username, first_name, last_name, exp_to_next_level) 
+                VALUES (?, ?, ?, ?, 100)
             ''', (user_id, username, first_name, last_name))
-            
             conn.commit()
             print(f"👤 Создан новый пользователь: {user_id}")
             return True
-            
         except Exception as e:
             print(f"❌ Ошибка при создании пользователя: {e}")
             return False
@@ -173,7 +171,6 @@ class Database:
             
             conn.commit()
             return cursor.rowcount > 0
-            
         except Exception as e:
             print(f"❌ Ошибка при обновлении пользователя: {e}")
             return False
@@ -182,9 +179,8 @@ class Database:
                 conn.close()
     
     def complete_character_creation(self, user_id, character_name, race):
-        """Завершение создания персонажа с именем и расой"""
+        """Завершение создания персонажа"""
         try:
-            # Бонусы в зависимости от расы
             race_bonuses = {
                 'human': {'attack': 2, 'defense': 2, 'health': 20},
                 'elf': {'attack': 5, 'defense': 0, 'health': 10},
@@ -201,21 +197,16 @@ class Database:
                     attack=10 + bonus['attack'],
                     defense=5 + bonus['defense'],
                     health=100 + bonus['health'],
-                    max_health=100 + bonus['health']
+                    max_health=100 + bonus['health'],
+                    coins=100
                 )
-            else:
-                return self.update_user(
-                    user_id,
-                    character_name=character_name,
-                    race=race
-                )
-                
+            return self.update_user(user_id, character_name=character_name, race=race)
         except Exception as e:
-            print(f"❌ Ошибка при завершении создания персонажа: {e}")
+            print(f"❌ Ошибка при создании персонажа: {e}")
             return False
     
     def add_exp(self, user_id, exp_amount):
-        """Добавление опыта пользователю с проверкой уровня"""
+        """Добавление опыта и проверка уровня"""
         try:
             user = self.get_user(user_id)
             if not user:
@@ -223,16 +214,31 @@ class Database:
             
             new_exp = user['exp'] + exp_amount
             new_level = user['level']
+            skill_points_gained = 0
             
-            exp_needed = new_level * 100
-            
-            while new_exp >= exp_needed:
-                new_exp -= exp_needed
+            # Проверяем повышение уровня
+            while new_exp >= user['exp_to_next_level']:
+                new_exp -= user['exp_to_next_level']
                 new_level += 1
-                exp_needed = new_level * 100
+                skill_points_gained += 1
+                # Увеличиваем необходимый опыт для следующего уровня
+                exp_to_next = int(100 * (1.5 ** (new_level - 1)))
+                
+                # Обновляем данные внутри цикла
+                self.update_user(
+                    user_id,
+                    level=new_level,
+                    exp=new_exp,
+                    exp_to_next_level=exp_to_next,
+                    skill_points=user['skill_points'] + skill_points_gained
+                )
+                user = self.get_user(user_id)  # Обновляем данные пользователя
             
-            return self.update_user(user_id, exp=new_exp, level=new_level)
+            # Обновляем опыт, если не было повышения уровня
+            if exp_amount > 0 and skill_points_gained == 0:
+                return self.update_user(user_id, exp=new_exp)
             
+            return skill_points_gained > 0
         except Exception as e:
             print(f"❌ Ошибка при добавлении опыта: {e}")
             return False
@@ -244,12 +250,179 @@ class Database:
             if not user:
                 return False
             
-            new_coins = user['coins'] + coins_amount
+            new_coins = max(0, user['coins'] + coins_amount)
             return self.update_user(user_id, coins=new_coins)
-            
         except Exception as e:
             print(f"❌ Ошибка при добавлении монет: {e}")
             return False
+    
+    def can_hunt_today(self, user_id):
+        """Проверка, может ли пользователь охотиться сегодня"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT daily_hunts, last_hunt_date 
+                FROM users 
+                WHERE user_id = ?
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            if not result:
+                return False, 0, 5
+            
+            daily_hunts = result['daily_hunts']
+            last_hunt_date = result['last_hunt_date']
+            today = datetime.date.today().isoformat()
+            
+            # Если последняя охота была не сегодня, сбрасываем счетчик
+            if last_hunt_date != today:
+                self.update_user(user_id, daily_hunts=0, last_hunt_date=today)
+                return True, 0, 5
+            
+            return daily_hunts < 5, daily_hunts, 5
+        except Exception as e:
+            print(f"❌ Ошибка при проверке охоты: {e}")
+            return False, 0, 5
+        finally:
+            if conn:
+                conn.close()
+    
+    def increment_daily_hunts(self, user_id):
+        """Увеличиваем счетчик охот за день"""
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False
+            
+            today = datetime.date.today().isoformat()
+            
+            # Если последняя охота была не сегодня, начинаем с 1
+            if user['last_hunt_date'] != today:
+                return self.update_user(user_id, daily_hunts=1, last_hunt_date=today)
+            
+            return self.update_user(user_id, daily_hunts=user['daily_hunts'] + 1)
+        except Exception as e:
+            print(f"❌ Ошибка при увеличении счетчика охот: {e}")
+            return False
+    
+    def use_skill_point(self, user_id, stat):
+        """Использование очка навыка"""
+        try:
+            user = self.get_user(user_id)
+            if not user or user['skill_points'] < 1:
+                return False
+            
+            improvements = {
+                'attack': {'attack': user['attack'] + 2},
+                'defense': {'defense': user['defense'] + 2},
+                'health': {'max_health': user['max_health'] + 15, 'health': min(user['health'] + 15, user['max_health'] + 15)}
+            }
+            
+            if stat not in improvements:
+                return False
+            
+            improvement = improvements[stat]
+            improvement['skill_points'] = user['skill_points'] - 1
+            
+            return self.update_user(user_id, **improvement)
+        except Exception as e:
+            print(f"❌ Ошибка при использовании очка навыка: {e}")
+            return False
+    
+    def add_to_inventory(self, user_id, item_type, item_name, quantity=1):
+        """Добавление предмета в инвентарь"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Проверяем, есть ли уже такой предмет
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = ? AND item_type = ? AND item_name = ?
+            ''', (user_id, item_type, item_name))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Обновляем количество
+                new_quantity = existing['quantity'] + quantity
+                cursor.execute('''
+                    UPDATE inventory SET quantity = ? 
+                    WHERE id = ?
+                ''', (new_quantity, existing['id']))
+            else:
+                # Добавляем новый предмет
+                cursor.execute('''
+                    INSERT INTO inventory (user_id, item_type, item_name, quantity)
+                    VALUES (?, ?, ?, ?)
+                ''', (user_id, item_type, item_name, quantity))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при добавлении в инвентарь: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_inventory(self, user_id):
+        """Получение инвентаря пользователя"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT item_type, item_name, quantity 
+                FROM inventory 
+                WHERE user_id = ? AND quantity > 0
+                ORDER BY item_type, item_name
+            ''', (user_id,))
+            
+            items = cursor.fetchall()
+            return [dict(item) for item in items]
+        except Exception as e:
+            print(f"❌ Ошибка при получении инвентаря: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+    
+    def use_item(self, user_id, item_type, item_name):
+        """Использование предмета из инвентаря"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Проверяем наличие предмета
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = ? AND item_type = ? AND item_name = ?
+            ''', (user_id, item_type, item_name))
+            
+            item = cursor.fetchone()
+            if not item or item['quantity'] < 1:
+                return False
+            
+            # Уменьшаем количество
+            if item['quantity'] == 1:
+                cursor.execute('DELETE FROM inventory WHERE id = ?', (item['id'],))
+            else:
+                cursor.execute('''
+                    UPDATE inventory SET quantity = quantity - 1 
+                    WHERE id = ?
+                ''', (item['id'],))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при использовании предмета: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
     
     def get_race_description(self, race):
         """Получить описание расы"""
@@ -264,7 +437,7 @@ class Database:
 # Создаем экземпляр базы данных
 db = Database()
 
-# Хранилище временных данных для создания персонажа
+# Хранилище временных данных
 temp_user_data = {}
 
 # ================== КЛАВИАТУРЫ ==================
@@ -273,10 +446,10 @@ def get_main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = types.KeyboardButton('🎮 Профиль')
     btn2 = types.KeyboardButton('⚔️ Охота')
-    btn3 = types.KeyboardButton('🏋️ Тренировка')
-    btn4 = types.KeyboardButton('🛒 Магазин')
-    btn5 = types.KeyboardButton('📊 Статистика')
-    btn6 = types.KeyboardButton('ℹ️ Помощь')
+    btn3 = types.KeyboardButton('🏋️ Улучшения')
+    btn4 = types.KeyboardButton('🛍️ Инвентарь')
+    btn5 = types.KeyboardButton('🛒 Магазин')
+    btn6 = types.KeyboardButton('📊 Статистика')
     markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
     return markup
 
@@ -293,21 +466,20 @@ def get_race_keyboard():
 def get_hunt_keyboard():
     """Клавиатура охоты"""
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton('🐺 Легкая охота', callback_data='hunt_easy')
-    btn2 = types.InlineKeyboardButton('🐗 Средняя охота', callback_data='hunt_medium')
-    btn3 = types.InlineKeyboardButton('🐉 Сложная охота', callback_data='hunt_hard')
-    btn4 = types.InlineKeyboardButton('🏆 Босс', callback_data='hunt_boss')
-    btn5 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
-    markup.add(btn1, btn2, btn3, btn4)
-    markup.add(btn5)
+    btn1 = types.InlineKeyboardButton('🐀 Крыса', callback_data='hunt_rat')
+    btn2 = types.InlineKeyboardButton('🐺 Волк', callback_data='hunt_wolf')
+    btn3 = types.InlineKeyboardButton('🐗 Кабан', callback_data='hunt_boar')
+    btn4 = types.InlineKeyboardButton('🐻 Медведь', callback_data='hunt_bear')
+    btn5 = types.InlineKeyboardButton('🐉 Дракон', callback_data='hunt_dragon')
+    markup.add(btn1, btn2, btn3, btn4, btn5)
     return markup
 
-def get_training_keyboard():
-    """Клавиатура тренировки"""
+def get_upgrade_keyboard():
+    """Клавиатура улучшений"""
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton('💪 Сила (+Атака)', callback_data='train_attack')
-    btn2 = types.InlineKeyboardButton('🛡️ Защита', callback_data='train_defense')
-    btn3 = types.InlineKeyboardButton('❤️ Выносливость', callback_data='train_health')
+    btn1 = types.InlineKeyboardButton('🗡️ Атака (+2)', callback_data='upgrade_attack')
+    btn2 = types.InlineKeyboardButton('🛡️ Защита (+2)', callback_data='upgrade_defense')
+    btn3 = types.InlineKeyboardButton('❤️ Здоровье (+15)', callback_data='upgrade_health')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
     markup.add(btn1, btn2, btn3)
     markup.add(btn4)
@@ -316,9 +488,20 @@ def get_training_keyboard():
 def get_shop_keyboard():
     """Клавиатура магазина"""
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn1 = types.InlineKeyboardButton('⚔️ Меч (+5 атаки)', callback_data='buy_sword')
-    btn2 = types.InlineKeyboardButton('🛡️ Щит (+5 защиты)', callback_data='buy_shield')
-    btn3 = types.InlineKeyboardButton('❤️ Зелье здоровья', callback_data='buy_potion')
+    btn1 = types.InlineKeyboardButton('❤️ Малое зелье (30 HP)', callback_data='buy_small_potion')
+    btn2 = types.InlineKeyboardButton('💖 Большое зелье (60 HP)', callback_data='buy_big_potion')
+    btn3 = types.InlineKeyboardButton('🍗 Еда (восст. 10 HP)', callback_data='buy_food')
+    btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
+    markup.add(btn1, btn2, btn3)
+    markup.add(btn4)
+    return markup
+
+def get_inventory_keyboard():
+    """Клавиатура инвентаря"""
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn1 = types.InlineKeyboardButton('❤️ Исп. малое зелье', callback_data='use_small_potion')
+    btn2 = types.InlineKeyboardButton('💖 Исп. большое зелье', callback_data='use_big_potion')
+    btn3 = types.InlineKeyboardButton('🍗 Съесть еду', callback_data='use_food')
     btn4 = types.InlineKeyboardButton('⬅️ Назад', callback_data='back_to_main')
     markup.add(btn1, btn2, btn3)
     markup.add(btn4)
@@ -386,9 +569,10 @@ def help_command(message):
 🎮 *Прокачка Героя* - RPG игра в Telegram!
 
 *Основные возможности:*
-⚔️ *Охота* - сражайтесь с монстрами, получайте опыт и золото
-🏋️ *Тренировка* - улучшайте характеристики персонажа
-🛒 *Магазин* - покупайте снаряжение и зелья
+⚔️ *Охота* - сражайтесь с монстрами, получайте опыт и золото (макс. 5 раз в день)
+🏋️ *Улучшения* - тратьте очки навыков на прокачку характеристик
+🛍️ *Инвентарь* - используйте купленные предметы
+🛒 *Магазин* - покупайте зелья и еду за золото
 📊 *Профиль* - просматривайте статистику персонажа
 
 *Расы персонажа:*
@@ -458,14 +642,14 @@ def handle_text(message):
         show_profile(message)
     elif text == '⚔️ Охота':
         show_hunt_menu(message)
-    elif text == '🏋️ Тренировка':
-        show_training_menu(message)
+    elif text == '🏋️ Улучшения':
+        show_upgrade_menu(message)
+    elif text == '🛍️ Инвентарь':
+        show_inventory(message)
     elif text == '🛒 Магазин':
         show_shop_menu(message)
     elif text == '📊 Статистика':
         show_stats(message)
-    elif text == 'ℹ️ Помощь':
-        help_command(message)
     else:
         bot.send_message(
             message.chat.id,
@@ -486,14 +670,12 @@ def callback_handler(call):
             # Выбор расы
             race = call.data.replace('race_', '')
             
-            # Проверяем, есть ли данные пользователя
             if user_id not in temp_user_data:
                 bot.answer_callback_query(call.id, "❌ Ошибка: данные сессии потеряны. Начните с /start")
                 return
                 
             character_name = temp_user_data[user_id].get('character_name', 'Герой')
             
-            # Завершаем создание персонажа
             if db.complete_character_creation(user_id, character_name, race):
                 # Удаляем временные данные
                 if user_id in temp_user_data:
@@ -521,27 +703,24 @@ def callback_handler(call):
 Используйте меню ниже для управления персонажем.
                 """
                 
-                # Удаляем старое сообщение с кнопками
                 try:
                     bot.delete_message(chat_id, message_id)
                 except:
                     pass
                 
-                # Отправляем новое сообщение
                 bot.send_message(
                     chat_id,
                     welcome_text,
                     reply_markup=get_main_menu()
                 )
                 
-                # Отправляем подсказку
                 time.sleep(1)
                 bot.send_message(
                     chat_id,
                     "🎮 *Используйте кнопки меню для игры!*\n\n"
                     "⚔️ *Охота* - сражайтесь с монстрами\n"
-                    "🏋️ *Тренировка* - улучшайте характеристики\n"
-                    "🛒 *Магазин* - покупайте снаряжение\n"
+                    "🏋️ *Улучшения* - тратьте очки навыков\n"
+                    "🛒 *Магазин* - покупайте предметы\n"
                     "📊 *Профиль* - просматривайте статистику",
                     parse_mode='Markdown'
                 )
@@ -550,18 +729,23 @@ def callback_handler(call):
         
         elif call.data.startswith('hunt_'):
             # Охота
-            difficulty = call.data.replace('hunt_', '')
-            hunt_monster(call, difficulty)
+            monster_type = call.data.replace('hunt_', '')
+            hunt_monster(call, monster_type)
         
-        elif call.data.startswith('train_'):
-            # Тренировка
-            stat = call.data.replace('train_', '')
-            train_skill(call, stat)
+        elif call.data.startswith('upgrade_'):
+            # Улучшение характеристик
+            stat = call.data.replace('upgrade_', '')
+            upgrade_stat(call, stat)
         
         elif call.data.startswith('buy_'):
             # Покупка в магазине
             item = call.data.replace('buy_', '')
             buy_item(call, item)
+        
+        elif call.data.startswith('use_'):
+            # Использование предмета
+            item = call.data.replace('use_', '')
+            use_item(call, item)
         
         elif call.data == 'back_to_main':
             # Возврат в главное меню
@@ -598,8 +782,12 @@ def show_profile(message):
     health_percent = (user_data['health'] / user_data['max_health']) * 100
     health_bar = "❤️" * int(health_percent / 20) + "♡" * (5 - int(health_percent / 20))
     
+    # Проверяем доступность охоты
+    can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
+    hunts_text = f"{hunts_done}/{max_hunts}"
+    
     profile_text = f"""
-📊 *ПРОФИЛЬ ПЕРОНАЖА*
+📊 *ПРОФИЛЬ ПЕРСОНАЖА*
 
 👤 *{user_data['character_name']}*
 🏹 *Раса:* {user_data['race'].capitalize() if user_data['race'] else 'Не выбрана'}
@@ -608,11 +796,13 @@ def show_profile(message):
 
 ⚔️ *Характеристики:*
 📊 Уровень: {user_data['level']}
-⭐ Опыт: {user_data['exp']}/{user_data['level'] * 100}
+⭐ Опыт: {user_data['exp']}/{user_data['exp_to_next_level']}
+🔶 Очки навыков: {user_data['skill_points']}
 💰 Золото: {user_data['coins']}
 🗡️ Атака: {user_data['attack']}
 🛡️ Защита: {user_data['defense']}
 
+🎯 *Охота сегодня:* {hunts_text}
 📅 Зарегистрирован: {user_data['created_at'][:10]}
     """
     
@@ -625,17 +815,34 @@ def show_profile(message):
 
 def show_hunt_menu(message):
     """Показать меню охоты"""
-    hunt_text = """
+    user_id = message.from_user.id
+    can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
+    
+    if not can_hunt:
+        bot.send_message(
+            message.chat.id,
+            f"❌ *Лимит охоты исчерпан!*\n\n"
+            f"Вы уже сходили на охоту {hunts_done} раз сегодня.\n"
+            f"Лимит: {max_hunts} охот в день.\n"
+            f"Приходите завтра!",
+            parse_mode='Markdown',
+            reply_markup=get_main_menu()
+        )
+        return
+    
+    hunt_text = f"""
 ⚔️ *Меню охоты*
 
-Выберите сложность охоты:
+Выберите противника:
 
-🐺 *Легкая* - слабые монстры, маленькая награда
-🐗 *Средняя* - обычные монстры, средняя награда
-🐉 *Сложная* - сильные монстры, большая награда
-🏆 *Босс* - очень сложно, но награда огромная!
+🐀 *Крыса* - очень слабая
+🐺 *Волк* - слабый
+🐗 *Кабан* - средний
+🐻 *Медведь* - сильный
+🐉 *Дракон* - очень сильный
 
-Рискните своей удачей!
+*Охот сегодня:* {hunts_done}/{max_hunts}
+Чем сильнее монстр, тем больше награда!
     """
     
     bot.send_message(
@@ -645,34 +852,65 @@ def show_hunt_menu(message):
         reply_markup=get_hunt_keyboard()
     )
 
-def show_training_menu(message):
-    """Показать меню тренировки"""
+def show_upgrade_menu(message):
+    """Показать меню улучшений"""
     user_data = db.get_user(message.from_user.id)
     
     if not user_data:
         return
     
-    train_text = f"""
-🏋️ *Меню тренировки*
+    upgrade_text = f"""
+🏋️ *Меню улучшений*
 
-Улучшайте характеристики персонажа:
+Используйте очки навыков для улучшения характеристик:
 
-💪 *Сила* (+1 к атаке) - 20💰
-🛡️ *Защита* (+1 к защите) - 20💰
-❤️ *Выносливость* (+10 к макс. здоровью) - 30💰
+🗡️ *Атака* (+2 к атаке) - 1 очко
+🛡️ *Защита* (+2 к защите) - 1 очко
+❤️ *Здоровье* (+15 к макс. здоровью) - 1 очко
 
-Ваши текущие характеристики:
+*Ваши характеристики:*
+🔶 Очков навыков: {user_data['skill_points']}
 🗡️ Атака: {user_data['attack']}
 🛡️ Защита: {user_data['defense']}
 ❤️ Макс. здоровье: {user_data['max_health']}
-💰 Ваши монеты: {user_data['coins']}
+❤️ Текущее здоровье: {user_data['health']}
+
+*Очки навыков вы получаете при повышении уровня!*
     """
     
     bot.send_message(
         message.chat.id,
-        train_text,
+        upgrade_text,
         parse_mode='Markdown',
-        reply_markup=get_training_keyboard()
+        reply_markup=get_upgrade_keyboard()
+    )
+
+def show_inventory(message):
+    """Показать инвентарь"""
+    user_id = message.from_user.id
+    user_data = db.get_user(user_id)
+    
+    if not user_data:
+        return
+    
+    inventory = db.get_inventory(user_id)
+    
+    if not inventory:
+        inventory_text = "📦 *Ваш инвентарь пуст!*\n\nПосетите магазин, чтобы купить предметы."
+    else:
+        inventory_text = "📦 *Ваш инвентарь:*\n\n"
+        for item in inventory:
+            emoji = "❤️" if "малое" in item['item_name'] else "💖" if "большое" in item['item_name'] else "🍗"
+            inventory_text += f"{emoji} {item['item_name']}: {item['quantity']} шт.\n"
+    
+    inventory_text += f"\n💰 *Золото:* {user_data['coins']}"
+    inventory_text += f"\n❤️ *Здоровье:* {user_data['health']}/{user_data['max_health']}"
+    
+    bot.send_message(
+        message.chat.id,
+        inventory_text,
+        parse_mode='Markdown',
+        reply_markup=get_inventory_keyboard()
     )
 
 def show_shop_menu(message):
@@ -683,15 +921,20 @@ def show_shop_menu(message):
         return
     
     shop_text = f"""
-🛒 *Магазин снаряжения*
+🛒 *Магазин*
 
 Здесь можно купить полезные предметы:
 
-⚔️ *Меч* (+5 к атаке) - 150💰
-🛡️ *Щит* (+5 к защите) - 150💰
-❤️ *Зелье здоровья* (восстанавливает 50 HP) - 50💰
+❤️ *Малое зелье здоровья* - восстанавливает 30 HP
+💰 Цена: 20 золота
 
-💰 Ваши монеты: {user_data['coins']}
+💖 *Большое зелье здоровья* - восстанавливает 60 HP
+💰 Цена: 35 золота
+
+🍗 *Еда* - восстанавливает 10 HP
+💰 Цена: 5 золота
+
+*Ваш баланс:* {user_data['coins']}💰
     """
     
     bot.send_message(
@@ -701,7 +944,7 @@ def show_shop_menu(message):
         reply_markup=get_shop_keyboard()
     )
 
-def hunt_monster(call, difficulty):
+def hunt_monster(call, monster_type):
     """Охота на монстра"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
@@ -710,65 +953,97 @@ def hunt_monster(call, difficulty):
         bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
         return
     
-    # Настройки сложности
-    difficulty_settings = {
-        'easy': {'name': '🐺 Легкая', 'exp': 10, 'coins': 5, 'health': 20, 'damage': 5},
-        'medium': {'name': '🐗 Средняя', 'exp': 25, 'coins': 15, 'health': 50, 'damage': 15},
-        'hard': {'name': '🐉 Сложная', 'exp': 50, 'coins': 30, 'health': 100, 'damage': 25},
-        'boss': {'name': '🏆 Босс', 'exp': 100, 'coins': 60, 'health': 200, 'damage': 40}
+    # Проверяем лимит охоты
+    can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
+    if not can_hunt:
+        bot.answer_callback_query(call.id, f"❌ Лимит охоты исчерпан! ({hunts_done}/{max_hunts})")
+        return
+    
+    # Настройки монстров
+    monsters = {
+        'rat': {'name': '🐀 Крыса', 'health': 20, 'attack': 5, 'defense': 1, 'exp': 5, 'coins': 3},
+        'wolf': {'name': '🐺 Волк', 'health': 40, 'attack': 10, 'defense': 3, 'exp': 10, 'coins': 8},
+        'boar': {'name': '🐗 Кабан', 'health': 70, 'attack': 15, 'defense': 5, 'exp': 20, 'coins': 15},
+        'bear': {'name': '🐻 Медведь', 'health': 120, 'attack': 25, 'defense': 8, 'exp': 35, 'coins': 25},
+        'dragon': {'name': '🐉 Дракон', 'health': 200, 'attack': 40, 'defense': 15, 'exp': 60, 'coins': 50}
     }
     
-    settings = difficulty_settings.get(difficulty, difficulty_settings['easy'])
+    monster = monsters.get(monster_type, monsters['rat'])
     
-    # Симуляция боя
-    player_damage = user_data['attack'] + random.randint(1, 10)
-    monster_damage = max(1, settings['damage'] - (user_data['defense'] // 3))
+    # Симуляция боя с несколькими раундами
+    player_health = user_data['health']
+    monster_health = monster['health']
     
-    # Шанс победы зависит от сложности
-    win_chance = {
-        'easy': 0.9,
-        'medium': 0.7,
-        'hard': 0.5,
-        'boss': 0.3
-    }.get(difficulty, 0.5)
+    battle_log = []
+    rounds = 0
     
-    if random.random() < win_chance:
+    while player_health > 0 and monster_health > 0 and rounds < 10:
+        rounds += 1
+        
+        # Игрок атакует
+        player_damage = max(1, user_data['attack'] + random.randint(-2, 5) - monster['defense'])
+        monster_health -= player_damage
+        battle_log.append(f"🎯 Вы нанесли {player_damage} урона")
+        
+        if monster_health <= 0:
+            break
+        
+        # Монстр атакует
+        monster_damage = max(1, monster['attack'] + random.randint(-1, 3) - user_data['defense'])
+        player_health -= monster_damage
+        battle_log.append(f"💥 {monster['name']} нанес {monster_damage} урона")
+    
+    # Определяем победителя
+    if player_health > 0:
         # Победа
-        db.add_exp(user_id, settings['exp'])
-        db.add_coins(user_id, settings['coins'])
+        exp_gained = monster['exp']
+        coins_gained = monster['coins']
+        health_lost = user_data['health'] - player_health
+        
+        # Начисляем награды
+        level_up = db.add_exp(user_id, exp_gained)
+        db.add_coins(user_id, coins_gained)
+        db.update_user(user_id, health=player_health)
+        db.increment_daily_hunts(user_id)
         
         result_text = f"""
 🎉 *ПОБЕДА!*
 
-Вы победили {settings['name']} монстра!
+Вы победили {monster['name']} за {rounds} раундов!
 
 🏆 *Награды:*
-⭐ Опыт: +{settings['exp']}
-💰 Золото: +{settings['coins']}
-
-⚔️ Нанесенный урон: {player_damage}
+⭐ Опыт: +{exp_gained}
+💰 Золото: +{coins_gained}
+💔 Потеряно здоровья: {health_lost}
+❤️ Осталось здоровья: {player_health}
         """
+        
+        if level_up:
+            result_text += "\n🎊 *Вы повысили уровень! Получено 1 очко навыка!*"
+        
+        # Добавляем лог боя
+        result_text += "\n\n*Ход боя:*\n" + "\n".join(battle_log[:6])
+        
     else:
         # Поражение
-        health_lost = min(monster_damage, user_data['health'] - 1)
-        new_health = user_data['health'] - health_lost
+        health_lost = user_data['health']
+        coins_lost = min(20, user_data['coins'])
         
-        db.update_user(user_id, health=new_health)
+        db.update_user(user_id, health=1)  # Оставляем 1 HP
+        db.add_coins(user_id, -coins_lost)
+        db.increment_daily_hunts(user_id)
         
         result_text = f"""
 💀 *ПОРАЖЕНИЕ!*
 
-{settings['name']} монстр оказался сильнее!
+{monster['name']} оказался слишком сильным!
 
 💔 Потеряно здоровья: {health_lost}
-❤️ Осталось здоровья: {new_health}
+💸 Потеряно золота: {coins_lost}
+❤️ Ваше здоровье восстановлено до 1
 
-💸 Вы потеряли 10💰
+Выживите и попробуйте снова!
         """
-        
-        # Штраф за поражение
-        if user_data['coins'] >= 10:
-            db.add_coins(user_id, -10)
     
     bot.edit_message_text(
         result_text,
@@ -777,8 +1052,8 @@ def hunt_monster(call, difficulty):
         parse_mode='Markdown'
     )
 
-def train_skill(call, stat):
-    """Тренировка навыка"""
+def upgrade_stat(call, stat):
+    """Улучшение характеристики"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     
@@ -786,62 +1061,39 @@ def train_skill(call, stat):
         bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
         return
     
-    # Стоимость тренировки
-    costs = {
-        'attack': 20,
-        'defense': 20,
-        'health': 30
-    }
-    
-    cost = costs.get(stat, 20)
-    
-    if user_data['coins'] < cost:
-        bot.answer_callback_query(call.id, f"❌ Недостаточно монет! Нужно {cost}💰")
+    if user_data['skill_points'] < 1:
+        bot.answer_callback_query(call.id, "❌ Недостаточно очков навыков!")
         return
     
-    # Улучшение характеристики
-    improvements = {
-        'attack': {'attack': user_data['attack'] + 1},
-        'defense': {'defense': user_data['defense'] + 1},
-        'health': {'max_health': user_data['max_health'] + 10, 'health': min(user_data['health'] + 10, user_data['max_health'] + 10)}
-    }
-    
-    improvement = improvements.get(stat, {})
-    
-    if improvement:
-        # Списываем монеты
-        new_coins = user_data['coins'] - cost
-        improvement['coins'] = new_coins
+    if db.use_skill_point(user_id, stat):
+        user_data = db.get_user(user_id)
         
-        # Применяем улучшение
-        if db.update_user(user_id, **improvement):
-            stat_names = {
-                'attack': '🗡️ Атаку',
-                'defense': '🛡️ Защиту',
-                'health': '❤️ Максимальное здоровье'
-            }
-            
-            result_text = f"""
-🏋️ *ТРЕНИРОВКА ЗАВЕРШЕНА!*
+        stat_names = {
+            'attack': '🗡️ Атаку',
+            'defense': '🛡️ Защиту',
+            'health': '❤️ Максимальное здоровье'
+        }
+        
+        result_text = f"""
+✅ *УСПЕХ!*
 
 Вы улучшили {stat_names[stat]}!
 
-💸 Стоимость: {cost}💰
-💰 Осталось монет: {new_coins}
-
-Продолжайте тренировки!
-            """
-            
-            bot.edit_message_text(
-                result_text,
-                call.message.chat.id,
-                call.message.message_id,
-                parse_mode='Markdown'
-            )
-        else:
-            bot.answer_callback_query(call.id, "❌ Ошибка при тренировке!")
+🔶 Осталось очков навыков: {user_data['skill_points']}
+🗡️ Атака: {user_data['attack']}
+🛡️ Защита: {user_data['defense']}
+❤️ Макс. здоровье: {user_data['max_health']}
+❤️ Текущее здоровье: {user_data['health']}
+        """
+        
+        bot.edit_message_text(
+            result_text,
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
     else:
-        bot.answer_callback_query(call.id, "❌ Неизвестный навык!")
+        bot.answer_callback_query(call.id, "❌ Ошибка при улучшении!")
 
 def buy_item(call, item):
     """Покупка предмета в магазине"""
@@ -852,35 +1104,34 @@ def buy_item(call, item):
         bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
         return
     
-    # Стоимость предметов
+    # Настройки предметов
     items = {
-        'sword': {'name': '⚔️ Меч', 'cost': 150, 'bonus': {'attack': 5}},
-        'shield': {'name': '🛡️ Щит', 'cost': 150, 'bonus': {'defense': 5}},
-        'potion': {'name': '❤️ Зелье здоровья', 'cost': 50, 'bonus': {'health': min(user_data['health'] + 50, user_data['max_health'])}}
+        'small_potion': {'name': 'Малое зелье здоровья', 'type': 'potion', 'price': 20, 'heal': 30},
+        'big_potion': {'name': 'Большое зелье здоровья', 'type': 'potion', 'price': 35, 'heal': 60},
+        'food': {'name': 'Еда', 'type': 'food', 'price': 5, 'heal': 10}
     }
     
     item_data = items.get(item)
-    
     if not item_data:
         bot.answer_callback_query(call.id, "❌ Предмет не найден!")
         return
     
-    if user_data['coins'] < item_data['cost']:
-        bot.answer_callback_query(call.id, f"❌ Недостаточно монет! Нужно {item_data['cost']}💰")
+    if user_data['coins'] < item_data['price']:
+        bot.answer_callback_query(call.id, f"❌ Недостаточно золота! Нужно {item_data['price']}💰")
         return
     
     # Покупка
-    new_coins = user_data['coins'] - item_data['cost']
-    item_data['bonus']['coins'] = new_coins
-    
-    if db.update_user(user_id, **item_data['bonus']):
+    if db.add_to_inventory(user_id, item_data['type'], item_data['name']):
+        db.add_coins(user_id, -item_data['price'])
+        user_data = db.get_user(user_id)
+        
         result_text = f"""
 🛒 *ПОКУПКА УСПЕШНА!*
 
 Вы купили {item_data['name']}!
 
-💸 Стоимость: {item_data['cost']}💰
-💰 Осталось монет: {new_coins}
+💸 Стоимость: {item_data['price']}💰
+💰 Осталось золота: {user_data['coins']}
 
 Предмет добавлен в инвентарь!
         """
@@ -893,6 +1144,53 @@ def buy_item(call, item):
         )
     else:
         bot.answer_callback_query(call.id, "❌ Ошибка при покупке!")
+
+def use_item(call, item):
+    """Использование предмета"""
+    user_id = call.from_user.id
+    user_data = db.get_user(user_id)
+    
+    if not user_data:
+        bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
+        return
+    
+    # Настройки предметов
+    items = {
+        'small_potion': {'name': 'Малое зелье здоровья', 'type': 'potion', 'heal': 30},
+        'big_potion': {'name': 'Большое зелье здоровья', 'type': 'potion', 'heal': 60},
+        'food': {'name': 'Еда', 'type': 'food', 'heal': 10}
+    }
+    
+    item_data = items.get(item)
+    if not item_data:
+        bot.answer_callback_query(call.id, "❌ Предмет не найден!")
+        return
+    
+    # Использование предмета
+    if db.use_item(user_id, item_data['type'], item_data['name']):
+        new_health = min(user_data['health'] + item_data['heal'], user_data['max_health'])
+        db.update_user(user_id, health=new_health)
+        user_data = db.get_user(user_id)
+        
+        heal_amount = new_health - user_data['health'] + item_data['heal']
+        
+        result_text = f"""
+✅ *ПРЕДМЕТ ИСПОЛЬЗОВАН!*
+
+Вы использовали {item_data['name']}!
+
+❤️ Восстановлено здоровья: +{heal_amount}
+❤️ Текущее здоровье: {user_data['health']}/{user_data['max_health']}
+        """
+        
+        bot.edit_message_text(
+            result_text,
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет этого предмета!")
 
 def show_stats(message):
     """Показать статистику сервера"""
