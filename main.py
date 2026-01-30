@@ -1343,13 +1343,13 @@ def hunt_monster(call, monster_type):
 ❤️ Осталось здоровья: {player_health}
         """
         
-        if level_up:
-            result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️"
+       # if level_up:
+           # result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️"
             # Отправляем изображение повышения уровня
-            send_battle_result_image(call.message.chat.id, 'level_up', result_text)
-        else:
+        #    send_battle_result_image(call.message.chat.id, 'level_up', result_text)
+    #    else:
             # Отправляем изображение победы
-            send_battle_result_image(call.message.chat.id, 'victory', result_text)
+       #     send_battle_result_image(call.message.chat.id, 'victory', result_text)
         
         # Добавляем лог боя
         battle_log_text = "\n\n*📜 ХРОНИКА БИТВЫ:*\n" + "\n".join(battle_log[:6])
