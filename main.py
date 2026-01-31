@@ -46,7 +46,13 @@ MENU_IMAGES = {
     'training': 'https://sun9-33.userapi.com/impg/training_image/photo.jpg',
     'rest': 'https://avatars.mds.yandex.net/get-images-cbir/rest_image/orig'
 }
-
+try:
+    from database import db  # Теперь используем PostgreSQL
+    logger = logging.getLogger(__name__)
+except ImportError as e:
+    logging.error(f"❌ Ошибка импорта базы данных: {e}")
+    exit(1)
+temp_user_data = {}
 # ================== БАЗА ДАННЫХ ==================
 class Database:
     def __init__(self, db_path='game_bot.db'):
