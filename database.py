@@ -9,44 +9,51 @@ logger = logging.getLogger(__name__)
 
 class PostgreSQLDatabase:
     def __init__(self):
-        # Получаем URL базы данных из переменных окружения
-        # Railway может использовать разные имена, проверим несколько вариантов
-        self.database_url = None
-        possible_names = ['DATABASE_URL', 'POSTGRES_URL', 'POSTGRESQL_URL']
+        # Получаем URL базы данных из переменных окружения Railway
+        self.database_url = os.environ.get('DATABASE_URL')
         
-        for name in possible_names:
-            self.database_url = os.environ.get(name)
-            if self.database_url:
-                logger.info(f"✅ Найдена переменная {name}")
-                break
+        # На Railway проверьте также другие возможные имена переменных
+        if not self.database_url:
+            self.database_url = os.environ.get('POSTGRESQL_URL')
         
         if not self.database_url:
-            logger.error("❌ Не найдена переменная с URL базы данных. Проверенные имена: " + ", ".join(possible_names))
-            # Выведем все переменные окружения для отладки (без значений, чтобы не было утечек)
-            env_keys = list(os.environ.keys())
-            logger.info(f"📝 Доступные переменные окружения: {', '.join(env_keys)}")
-            # Не будем падать, но будем работать без БД?
-            # Для Railway лучше упасть, чтобы увидеть ошибку в логах.
-            raise ValueError("Не установлена переменная DATABASE_URL")
+            # Проверяем, не запущено ли локально
+            if os.environ.get('RAILWAY_ENVIRONMENT'):
+                # На Railway, но DATABASE_URL не установлен
+                logger.error("❌ ОШИБКА: DATABASE_URL не установлена на Railway!")
+                logger.error("   Добавьте переменную DATABASE_URL в разделе Variables")
+                logger.error("   Или создайте PostgreSQL базу через New -> Database")
+                # Создаем заглушку, чтобы бот мог работать без БД
+                self.database_url = None
+                return
+            else:
+                # Локальная разработка
+                logger.warning("⚠️  DATABASE_URL не установлена, работаем без БД")
+                self.database_url = None
+                return
         
         # Исправляем формат URL для psycopg2
         if self.database_url.startswith("postgres://"):
             self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
         
-        logger.info(f"✅ Подключение к БД: {self.database_url[:50]}...")
+        logger.info(f"✅ DATABASE_URL обнаружена")
         
-        # Пытаемся подключиться с повторными попытками
+        # Пытаемся подключиться
         self.retry_connection()
     
     def retry_connection(self):
         """Повторные попытки подключения к БД"""
-        max_retries = 5
-        retry_delay = 3
+        if not self.database_url:
+            logger.error("❌ Нет DATABASE_URL для подключения")
+            return False
+        
+        max_retries = 3
+        retry_delay = 2
         
         for attempt in range(max_retries):
             try:
                 self.init_db()
-                logger.info(f"✅ База данных успешно инициализирована (попытка {attempt + 1})")
+                logger.info(f"✅ База данных успешно инициализирована")
                 return True
             except Exception as e:
                 logger.error(f"❌ Попытка {attempt + 1}/{max_retries}: {e}")
@@ -54,9 +61,7 @@ class PostgreSQLDatabase:
                     logger.info(f"🔄 Повторная попытка через {retry_delay} секунд...")
                     time.sleep(retry_delay)
                 else:
-                    logger.error("❌ Не удалось подключиться к базе данных после всех попыток")
-                    # Не выбрасываем исключение, чтобы бот мог продолжить работу
-                    # и попробовать подключиться позже
+                    logger.error("❌ Не удалось подключиться к базе данных")
                     return False
     
     def get_connection(self):
@@ -163,12 +168,12 @@ class PostgreSQLDatabase:
                     logger.info(f"✅ Добавлен столбец {column_name}")
             except Exception as e:
                 logger.warning(f"⚠️  Не удалось добавить столбец {column_name}: {e}")
-
-
-# Создаем глобальный экземпляр
-db = PostgreSQLDatabase()
+    
     def get_user(self, user_id):
         """Получить пользователя"""
+        if not self.database_url:
+            return None
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -181,6 +186,9 @@ db = PostgreSQLDatabase()
     
     def create_user(self, user_id, username="", first_name="", last_name=""):
         """Создать пользователя"""
+        if not self.database_url:
+            return False
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -201,7 +209,7 @@ db = PostgreSQLDatabase()
     
     def update_user(self, user_id, **kwargs):
         """Обновить данные пользователя"""
-        if not kwargs:
+        if not self.database_url or not kwargs:
             return False
         
         try:
@@ -231,6 +239,9 @@ db = PostgreSQLDatabase()
     
     def complete_character_creation(self, user_id, character_name, race):
         """Завершить создание персонажа"""
+        if not self.database_url:
+            return False
+            
         try:
             race_bonuses = {
                 'human': {'attack': 2, 'defense': 2, 'health': 20},
@@ -263,6 +274,9 @@ db = PostgreSQLDatabase()
     
     def add_exp(self, user_id, exp_amount):
         """Добавить опыт"""
+        if not self.database_url:
+            return False
+            
         try:
             user = self.get_user(user_id)
             if not user:
@@ -297,6 +311,9 @@ db = PostgreSQLDatabase()
     
     def add_coins(self, user_id, coins_amount):
         """Добавить монеты"""
+        if not self.database_url:
+            return False
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -313,6 +330,9 @@ db = PostgreSQLDatabase()
     
     def can_hunt_today(self, user_id):
         """Проверить лимит охоты"""
+        if not self.database_url:
+            return False, 0, 5
+            
         try:
             user = self.get_user(user_id)
             if not user:
@@ -332,6 +352,9 @@ db = PostgreSQLDatabase()
     
     def increment_daily_hunts(self, user_id):
         """Увеличить счетчик охот"""
+        if not self.database_url:
+            return False
+            
         try:
             user = self.get_user(user_id)
             if not user:
@@ -356,6 +379,9 @@ db = PostgreSQLDatabase()
     
     def use_skill_point(self, user_id, stat):
         """Использовать очко навыка"""
+        if not self.database_url:
+            return False
+            
         try:
             user = self.get_user(user_id)
             if not user or user['skill_points'] < 1:
@@ -383,6 +409,9 @@ db = PostgreSQLDatabase()
     
     def add_to_inventory(self, user_id, item_type, item_name, quantity=1):
         """Добавить предмет в инвентарь"""
+        if not self.database_url:
+            return False
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -400,6 +429,9 @@ db = PostgreSQLDatabase()
     
     def get_inventory(self, user_id):
         """Получить инвентарь"""
+        if not self.database_url:
+            return []
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -417,6 +449,9 @@ db = PostgreSQLDatabase()
     
     def use_item(self, user_id, item_type, item_name):
         """Использовать предмет"""
+        if not self.database_url:
+            return False
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
@@ -457,6 +492,9 @@ db = PostgreSQLDatabase()
     
     def get_top_players(self, limit=5):
         """Топ игроков"""
+        if not self.database_url:
+            return []
+            
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cursor:
