@@ -9,6 +9,11 @@ import random
 import time
 import requests
 
+
+if os.path.exists('game_bot.db'):
+    print(f"✅ База данных найдена: game_bot.db ({os.path.getsize('game_bot.db')} байт)")
+else:
+    print("⚠️ База данных не найдена, будет создана новая")
 # ================== ИЗОБРАЖЕНИЯ ==================
 # Ссылки на изображения (можно заменить на свои)
 
