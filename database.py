@@ -10,17 +10,24 @@ logger = logging.getLogger(__name__)
 class PostgreSQLDatabase:
     def __init__(self):
         # Получаем URL базы данных из переменных окружения
-        self.database_url = os.environ.get('DATABASE_URL')
+        # Railway может использовать разные имена, проверим несколько вариантов
+        self.database_url = None
+        possible_names = ['DATABASE_URL', 'POSTGRES_URL', 'POSTGRESQL_URL']
         
-        # Если DATABASE_URL не установлена, проверяем альтернативные имена
-        if not self.database_url:
-            self.database_url = os.environ.get('POSTGRESQL_URL')
+        for name in possible_names:
+            self.database_url = os.environ.get(name)
+            if self.database_url:
+                logger.info(f"✅ Найдена переменная {name}")
+                break
         
         if not self.database_url:
-            # Для локальной разработки можно использовать строку по умолчанию
-            # Но на Railway это должно быть установлено
-            logger.warning("⚠️  DATABASE_URL не установлена, использую значение по умолчанию")
-            self.database_url = "postgresql://postgres:postgres@localhost:5432/railway"
+            logger.error("❌ Не найдена переменная с URL базы данных. Проверенные имена: " + ", ".join(possible_names))
+            # Выведем все переменные окружения для отладки (без значений, чтобы не было утечек)
+            env_keys = list(os.environ.keys())
+            logger.info(f"📝 Доступные переменные окружения: {', '.join(env_keys)}")
+            # Не будем падать, но будем работать без БД?
+            # Для Railway лучше упасть, чтобы увидеть ошибку в логах.
+            raise ValueError("Не установлена переменная DATABASE_URL")
         
         # Исправляем формат URL для psycopg2
         if self.database_url.startswith("postgres://"):
@@ -157,13 +164,7 @@ class PostgreSQLDatabase:
             except Exception as e:
                 logger.warning(f"⚠️  Не удалось добавить столбец {column_name}: {e}")
     
-    # ... остальные методы остаются без изменений ...
-    # (get_user, create_user, update_user и т.д.)
+    # ... остальные методы без изменений ...
 
-# Создаем глобальный экземпляр с обработкой ошибок
-try:
-    db = PostgreSQLDatabase()
-except Exception as e:
-    logger.error(f"❌ Не удалось инициализировать базу данных: {e}")
-    # Создаем заглушку, чтобы бот мог запуститься
-    db = None
+# Создаем глобальный экземпляр
+db = PostgreSQLDatabase()
