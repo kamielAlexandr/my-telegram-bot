@@ -1469,29 +1469,74 @@ def main():
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print("=" * 50)
     
+    # Принудительно удаляем вебхук перед запуском
     try:
-        bot_info = bot.get_me()
-        print(f"🤖 Бот: @{bot_info.username} (ID: {bot_info.id})")
-        print(f"📝 Имя бота: {bot_info.first_name}")
-        
-        print("🔄 Бот запускает polling...")
-        # Убираем предыдущие обновления, чтобы избежать конфликта 409
         bot.remove_webhook()
-        time.sleep(1)
-        
-        # Запускаем polling с параметрами
-        bot.polling(
-            none_stop=True,        # Не останавливаться при ошибках
-            interval=0,            # Интервал между запросами
-            timeout=20,            # Таймаут
-            long_polling_timeout=5
-        )
-        
+        print("✅ Вебхук удален")
+        time.sleep(2)
     except Exception as e:
-        print(f"❌ Критическая ошибка при запуске бота: {e}")
-        import traceback
-        traceback.print_exc()
-        exit(1)
-
-if __name__ == "__main__":
-    main()
+        print(f"⚠️  При удалении вебхука: {e}")
+    
+    # Проверяем подключение к БД
+    try:
+        if hasattr(db, 'database_url') and db.database_url:
+            print("✅ База данных подключена")
+        else:
+            print("⚠️  База данных в режиме заглушки")
+    except:
+        print("⚠️  Не удалось проверить БД")
+    
+    # ГАРАНТИРОВАННЫЙ ЗАПУСК ОДНОГО ИНСТАНСА
+    while True:
+        try:
+            print("🔄 Запускаем polling (одноразово)...")
+            
+            # Используем polling с skip_pending=True
+            bot.polling(
+                none_stop=True,
+                interval=0,
+                timeout=30,
+                skip_pending=True,  # Пропускаем старые обновления
+                logger_level=logging.INFO
+            )
+            
+            # Если polling завершился без ошибки, перезапускаем
+            print("⚠️  Polling завершился. Перезапуск через 5 секунд...")
+            time.sleep(5)
+            
+        except telebot.apihelper.ApiTelegramException as e:
+            if "409" in str(e):
+                print("=" * 60)
+                print("❌ КРИТИЧЕСКАЯ ОШИБКА 409")
+                print("=" * 60)
+                print("Обнаружено несколько экземпляров бота!")
+                print("Возможные причины:")
+                print("1. На Railway запущено несколько контейнеров")
+                print("2. Бот запущен локально")
+                print("3. Старый процесс не завершился")
+                print("=" * 60)
+                print("🔄 Ожидание 30 секунд и принудительный перезапуск...")
+                
+                # Принудительно удаляем вебхук
+                try:
+                    bot.remove_webhook()
+                except:
+                    pass
+                
+                time.sleep(30)  # Долгое ожидание
+                
+            else:
+                print(f"❌ Ошибка Telegram API: {e}")
+                print("🔄 Перезапуск через 10 секунд...")
+                time.sleep(10)
+                
+        except Exception as e:
+            print(f"❌ Неизвестная ошибка: {e}")
+            import traceback
+            traceback.print_exc()
+            print("🔄 Перезапуск через 10 секунд...")
+            time.sleep(10)
+            
+        except KeyboardInterrupt:
+            print("\n🛑 Бот остановлен пользователем")
+            sys.exit(0)
