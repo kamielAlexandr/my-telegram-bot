@@ -1,4 +1,4 @@
-# bot.py
+# main.py - основной файл бота
 import telebot
 from telebot import types
 import os
@@ -8,16 +8,14 @@ import time
 import requests
 import logging
 
-# ================== ПЕРВОЕ: ИМПОРТ БАЗЫ ДАННЫХ ==================
+# ================== ИМПОРТ БАЗЫ ДАННЫХ ==================
 try:
-    from database import db  # PostgreSQL - правильно!
-    logger = logging.getLogger(__name__)
+    from database import db  # PostgreSQL база данных
 except ImportError as e:
     logging.error(f"❌ Ошибка импорта базы данных: {e}")
-    logging.error("ℹ️ Убедитесь, что файл database.py существует")
     exit(1)
 
-# ================== ВТОРОЕ: ПРОВЕРКА ТОКЕНА БОТА ==================
+# ================== НАСТРОЙКИ БОТА ==================
 try:
     from config import BOT_TOKEN
 except ImportError:
@@ -25,10 +23,20 @@ except ImportError:
 
 # Проверяем токен бота
 if not BOT_TOKEN:
-    logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не установлен!")
-    logger.info("ℹ️ Установите переменную окружения BOT_TOKEN в Railway")
-    logger.info("ℹ️ Или создайте файл config.py с BOT_TOKEN='ваш_токен'")
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
+    print("   Установите переменную окружения или создайте файл config.py")
     exit(1)
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -66,25 +74,7 @@ MENU_IMAGES = {
     'rest': 'https://avatars.mds.yandex.net/get-images-cbir/rest_image/orig'
 }
 
-# ================== УДАЛИТЬ ВЕСЬ КЛАСС Database! ==================
-# УДАЛИТЬ ВСЮ ЭТУ ЧАСТЬ КОДА:
-# class Database:
-#     def __init__(self, db_path='game_bot.db'):
-#         ...
-# ДО САМОГО КОНЦА КЛАССА
-
-# ================== НАСТРОЙКИ ЛОГГИРОВАНИЯ ==================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# ================== КЛАВИАТУРЫ ==================
+# ================== КЛАВИАТУРЫ (ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ) ==================
 def get_main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = types.KeyboardButton('🎮 Профиль')
@@ -117,29 +107,21 @@ def get_hunt_keyboard():
     return markup
 
 def get_battle_keyboard(battle_state):
-    """Клавиатура для интерактивного боя"""
     markup = types.InlineKeyboardMarkup(row_width=2)
-    
-    # Базовые действия
     btn1 = types.InlineKeyboardButton('🗡️ Атаковать', callback_data='battle_attack')
     btn2 = types.InlineKeyboardButton('🛡️ Блокировать', callback_data='battle_block')
     btn3 = types.InlineKeyboardButton('💥 Супер-удар', callback_data='battle_super')
     
-    # Отображение супер-удара в зависимости от энергии
     energy_emoji = '⚡' * battle_state['energy'] + '○' * (3 - battle_state['energy'])
     btn3.text = f'{energy_emoji} Супер-удар'
     
-    # Если энергии нет, делаем кнопку неактивной
     if battle_state['energy'] < 3:
         btn3.callback_data = 'battle_no_energy'
     
     markup.add(btn1, btn2, btn3)
-    
-    # Дополнительные действия
     btn4 = types.InlineKeyboardButton('🧪 Исп. зелье', callback_data='battle_potion')
     btn5 = types.InlineKeyboardButton('🏃 Бежать', callback_data='battle_flee')
     markup.add(btn4, btn5)
-    
     return markup
 
 def get_upgrade_keyboard():
@@ -184,7 +166,6 @@ def get_rest_keyboard():
 
 # ================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==================
 def get_race_ability_description(race):
-    """Получить описание расовой способности"""
     abilities = {
         'human': "👑 *Сокрушительный удар:* двойной урон от атаки",
         'elf': "🎯 *Точный выстрел:* игнорирует защиту врага, высокий урон",
@@ -194,12 +175,10 @@ def get_race_ability_description(race):
     return abilities.get(race, "Неизвестная способность")
 
 def update_battle_message(call, battle_state, log_text=""):
-    """Обновление сообщения с текущим состоянием боя"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
     
-    # Создаем текст состояния
     health_bar_player = "❤️" * max(1, int((battle_state['player_health'] / battle_state['player_max_health']) * 10))
     health_bar_monster = "❤️" * max(1, int((battle_state['monster_health'] / monster['health']) * 10))
     
@@ -220,13 +199,11 @@ VS
 
 """
     
-    # Добавляем лог последнего раунда
     if log_text:
         status_text += f"{log_text}\n"
     
     status_text += "\n*Выберите действие:*"
     
-    # Обновляем сообщение
     try:
         bot.edit_message_caption(
             chat_id=call.message.chat.id,
@@ -239,7 +216,6 @@ VS
         logger.error(f"Ошибка обновления сообщения: {e}")
 
 def process_battle_action(call, battle_state, action):
-    """Обработка одного действия в бою"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
@@ -248,11 +224,9 @@ def process_battle_action(call, battle_state, action):
     
     # === ХОД ИГРОКА ===
     if action == 'attack':
-        # Базовая атака
         damage = max(1, battle_state['player_attack'] + random.randint(-3, 7))
         damage = max(1, damage - monster['defense'] // 3)
         
-        # Критический удар игрока (15% шанс)
         if random.random() < 0.15:
             damage = int(damage * 1.8)
             battle_log.append(f"🎯 *КРИТИЧЕСКИЙ УДАР!* {damage} урона!")
@@ -260,17 +234,15 @@ def process_battle_action(call, battle_state, action):
             battle_log.append(f"🗡️ *Вы атакуете:* {damage} урона")
         
         battle_state['monster_health'] -= damage
-        battle_state['energy'] = min(3, battle_state['energy'] + 1)  # Получаем энергию
+        battle_state['energy'] = min(3, battle_state['energy'] + 1)
         
     elif action == 'block':
-        # Блок - уменьшает урон от следующей атаки врага
         block_power = battle_state['player_defense'] // 2 + random.randint(0, 5)
         battle_state['last_action'] = 'block'
         battle_log.append(f"🛡️ *Вы готовитесь к защите:* +{block_power} к блоку")
         battle_state['energy'] = min(3, battle_state['energy'] + 1)
         
     elif action == 'super':
-        # Супер-удар в зависимости от расы
         if battle_state['energy'] < 3:
             return 'continue', "❌ Недостаточно энергии!"
         
@@ -278,41 +250,35 @@ def process_battle_action(call, battle_state, action):
         damage = 0
         
         if race == 'human':
-            # Человек: двойная атака
             damage = battle_state['player_attack'] * 2
             battle_log.append(f"👑 *СОКРУШИТЕЛЬНЫЙ УДАР ЧЕЛОВЕКА:* {damage} урона!")
             
         elif race == 'elf':
-            # Эльф: точный выстрел (игнорирует защиту)
             damage = battle_state['player_attack'] + random.randint(10, 20)
             battle_log.append(f"🎯 *ТОЧНЫЙ ВЫСТРЕЛ ЭЛЬФА:* {damage} урона (игнорирует защиту)!")
             
         elif race == 'orc':
-            # Орк: ярость (огромный урон, но теряет здоровье)
             damage = battle_state['player_attack'] * 3
             self_damage = battle_state['player_attack'] // 2
             battle_state['player_health'] -= self_damage
             battle_log.append(f"💢 *ЯРОСТЬ ОРКА:* {damage} урона! (вы теряете {self_damage} HP)")
             
         elif race == 'dwarf':
-            # Гном: удар молота (оглушение + урон)
             damage = battle_state['player_attack'] + battle_state['player_defense']
             battle_log.append(f"⚒️ *УДАР МОЛОТА ГНОМА:* {damage} урона! (оглушение)")
             battle_state['monster_stunned'] = True
         
         battle_state['monster_health'] -= damage
-        battle_state['energy'] = 0  # Тратим всю энергию
+        battle_state['energy'] = 0
         battle_state['last_action'] = 'super'
         
     elif action == 'potion':
-        # Использование зелья
         inventory = db.get_inventory(user_id)
         potions = [item for item in inventory if 'зелье' in item['item_name'].lower()]
         
         if not potions:
             battle_log.append("❌ В инвентаре нет зелий!")
         else:
-            # Используем первое малое зелье
             for potion in potions:
                 if 'малое' in potion['item_name'].lower():
                     db.use_item(user_id, potion['item_type'], potion['item_name'])
@@ -327,7 +293,6 @@ def process_battle_action(call, battle_state, action):
         battle_state['energy'] = min(3, battle_state['energy'] + 1)
         
     elif action == 'flee':
-        # Попытка бегства
         flee_chance = 0.4 + (battle_state['player_health'] / battle_state['player_max_health']) * 0.3
         
         if random.random() < flee_chance:
@@ -335,38 +300,31 @@ def process_battle_action(call, battle_state, action):
             return 'fled', "\n".join(battle_log)
         else:
             battle_log.append("❌ *Не удалось сбежать!* Монстр атакует вас в спину!")
-            # Монстр получает бонус к атаке при неудачном побеге
             monster_damage = int(monster['attack'] * 1.5)
             battle_state['player_health'] -= max(1, monster_damage - battle_state['player_defense'] // 2)
             battle_log.append(f"💢 *Атака в спину:* {monster_damage} урона")
     
-    # Проверяем, жив ли монстр
     if battle_state['monster_health'] <= 0:
         battle_log.append(f"🎉 *{monster['name']} побежден!*")
         return 'player_win', "\n".join(battle_log)
     
     # === ХОД МОНСТРА ===
-    # Если монстр оглушен, пропускает ход
     if battle_state.get('monster_stunned'):
         battle_log.append(f"😵 *{monster['name']} оглушен и пропускает ход!*")
         battle_state['monster_stunned'] = False
     else:
-        # Монстр может атаковать или использовать спецспособность
         monster_action = random.choice(['attack', 'attack', 'attack', 'special'])
         
         if monster_action == 'attack':
             monster_damage = max(1, monster['attack'] + random.randint(-2, 5))
             
-            # Если игрок блокировал в предыдущем ходу
             if battle_state.get('last_action') == 'block':
                 block_reduction = battle_state['player_defense'] + random.randint(0, 10)
                 monster_damage = max(1, monster_damage - block_reduction)
                 battle_log.append(f"🛡️ *Ваш блок поглощает* {block_reduction} урона!")
             
-            # Вычитаем защиту игрока
             monster_damage = max(1, monster_damage - battle_state['player_defense'] // 2)
             
-            # Критический удар монстра
             if random.random() < 0.1:
                 monster_damage = int(monster_damage * 1.7)
                 battle_log.append(f"💀 *КРИТИЧЕСКИЙ удар врага:* {monster_damage} урона!")
@@ -376,9 +334,7 @@ def process_battle_action(call, battle_state, action):
             battle_state['player_health'] -= monster_damage
             
         elif monster_action == 'special':
-            # Спецспособности монстров
             if battle_state['monster_type'] == 'wolf':
-                # Волк: двойная атака
                 attacks = 2
                 total_damage = 0
                 for _ in range(attacks):
@@ -390,20 +346,17 @@ def process_battle_action(call, battle_state, action):
                 battle_log.append(f"🐺 *Быстрая атака волка:* {attacks} удара, {total_damage} урона")
                 
             elif battle_state['monster_type'] == 'spider':
-                # Паук: яд (урон в течение 3 ходов)
                 poison_damage = 5
                 battle_state['poison'] = battle_state.get('poison', 0) + poison_damage
                 battle_state['poison_rounds'] = 3
                 battle_log.append(f"🕷️ *{monster['name']} кусает:* яд наносит {poison_damage} урона в раунд")
             
             elif battle_state['monster_type'] == 'bear':
-                # Медведь: оглушение
                 stun_chance = 0.3
                 if random.random() < stun_chance:
                     battle_state['player_stunned'] = True
                     battle_log.append(f"🐻 *Рев медведя:* вы оглушены на следующий ход!")
     
-    # Применяем эффекты (яд, оглушение)
     if battle_state.get('poison', 0) > 0 and battle_state.get('poison_rounds', 0) > 0:
         poison_damage = battle_state['poison']
         battle_state['player_health'] -= poison_damage
@@ -413,37 +366,29 @@ def process_battle_action(call, battle_state, action):
         if battle_state['poison_rounds'] <= 0:
             battle_state['poison'] = 0
     
-    # Проверяем, жив ли игрок
     if battle_state['player_health'] <= 0:
         battle_log.append("💀 *Вы пали в бою!*")
         return 'monster_win', "\n".join(battle_log)
     
-    # Увеличиваем раунд
     battle_state['round'] += 1
-    
-    # Сбрасываем последнее действие
     battle_state['last_action'] = None
     
     return 'continue', "\n".join(battle_log)
 
 def end_battle(call, battle_state, result, log_text=""):
-    """Завершение боя и начисление наград"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
     
     try:
         if result == 'player_win':
-            # Победа игрока
             exp_gained = monster['exp']
             coins_gained = monster['coins']
             
-            # Бонусы за быструю победу
             if battle_state['round'] <= 5:
                 exp_gained = int(exp_gained * 1.3)
                 coins_gained = int(coins_gained * 1.5)
             
-            # Начисляем награды
             level_up = db.add_exp(user_id, exp_gained)
             db.add_coins(user_id, coins_gained)
             db.update_user(user_id, health=battle_state['player_health'])
@@ -460,7 +405,6 @@ def end_battle(call, battle_state, result, log_text=""):
 ❤️ Осталось здоровья: {battle_state['player_health']}
 """
             
-            # Отправляем изображение победы
             try:
                 bot.send_photo(call.message.chat.id, BATTLE_IMAGES['victory'], 
                              caption=result_text, parse_mode='Markdown')
@@ -468,7 +412,6 @@ def end_battle(call, battle_state, result, log_text=""):
                 bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
             
         elif result == 'monster_win':
-            # Поражение игрока
             coins_lost = min(30, user_data['coins'] // 3)
             recovered_health = max(1, user_data['max_health'] // 5)
             
@@ -495,7 +438,6 @@ def end_battle(call, battle_state, result, log_text=""):
                 bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
             
         elif result == 'fled':
-            # Игрок сбежал
             health_lost = user_data['health'] - battle_state['player_health']
             db.update_user(user_id, health=battle_state['player_health'])
             db.increment_daily_hunts(user_id)
@@ -513,12 +455,10 @@ def end_battle(call, battle_state, result, log_text=""):
             
             bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
         
-        # Показываем детали боя
         if log_text:
             battle_details = f"*📜 ДЕТАЛИ БОЯ:*\n\n{log_text}"
             bot.send_message(call.message.chat.id, battle_details, parse_mode='Markdown')
         
-        # Возвращаем в главное меню
         time.sleep(1)
         bot.send_message(
             call.message.chat.id,
@@ -604,7 +544,7 @@ def help_command(message):
 *Интерактивный бой:*
 🗡️ *Атака* - обычная атака, накапливает энергию
 🛡️ *Блок* - уменьшает урон от следующей атаки
-⚡ *Супер  удар* - мощная расавая способность (требует 3 энергии)
+⚡ *Супер-удар* - мощная расавая способность (требует 3 энергии)
 🧪 *Зелье* - использование зелий во время боя
 🏃 *Бегство* - попытка сбежать от монстра
 
@@ -782,7 +722,6 @@ def callback_handler(call):
         bot.answer_callback_query(call.id, "❌ Произошла ошибка!")
 
 def battle_callback_handler(call):
-    """Обработчик действий в бою"""
     user_id = call.from_user.id
     battle_key = f'battle_{user_id}'
     
@@ -797,21 +736,17 @@ def battle_callback_handler(call):
         bot.answer_callback_query(call.id, "❌ Недостаточно энергии для супер-удара!")
         return
     
-    # Если игрок оглушен, может использовать только зелье или блок
     if battle_state.get('player_stunned') and action not in ['potion', 'block']:
         bot.answer_callback_query(call.id, "❌ Вы оглушены! Можете только блокировать или использовать зелье.")
         battle_state['player_stunned'] = False
         return
     
-    # Обрабатываем действие
     result, log_text = process_battle_action(call, battle_state, action)
     
     if result == 'continue':
-        # Обновляем сообщение боя
         update_battle_message(call, battle_state, log_text)
         temp_user_data[battle_key] = battle_state
     elif result in ['player_win', 'monster_win', 'fled']:
-        # Завершаем бой
         end_battle(call, battle_state, result, log_text)
         if battle_key in temp_user_data:
             del temp_user_data[battle_key]
@@ -833,15 +768,12 @@ def show_profile(message):
         )
         return
     
-    # Расчет процента здоровья
     health_percent = (user_data['health'] / user_data['max_health']) * 100
     health_bar = "❤️" * int(health_percent / 20) + "♡" * (5 - int(health_percent / 20))
     
-    # Проверяем доступность охоты
     can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
     hunts_text = f"{hunts_done}/{max_hunts}"
     
-    # Описание расовой способности
     race_ability = get_race_ability_description(user_data.get('race', ''))
     
     profile_text = f"""
@@ -921,7 +853,6 @@ def show_hunt_menu(message):
     )
 
 def hunt_monster(call, monster_type):
-    """Начало интерактивного боя"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     
@@ -929,13 +860,11 @@ def hunt_monster(call, monster_type):
         bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
         return
     
-    # Проверяем лимит охоты
     can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
     if not can_hunt:
         bot.answer_callback_query(call.id, f"❌ Лимит охоты исчерпан! ({hunts_done}/{max_hunts})")
         return
     
-    # Данные монстров
     monsters = {
         'rat': {
             'name': '🐀 Крыса', 
@@ -991,7 +920,6 @@ def hunt_monster(call, monster_type):
     except:
         pass
     
-    # Создаем состояние боя
     battle_state = {
         'user_id': user_id,
         'monster_type': monster_type,
@@ -1003,14 +931,12 @@ def hunt_monster(call, monster_type):
         'player_defense': user_data['defense'],
         'player_race': user_data['race'],
         'round': 1,
-        'energy': 0,  # Энергия для супер-удара
+        'energy': 0,
         'last_action': None
     }
     
-    # Сохраняем состояние боя
     temp_user_data[f'battle_{user_id}'] = battle_state
     
-    # Отправляем изображение монстра и клавиатуру боя
     monster_image_url = MONSTER_IMAGES.get(monster_type, MONSTER_IMAGES['rat'])
     battle_start_text = f"""
 ⚔️ *НАЧАЛО БИТВЫ!*
@@ -1042,8 +968,7 @@ def hunt_monster(call, monster_type):
 
 def show_upgrade_menu(message):
     user_id = message.from_user.id
-    
-    user_data = db.get_user(message.from_user.id)
+    user_data = db.get_user(user_id)
     
     if not user_data:
         return
@@ -1125,7 +1050,6 @@ def upgrade_stat(call, stat):
 
 def show_inventory(message):
     user_id = message.from_user.id
-    
     user_data = db.get_user(user_id)
     
     if not user_data:
