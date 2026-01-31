@@ -6,18 +6,15 @@ import random
 import time
 import requests
 import logging
+import sys
 
 # ================== НАСТРОЙКИ БОТА ==================
-try:
-    from config import BOT_TOKEN
-except ImportError:
-    BOT_TOKEN = os.environ.get('BOT_TOKEN')
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 # Проверяем токен бота
 if not BOT_TOKEN:
     print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
-    print("   Установите переменную окружения BOT_TOKEN")
-    print("   На Railway: добавьте в Variables секцию")
+    print("   На Railway: добавьте BOT_TOKEN в Variables")
     exit(1)
 
 # Настройка логирования
@@ -35,25 +32,31 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # ================== ИМПОРТ БАЗЫ ДАННЫХ ==================
 try:
     from database import db  # PostgreSQL база данных
-    if db is None:
-        logger.error("❌ База данных не инициализирована")
-        # Создаем простую заглушку для тестирования
-        class DummyDB:
-            def get_user(self, user_id):
-                return None
-            def create_user(self, *args, **kwargs):
-                return False
-            # Добавьте другие методы по необходимости
-        db = DummyDB()
-        logger.warning("⚠️  Используется заглушка базы данных")
+    print("✅ База данных импортирована")
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта базы данных: {e}")
-    exit(1)
+    # Создаем заглушку
+    class DummyDB:
+        def get_user(self, *args): return None
+        def create_user(self, *args): return True
+        def update_user(self, *args): return True
+        def complete_character_creation(self, *args): return True
+        def add_exp(self, *args): return False
+        def add_coins(self, *args): return True
+        def can_hunt_today(self, *args): return True, 0, 5
+        def increment_daily_hunts(self, *args): return True
+        def use_skill_point(self, *args): return True
+        def get_inventory(self, *args): return []
+        def add_to_inventory(self, *args): return True
+        def use_item(self, *args): return True
+        def get_race_description(self, race): 
+            return f"{race.capitalize()} - неизвестная раса"
+        def get_top_players(self, *args): return []
+    db = DummyDB()
+    print("⚠️  Используется заглушка базы данных")
 
-# Остальной код остается без изменений...
 # Хранилище временных данных
 temp_user_data = {}
-
 # ================== ИЗОБРАЖЕНИЯ ==================
 RACE_IMAGES = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
@@ -1463,81 +1466,129 @@ def show_stats(message):
         )
 
 # ================== ЗАПУСК БОТА ==================
-# ================== ЗАПУСК БОТА ==================
 def main():
     print("=" * 50)
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
+    print(f"⏰ Время: {datetime.datetime.now()}")
     print("=" * 50)
     
-    # Принудительно удаляем вебхук перед запуском
+    # Проверяем наличие BOT_TOKEN
+    if not BOT_TOKEN:
+        print("❌ КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не установлен!")
+        print("   На Railway добавьте переменную BOT_TOKEN в разделе Variables")
+        return
+    
+    # Проверяем наличие DATABASE_URL
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        print(f"✅ DATABASE_URL найден ({len(db_url)} символов)")
+    else:
+        print("⚠️  DATABASE_URL не найден, работаем в режиме заглушки")
+    
+    # ОЧЕНЬ ВАЖНО: Принудительно удаляем вебхук перед запуском
+    print("🔄 Удаляем вебхук...")
     try:
         bot.remove_webhook()
         print("✅ Вебхук удален")
-        time.sleep(2)
+        time.sleep(2)  # Даем время Telegram обработать запрос
     except Exception as e:
-        print(f"⚠️  При удалении вебхука: {e}")
+        print(f"⚠️  Не удалось удалить вебхук: {e}")
     
-    # Проверяем подключение к БД
+    # Проверяем доступность Telegram API
+    print("🔄 Проверяем подключение к Telegram API...")
     try:
-        if hasattr(db, 'database_url') and db.database_url:
-            print("✅ База данных подключена")
-        else:
-            print("⚠️  База данных в режиме заглушки")
-    except:
-        print("⚠️  Не удалось проверить БД")
+        bot_info = bot.get_me()
+        print(f"✅ Бот: @{bot_info.username} (ID: {bot_info.id})")
+        print(f"📝 Имя: {bot_info.first_name}")
+    except Exception as e:
+        print(f"❌ Ошибка подключения к Telegram API: {e}")
+        print("⚠️  Проверьте BOT_TOKEN и интернет соединение")
+        return
     
-    # ГАРАНТИРОВАННЫЙ ЗАПУСК ОДНОГО ИНСТАНСА
-    while True:
+    # Основной цикл бота с защитой от 409 ошибки
+    print("\n" + "=" * 50)
+    print("🚀 НАЧИНАЕМ РАБОТУ БОТА")
+    print("=" * 50)
+    
+    last_409_time = 0
+    error_count = 0
+    max_errors = 10
+    
+    while error_count < max_errors:
         try:
-            print("🔄 Запускаем polling (одноразово)...")
+            print(f"\n🔄 Запуск polling (попытка {error_count + 1}/{max_errors})...")
             
-            # Используем polling с skip_pending=True
+            # Используем polling с параметрами для предотвращения конфликтов
             bot.polling(
                 none_stop=True,
                 interval=0,
-                timeout=30,
-                skip_pending=True,  # Пропускаем старые обновления
-                logger_level=logging.INFO
+                timeout=25,
+                long_polling_timeout=20,
+                skip_pending=True,  # КРИТИЧЕСКИ ВАЖНО: пропускаем ожидающие обновления
+                allowed_updates=None
             )
             
             # Если polling завершился без ошибки, перезапускаем
             print("⚠️  Polling завершился. Перезапуск через 5 секунд...")
+            error_count = 0  # Сбрасываем счетчик ошибок
             time.sleep(5)
             
         except telebot.apihelper.ApiTelegramException as e:
+            error_count += 1
+            
             if "409" in str(e):
+                current_time = time.time()
+                time_since_last_409 = current_time - last_409_time
+                last_409_time = current_time
+                
+                print("\n" + "=" * 60)
+                print("❌ ОШИБКА 409: Обнаружено несколько экземпляров бота!")
                 print("=" * 60)
-                print("❌ КРИТИЧЕСКАЯ ОШИБКА 409")
-                print("=" * 60)
-                print("Обнаружено несколько экземпляров бота!")
-                print("Возможные причины:")
+                
+                # Предлагаем решение в зависимости от времени
+                if time_since_last_409 < 30:
+                    wait_time = 30
+                    print(f"⚠️  Частые ошибки 409. Ждем {wait_time} секунд...")
+                else:
+                    wait_time = 15
+                    print(f"🔄 Ожидание {wait_time} секунд...")
+                
+                print("ПРИЧИНЫ И РЕШЕНИЯ:")
                 print("1. На Railway запущено несколько контейнеров")
-                print("2. Бот запущен локально")
-                print("3. Старый процесс не завершился")
+                print("2. Проверьте настройки Scale в Railway Dashboard")
+                print("3. Установите Min и Max Containers = 1")
                 print("=" * 60)
-                print("🔄 Ожидание 30 секунд и принудительный перезапуск...")
                 
                 # Принудительно удаляем вебхук
                 try:
                     bot.remove_webhook()
+                    print("✅ Вебхук принудительно удален")
+                    time.sleep(2)
                 except:
                     pass
                 
-                time.sleep(30)  # Долгое ожидание
+                time.sleep(wait_time)
                 
             else:
-                print(f"❌ Ошибка Telegram API: {e}")
-                print("🔄 Перезапуск через 10 секунд...")
+                print(f"❌ Другая ошибка Telegram API: {e}")
+                print(f"🔄 Перезапуск через 10 секунд...")
                 time.sleep(10)
                 
         except Exception as e:
+            error_count += 1
             print(f"❌ Неизвестная ошибка: {e}")
             import traceback
             traceback.print_exc()
-            print("🔄 Перезапуск через 10 секунд...")
+            print(f"🔄 Перезапуск через 10 секунд...")
             time.sleep(10)
             
         except KeyboardInterrupt:
             print("\n🛑 Бот остановлен пользователем")
-            sys.exit(0)
-            #go
+            break
+    
+    if error_count >= max_errors:
+        print(f"\n❌ Достигнуто максимальное количество ошибок ({max_errors})")
+        print("🛑 Бот остановлен. Проверьте настройки на Railway.")
+
+if __name__ == "__main__":
+    main()
