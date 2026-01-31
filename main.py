@@ -95,7 +95,7 @@ print(f"✅ Токен бота получен (длина: {len(BOT_TOKEN)} с�
 bot = safe_bot_start(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ SQLite ==================
-class Database:
+
 class Database:
     def __init__(self, db_name='game_bot.db'):
         self.db_name = db_name
