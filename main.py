@@ -1540,3 +1540,4 @@ def main():
         except KeyboardInterrupt:
             print("\n🛑 Бот остановлен пользователем")
             sys.exit(0)
+            #go
