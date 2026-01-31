@@ -30,11 +30,11 @@ RACE_IMAGES = {
 
 # Изображения монстров (русские хостинги)
 MONSTER_IMAGES = {
-    'rat': 'https://storage.yandexcloud.net/game-bot-images/monsters/rat.png',    # Крыса
-    'wolf': 'https://storage.yandexcloud.net/game-bot-images/monsters/wolf.png',   # Волк
-    'boar': 'https://sun9-55.userapi.com/impg/boar_image_hash/photo.jpg',   # Кабан
-    'bear': 'https://avatars.mds.yandex.net/get-images-cbir/789012/bear_image/orig',   # Медведь
-    'dragon': 'https://storage.yandexcloud.net/game-bot-images/monsters/dragon.png'  # Дракон
+    'rat': 'https://i126.fastpic.org/thumb/2026/0131/e9/a82df7379d77b0006066c011474d16e9.jpeg',    # Крыса
+    'wolf': 'https://i126.fastpic.org/thumb/2026/0131/38/ce2b3221d3076bcb3db2dedfff33fa38.jpeg',   # Волк
+    'boar': 'https://i126.fastpic.org/thumb/2026/0131/25/317fa1bb5307624d5546b7ca5e173725.jpeg',   # Кабан
+    'bear': 'https://i126.fastpic.org/thumb/2026/0131/45/2db4265909ceb3e92fc77ab6297b9045.jpeg',   # Медведь
+    'dragon': 'https://i126.fastpic.org/thumb/2026/0131/c2/df5fb497f92b3f7578ca0a0ab53c8ac2.jpeg'  # Дракон
 }
 
 # Изображения результатов боя
