@@ -1,19 +1,20 @@
+# bot.py
 import telebot
 from telebot import types
-import sqlite3
 import os
 import datetime
-import logging
-import sys
 import random
 import time
 import requests
+import logging
+from database import Database
 
-
-if os.path.exists('game_bot.db'):
-    print(f"✅ База данных найдена: game_bot.db ({os.path.getsize('game_bot.db')} байт)")
-else:
-    print("⚠️ База данных не найдена, будет создана новая")
+try:
+    from config import BOT_TOKEN, DB_PATH
+except ImportError:
+    # Если config.py не существует, используем значения по умолчанию
+    BOT_TOKEN = os.environ.get('BOT_TOKEN')
+    DB_PATH = 'data/game_bot.db
 # ================== ИЗОБРАЖЕНИЯ ==================
 # Ссылки на изображения (можно заменить на свои)
 
@@ -76,23 +77,32 @@ def safe_bot_start(token):
     return bot
 
 # ================== НАСТРОЙКИ ==================
+# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
+# Проверка токена
+if not BOT_TOKEN:
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
+    print("   Установите переменную окружения или создайте файл config.py")
+    exit(1)
+
+# Создаем экземпляр базы данных
 print("=" * 60)
 print("🚀 ПОДГОТОВКА К ЗАПУСКУ БОТА")
 print("=" * 60)
+print(f"📁 Путь к базе данных: {DB_PATH}")
+db = Database(DB_PATH)
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-if not BOT_TOKEN:
-    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная окружения 'BOT_TOKEN' не найдена.")
-    exit(1)
-
-print(f"✅ Токен бота получен (длина: {len(BOT_TOKEN)} символов)")
-bot = safe_bot_start(BOT_TOKEN)
+# Создаем бота
+bot = telebot.TeleBot(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ SQLite ==================
 
