@@ -91,9 +91,68 @@ bot = safe_bot_start(BOT_TOKEN)
 
 # ================== БАЗА ДАННЫХ SQLite ==================
 class Database:
+class Database:
     def __init__(self, db_name='game_bot.db'):
         self.db_name = db_name
+        
+        # Проверяем существование БД
+        if os.path.exists(db_name):
+            file_size = os.path.getsize(db_name)
+            print(f"📁 База данных найдена: {db_name} ({file_size} байт)")
+        else:
+            print("🆕 База данных не найдена, будет создана новая")
+        
+        # Создаем резервную копию
+        self.create_backup()
+        
+        # Инициализируем БД
         self.init_db()
+    
+    def create_backup(self):
+        """Создание резервной копии базы данных"""
+        try:
+            import shutil
+            import datetime
+            
+            if os.path.exists(self.db_name):
+                # Создаем папку для бэкапов, если ее нет
+                backup_dir = 'backups'
+                if not os.path.exists(backup_dir):
+                    os.makedirs(backup_dir)
+                
+                # Формируем имя файла с датой
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_name = f"{backup_dir}/{self.db_name}.backup_{timestamp}"
+                
+                # Копируем файл
+                shutil.copy2(self.db_name, backup_name)
+                print(f"✅ Резервная копия создана: {backup_name}")
+                
+                # Удаляем старые бэкапы (оставляем последние 5)
+                self.cleanup_old_backups(backup_dir)
+                
+                return backup_name
+        except Exception as e:
+            print(f"⚠️ Не удалось создать резервную копию: {e}")
+        return None
+    
+    def cleanup_old_backups(self, backup_dir, keep_last=5):
+        """Удаление старых резервных копий"""
+        try:
+            import glob
+            
+            # Получаем все файлы бэкапов
+            backup_files = glob.glob(f"{backup_dir}/{self.db_name}.backup_*")
+            backup_files.sort(key=os.path.getmtime)
+            
+            # Удаляем старые, оставляя только keep_last последних
+            if len(backup_files) > keep_last:
+                files_to_delete = backup_files[:-keep_last]
+                for file in files_to_delete:
+                    os.remove(file)
+                    print(f"🗑️ Удален старый бэкап: {file}")
+        except Exception as e:
+            print(f"⚠️ Не удалось очистить старые бэкапы: {e}")
     
     def get_connection(self):
         """Создаем соединение с базой данных"""
@@ -145,10 +204,16 @@ class Database:
             ''')
             
             conn.commit()
-            print(f"✅ База данных инициализирована: {self.db_name}")
+            
+            # Проверяем количество пользователей
+            cursor.execute('SELECT COUNT(*) as count FROM users')
+            user_count = cursor.fetchone()[0]
+            print(f"✅ База данных готова. Пользователей: {user_count}")
             
         except Exception as e:
             print(f"❌ Ошибка при инициализации БД: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             if conn:
                 conn.close()
