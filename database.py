@@ -555,6 +555,32 @@ class PostgreSQLDatabase:
         except Exception as e:
             logger.error(f"❌ Ошибка при создании бэкапа: {e}")
             return False
-
+    def log_activity(self, user_id, action, details=""):
+        """Логирование активности пользователя"""
+        try:
+            with self.get_connection() as conn:
+                with self.get_cursor(conn) as (cursor, _):
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS activity_log (
+                            id SERIAL PRIMARY KEY,
+                            user_id BIGINT NOT NULL,
+                            action VARCHAR(100),
+                            details TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            
+                            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                        )
+                    ''')
+                    
+                    cursor.execute('''
+                        INSERT INTO activity_log (user_id, action, details)
+                        VALUES (%s, %s, %s)
+                    ''', (user_id, action, details))
+                    
+                    conn.commit()
+                    return True
+        except Exception as e:
+            logger.error(f"❌ Ошибка при логировании активности: {e}")
+            return False
 # Создаем глобальный экземпляр базы данных
 db = PostgreSQLDatabase()
