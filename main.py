@@ -2,6 +2,7 @@
 import telebot
 from telebot import types
 import os
+import sqlite3
 import datetime
 import random
 import time
@@ -107,40 +108,36 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # ================== БАЗА ДАННЫХ SQLite ==================
 
 class Database:
-    def __init__(self, db_name='game_bot.db'):
-        self.db_name = db_name
+    def __init__(self, db_path='data/game_bot.db'):
+        self.db_path = db_path
+        self.data_dir = os.path.dirname(db_path)
         
-        # Проверяем существование БД
-        if os.path.exists(db_name):
-            file_size = os.path.getsize(db_name)
-            print(f"📁 База данных найдена: {db_name} ({file_size} байт)")
-        else:
-            print("🆕 База данных не найдена, будет создана новая")
-        
-        # Создаем резервную копию
-        self.create_backup()
+        # Создаем папку для данных, если ее нет
+        if not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir)
+            print(f"📁 Создана папка для данных: {self.data_dir}")
         
         # Инициализируем БД
         self.init_db()
+        
+        # Создаем резервную копию ПОСЛЕ инициализации
+        self.create_backup()
     
     def create_backup(self):
         """Создание резервной копии базы данных"""
         try:
-            import shutil
-            import datetime
-            
-            if os.path.exists(self.db_name):
-                # Создаем папку для бэкапов, если ее нет
+            if os.path.exists(self.db_path) and os.path.getsize(self.db_path) > 0:
+                # Создаем папку для бэкапов
                 backup_dir = 'backups'
                 if not os.path.exists(backup_dir):
                     os.makedirs(backup_dir)
                 
-                # Формируем имя файла с датой
+                # Формируем имя файла
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_name = f"{backup_dir}/{self.db_name}.backup_{timestamp}"
+                backup_name = f"{backup_dir}/game_bot_{timestamp}.db"
                 
                 # Копируем файл
-                shutil.copy2(self.db_name, backup_name)
+                shutil.copy2(self.db_path, backup_name)
                 print(f"✅ Резервная копия создана: {backup_name}")
                 
                 # Удаляем старые бэкапы (оставляем последние 5)
@@ -154,29 +151,33 @@ class Database:
     def cleanup_old_backups(self, backup_dir, keep_last=5):
         """Удаление старых резервных копий"""
         try:
-            import glob
+            # Получаем все файлы бэкапов, начинающиеся с game_bot_
+            backup_files = glob.glob(f"{backup_dir}/game_bot_*.db")
             
-            # Получаем все файлы бэкапов
-            backup_files = glob.glob(f"{backup_dir}/{self.db_name}.backup_*")
+            # Сортируем по времени создания
             backup_files.sort(key=os.path.getmtime)
             
             # Удаляем старые, оставляя только keep_last последних
             if len(backup_files) > keep_last:
                 files_to_delete = backup_files[:-keep_last]
                 for file in files_to_delete:
-                    os.remove(file)
-                    print(f"🗑️ Удален старый бэкап: {file}")
+                    try:
+                        os.remove(file)
+                        print(f"🗑️ Удален старый бэкап: {os.path.basename(file)}")
+                    except Exception as e:
+                        print(f"⚠️ Не удалось удалить бэкап {file}: {e}")
         except Exception as e:
             print(f"⚠️ Не удалось очистить старые бэкапы: {e}")
     
     def get_connection(self):
         """Создаем соединение с базой данных"""
-        conn = sqlite3.connect(self.db_name)
+        conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
     
     def init_db(self):
-        """Инициализация базы данных и создание таблиц"""
+        """Инициализация базы данных"""
+        conn = None  # Объявляем переменную заранее
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -214,21 +215,63 @@ class Database:
                     item_type TEXT,
                     item_name TEXT,
                     quantity INTEGER DEFAULT 1,
-                    FOREIGN KEY (user_id) REFERENCES users (user_id)
+                    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
                 )
             ''')
             
             conn.commit()
             
-            # Проверяем количество пользователей
+            # Проверяем состояние БД
             cursor.execute('SELECT COUNT(*) as count FROM users')
             user_count = cursor.fetchone()[0]
-            print(f"✅ База данных готова. Пользователей: {user_count}")
+            
+            file_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+            print(f"✅ База данных инициализирована")
+            print(f"   📊 Пользователей: {user_count}")
+            print(f"   📏 Размер файла: {file_size} байт")
             
         except Exception as e:
             print(f"❌ Ошибка при инициализации БД: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_user(self, user_id):
+        """Получение данных пользователя"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+            user = cursor.fetchone()
+            return dict(user) if user else None
+        except Exception as e:
+            print(f"❌ Ошибка при получении пользователя: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
+    def create_user(self, user_id, username="", first_name="", last_name=""):
+        """Создание нового пользователя"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users 
+                (user_id, username, first_name, last_name, exp_to_next_level) 
+                VALUES (?, ?, ?, ?, 100)
+            ''', (user_id, username, first_name, last_name))
+            conn.commit()
+            print(f"👤 Создан новый пользователь: {user_id}")
+            return True
+        except sqlite3.IntegrityError:
+            # Пользователь уже существует
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при создании пользователя: {e}")
+            return False
         finally:
             if conn:
                 conn.close()
@@ -594,8 +637,8 @@ class Database:
             if conn:
                 conn.close()
 
-# Создаем экземпляр базы данных
-db = Database()
+print(f"📁 Путь к базе данных: data/game_bot.db")
+db = Database('data/game_bot.db')
 
 # Хранилище временных данных
 temp_user_data = {}
