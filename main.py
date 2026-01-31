@@ -37,7 +37,7 @@ MONSTER_IMAGES = {
     'dragon': 'https://i126.fastpic.org/thumb/2026/0131/c2/df5fb497f92b3f7578ca0a0ab53c8ac2.jpeg'  # Дракон
 }
 
-# Изображения результатов боя
+# Изображения результатов боя доделать
 BATTLE_IMAGES = {
     'victory': 'https://sun9-29.userapi.com/impg/victory_image/photo.jpg?size=800x600',  # Победа
     'defeat': 'https://sun9-12.userapi.com/impg/defeat_image/photo.jpg?size=800x600',   # Поражение
