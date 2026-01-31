@@ -1381,8 +1381,10 @@ def show_stats(message):
             reply_markup=get_main_menu()
         )
 
+# ================== УЛУЧШЕННАЯ БОЁВКА ==================
+
 def hunt_monster(call, monster_type):
-    """Охота на монстра"""
+    """Охота на монстра - УЛУЧШЕННАЯ ВЕРСИЯ"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     
@@ -1396,51 +1398,67 @@ def hunt_monster(call, monster_type):
         bot.answer_callback_query(call.id, f"❌ Лимит охоты исчерпан! ({hunts_done}/{max_hunts})")
         return
     
+    # Данные монстров с улучшенными характеристиками
     monsters = {
         'rat': {
             'name': '🐀 Крыса', 
-            'health': 20, 
-            'attack': 5, 
-            'defense': 1, 
-            'exp': 5, 
-            'coins': 3,
-            'description': 'Маленькая, но опасная тварь из подземелий'
+            'health': 25, 
+            'attack': 8, 
+            'defense': 2, 
+            'exp': 10, 
+            'coins': 5,
+            'crit_chance': 0.05,
+            'dodge_chance': 0.10,
+            'description': 'Маленькая, но опасная тварь из подземелий',
+            'special': '🦷 Ядовитый укус (шанс отравления)'
         },
         'wolf': {
             'name': '🐺 Волк', 
-            'health': 40, 
-            'attack': 10, 
-            'defense': 3, 
-            'exp': 10, 
-            'coins': 8,
-            'description': 'Быстрый и безжалостный хищник лесов'
-        },
-        'boar': {
-            'name': '🐗 Кабан', 
-            'health': 70, 
+            'health': 50, 
             'attack': 15, 
             'defense': 5, 
             'exp': 20, 
-            'coins': 15,
-            'description': 'Мощный зверь с острыми клыками'
+            'coins': 12,
+            'crit_chance': 0.10,
+            'dodge_chance': 0.15,
+            'description': 'Быстрый и безжалостный хищник лесов',
+            'special': '🐾 Быстрая атака (двойной удар)'
+        },
+        'boar': {
+            'name': '🐗 Кабан', 
+            'health': 85, 
+            'attack': 20, 
+            'defense': 8, 
+            'exp': 35, 
+            'coins': 20,
+            'crit_chance': 0.15,
+            'dodge_chance': 0.05,
+            'description': 'Мощный зверь с острыми клыками',
+            'special': '💥 Таран (пробивает защиту)'
         },
         'bear': {
             'name': '🐻 Медведь', 
-            'health': 120, 
-            'attack': 25, 
-            'defense': 8, 
-            'exp': 35, 
-            'coins': 25,
-            'description': 'Грозный хозяин леса, сокрушающий врагов'
+            'health': 140, 
+            'attack': 30, 
+            'defense': 12, 
+            'exp': 50, 
+            'coins': 35,
+            'crit_chance': 0.20,
+            'dodge_chance': 0.03,
+            'description': 'Грозный хозяин леса, сокрушающий врагов',
+            'special': '🐾 Сокрушительный удар (оглушение)'
         },
-        'dragon': {
-            'name': '🐉 Дракон', 
-            'health': 200, 
-            'attack': 40, 
+        'spider': {
+            'name': '🕷️ Гигантский паук', 
+            'health': 180, 
+            'attack': 35, 
             'defense': 15, 
-            'exp': 60, 
-            'coins': 50,
-            'description': 'Легендарное чудовище, повелитель огня и страха'
+            'exp': 80, 
+            'coins': 60,
+            'crit_chance': 0.25,
+            'dodge_chance': 0.20,  # Паук очень ловкий
+            'description': 'Гигантский паук из тёмных пещер, опутывающий добычу паутиной',
+            'special': '🕸️ Паутина (замедление и яд)'
         }
     }
     
@@ -1451,47 +1469,186 @@ def hunt_monster(call, monster_type):
     except:
         pass
     
-    # Симуляция боя с несколькими раундами
+    # Отправляем изображение монстра
+    monster_image_url = MONSTER_IMAGES.get(monster_type, MONSTER_IMAGES['rat'])
+    battle_start_text = f"""
+⚔️ *НАЧАЛО БИТВЫ!*
+
+Вы встретили *{monster['name']}*!
+{monster['description']}
+
+*Характеристики врага:*
+❤️ Здоровье: {monster['health']}
+🗡️ Атака: {monster['attack']}
+🛡️ Защита: {monster['defense']}
+✨ Особенность: {monster['special']}
+
+*Ваши характеристики:*
+❤️ Здоровье: {user_data['health']}/{user_data['max_health']}
+🗡️ Атака: {user_data['attack']}
+🛡️ Защита: {user_data['defense']}
+
+Битва начинается! ⚔️
+"""
+    
+    try:
+        bot.send_photo(call.message.chat.id, monster_image_url, 
+                      caption=battle_start_text, parse_mode='Markdown')
+    except:
+        bot.send_message(call.message.chat.id, battle_start_text, parse_mode='Markdown')
+    
+    # Симуляция боя с улучшенной логикой
     player_health = user_data['health']
     monster_health = monster['health']
     
     battle_log = []
     rounds = 0
+    player_crits = 0
+    monster_crits = 0
+    player_dodges = 0
+    monster_dodges = 0
+    special_events = []
     
-    while player_health > 0 and monster_health > 0 and rounds < 10:
+    # Дополнительные параметры для спецэффектов
+    poison_damage = 0  # Урон от яда
+    slowed = False  # Замедлен ли игрок
+    stunned = False  # Оглушен ли игрок
+    broken_defense = False  # Пробита ли защита
+    
+    while player_health > 0 and monster_health > 0 and rounds < 15:
         rounds += 1
         
-        # Игрок атакует
-        player_damage = max(1, user_data['attack'] + random.randint(-2, 5) - monster['defense'])
-        monster_health -= player_damage
+        # Проверяем спецэффекты в начале раунда
+        if poison_damage > 0:
+            player_health -= poison_damage
+            battle_log.append(f"☠️ *Раунд {rounds}:* Вы получаете {poison_damage} урона от яда!")
+            poison_damage = max(0, poison_damage - 2)  # Яд ослабевает
         
-        # Критический урон с шансом 20%
-        is_critical = random.random() < 0.2
-        if is_critical:
-            player_damage = int(player_damage * 1.5)
-            battle_log.append(f"🎯 *Раунд {rounds}:* КРИТИЧЕСКИЙ УДАР! Вы нанесли {player_damage} урона! 💥")
+        if stunned:
+            battle_log.append(f"😵 *Раунд {rounds}:* Вы оглушены и пропускаете ход!")
+            stunned = False
+            continue  # Пропускаем ход
+        
+        # ===== ИГРОК АТАКУЕТ =====
+        if not slowed:  # Если не замедлен
+            # Базовая атака
+            base_damage = max(1, user_data['attack'] + random.randint(-3, 7))
+            
+            # Учет защиты монстра
+            if broken_defense:
+                actual_damage = base_damage  # Пробита защита
+            else:
+                actual_damage = max(1, base_damage - monster['defense'] // 2)
+            
+            # Критический удар игрока (15% шанс)
+            is_critical = random.random() < 0.15
+            if is_critical:
+                actual_damage = int(actual_damage * 1.8)
+                player_crits += 1
+                battle_log.append(f"🎯 *Раунд {rounds}:* КРИТИЧЕСКИЙ УДАР! Вы нанесли {actual_damage} урона! 💥")
+            else:
+                # Обычный удар
+                actual_damage = int(actual_damage * random.uniform(0.8, 1.2))
+                battle_log.append(f"⚔️ *Раунд {rounds}:* Вы нанесли {actual_damage} урона")
+            
+            monster_health -= actual_damage
+            
+            # Спецэффекты от атаки игрока
+            if random.random() < 0.1:  # 10% шанс на спецэффект
+                special_events.append(f"✨ *Особый момент:* Вы нашли слабое место врага!")
+                monster_health -= 5  # Дополнительный урон
+        
         else:
-            battle_log.append(f"🎯 *Раунд {rounds}:* Вы нанесли {player_damage} урона")
+            battle_log.append(f"🐌 *Раунд {rounds}:* Вы замедлены паутиной и атакуете слабее!")
+            actual_damage = max(1, user_data['attack'] // 2 - monster['defense'] // 3)
+            monster_health -= actual_damage
         
         if monster_health <= 0:
             break
         
-        # Монстр атакует
-        monster_damage = max(1, monster['attack'] + random.randint(-1, 3) - user_data['defense'])
-        player_health -= monster_damage
-        
-        # Уклонение с шансом 15%
-        if random.random() < 0.15:
+        # ===== МОНСТР АТАКУЕТ =====
+        # Проверяем уклонение игрока (20% шанс)
+        if random.random() < 0.20:
+            player_dodges += 1
             battle_log.append(f"🌀 *Раунд {rounds}:* Вы увернулись от атаки {monster['name']}! 🍃")
         else:
-            battle_log.append(f"💥 *Раунд {rounds}:* {monster['name']} нанес {monster_damage} урона")
+            # Атака монстра
+            monster_base_damage = max(1, monster['attack'] + random.randint(-2, 5))
+            
+            # Учет защиты игрока
+            monster_damage = max(1, monster_base_damage - user_data['defense'] // 2)
+            
+            # Критический удар монстра
+            if random.random() < monster['crit_chance']:
+                monster_damage = int(monster_damage * 1.7)
+                monster_crits += 1
+                battle_log.append(f"💀 *Раунд {rounds}:* {monster['name']} наносит КРИТИЧЕСКИЙ удар {monster_damage} урона!")
+            else:
+                # Обычная атака
+                monster_damage = int(monster_damage * random.uniform(0.7, 1.3))
+                battle_log.append(f"💥 *Раунд {rounds}:* {monster['name']} наносит {monster_damage} урона")
+            
+            player_health -= monster_damage
+            
+            # Спецэффекты монстров
+            if monster_type == 'rat' and random.random() < 0.15:
+                poison_damage += 3
+                battle_log.append(f"☠️ *Раунд {rounds}:* Крыса кусает вас! Вы отравлены (+3 урона в раунд)")
+            
+            elif monster_type == 'wolf' and random.random() < 0.2:
+                # Двойная атака волка
+                extra_damage = max(1, monster['attack'] // 3)
+                player_health -= extra_damage
+                battle_log.append(f"🐺 *Раунд {rounds}:* Волк делает быструю двойную атаку! +{extra_damage} урона")
+            
+            elif monster_type == 'boar' and random.random() < 0.25:
+                broken_defense = True
+                battle_log.append(f"💢 *Раунд {rounds}:* Кабан пробивает вашу защиту! Следующая атака пройдет полностью")
+            
+            elif monster_type == 'bear' and random.random() < 0.3:
+                stunned = True
+                battle_log.append(f"😵 *Раунд {rounds}:* Медведь оглушает вас! Вы пропустите следующий ход")
+            
+            elif monster_type == 'spider':
+                if random.random() < 0.4:  # 40% шанс для паука
+                    slowed = True
+                    poison_damage += 5
+                    battle_log.append(f"🕸️ *Раунд {rounds}:* Паук опутывает вас паутиной! Вы замедлены и отравлены (+5 урона)")
+                elif random.random() < 0.2:
+                    # Паук прячется и восстанавливает здоровье
+                    heal_amount = monster['health'] // 10
+                    monster_health = min(monster['health'], monster_health + heal_amount)
+                    battle_log.append(f"🕷️ *Раунд {rounds}:* Паук прячется в паутине и восстанавливает {heal_amount} здоровья")
+        
+        # Проверяем здоровье после каждого раунда
+        if player_health <= 0:
+            break
+        
+        # Пауза между раундами для драматизма
+        time.sleep(0.5)
     
-    # Определяем победителя
+    # ===== РЕЗУЛЬТАТЫ БИТВЫ =====
     if player_health > 0:
-        # Победа
+        # ПОБЕДА
         exp_gained = monster['exp']
         coins_gained = monster['coins']
         health_lost = user_data['health'] - player_health
+        
+        # Бонусы за хорошую битву
+        victory_bonus = 1.0
+        
+        if rounds <= 5:
+            victory_bonus = 1.5  # Быстрая победа
+            coins_gained = int(coins_gained * 1.5)
+            exp_gained = int(exp_gained * 1.3)
+        
+        if player_crits >= 2:
+            victory_bonus = 1.3
+            coins_gained += 5
+        
+        if player_dodges >= 3:
+            victory_bonus = 1.2
+            exp_gained += 5
         
         # Начисляем награды
         level_up = db.add_exp(user_id, exp_gained)
@@ -1499,28 +1656,49 @@ def hunt_monster(call, monster_type):
         db.update_user(user_id, health=player_health)
         db.increment_daily_hunts(user_id)
         
+        # Статистика боя
+        battle_stats = f"""
+📊 *СТАТИСТИКА БИТВЫ:*
+🎯 Критических ударов: {player_crits}
+🌀 Уклонений: {player_dodges}
+⚔️ Всего раундов: {rounds}
+"""
+        
+        if special_events:
+            battle_stats += "\n✨ *Особые моменты:*\n" + "\n".join(special_events[:3])
+        
         result_text = f"""
 🎉 *ВЕЛИКОЛЕПНАЯ ПОБЕДА!*
 
-Вы победили {monster['name']} за {rounds} раундов!
+Вы победили *{monster['name']}* за {rounds} раундов!
 
 🏆 *НАГРАДЫ ЗА ПОБЕДУ:*
-⭐ Опыт: +{exp_gained}
+⭐ Опыт: +{exp_gained} (x{victory_bonus:.1f})
 💰 Золото: +{coins_gained}
 💔 Потеряно здоровья: {health_lost}
 ❤️ Осталось здоровья: {player_health}
+
+{battle_stats}
+
+⚔️ *С возвращением, герой!*
         """
         
-        # if level_up:
-        #     result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️"
-        #     # Отправляем изображение повышения уровня
-        #     send_battle_result_image(call.message.chat.id, 'level_up', result_text)
-        # else:
-        #     # Отправляем изображение победы
-        #     send_battle_result_image(call.message.chat.id, 'victory', result_text)
+        if level_up:
+            result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️\n"
+            # Отправляем изображение повышения уровня
+            try:
+                send_battle_result_image(call.message.chat.id, 'level_up', result_text)
+            except:
+                bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
+        else:
+            # Отправляем изображение победы
+            try:
+                send_battle_result_image(call.message.chat.id, 'victory', result_text)
+            except:
+                bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
         
-        # Добавляем лог боя
-        battle_log_text = "\n\n*📜 ХРОНИКА БИТВЫ:*\n" + "\n".join(battle_log[:6])
+        # Добавляем подробный лог боя
+        battle_log_text = "\n\n*📜 ПОДРОБНАЯ ХРОНИКА БИТВЫ:*\n" + "\n".join(battle_log[-8:])  # Последние 8 раундов
         battle_log_text += f"\n\n🎯 *Охот сегодня:* {hunts_done + 1}/{max_hunts}"
         
         bot.send_message(
@@ -1530,31 +1708,53 @@ def hunt_monster(call, monster_type):
         )
         
     else:
-        # Поражение
+        # ПОРАЖЕНИЕ
         health_lost = user_data['health']
-        coins_lost = min(20, user_data['coins'])
+        coins_lost = min(30, user_data['coins'] // 2)  # Теряем половину золота, но не более 30
         
-        db.update_user(user_id, health=1)
+        # Восстанавливаем немного здоровья после поражения
+        recovered_health = max(1, user_data['max_health'] // 4)
+        
+        db.update_user(user_id, health=recovered_health)
         db.add_coins(user_id, -coins_lost)
         db.increment_daily_hunts(user_id)
+        
+        # Статистика поражения
+        defeat_stats = f"""
+📊 *СТАТИСТИКА ПОРАЖЕНИЯ:*
+💀 Критических ударов врага: {monster_crits}
+🛡️ Уклонений врага: {monster_dodges}
+⚔️ Продержались раундов: {rounds}
+"""
         
         result_text = f"""
 💀 *ГЕРОИЧЕСКОЕ ПОРАЖЕНИЕ!*
 
-{monster['name']} оказался слишком сильным!
+*{monster['name']}* оказался слишком сильным!
 
-⚔️ *ПОТЕРИ:*
+⚔️ *ВЫ СДЕРЖАЛИ {rounds} РАУНДОВ!*
+
+📉 *ПОТЕРИ:*
 💔 Потеряно здоровья: {health_lost}
 💸 Потеряно золота: {coins_lost}
-❤️ Ваше здоровье восстановлено до 1
+❤️ Ваше здоровье восстановлено до {recovered_health}
 
-📜 *МУДРОСТЬ:* Даже поражение дает опыт. Вернитесь сильнее!
+{defeat_stats}
+
+📜 *МУДРОСТЬ ПОСЛЕ БИТВЫ:*
+Каждое поражение делает вас сильнее. 
+Подготовьтесь лучше и вернитесь за реваншем!
+
+🏋️ *СОВЕТ:* Улучшите характеристики или купите зелья перед следующей битвой!
         """
         
         # Отправляем изображение поражения
-        send_battle_result_image(call.message.chat.id, 'defeat', result_text)
+        try:
+            send_battle_result_image(call.message.chat.id, 'defeat', result_text)
+        except:
+            bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
         
-        battle_log_text = "\n\n*📜 ХРОНИКА БИТВЫ:*\n" + "\n".join(battle_log[:6])
+        battle_log_text = "\n\n*📜 ХРОНИКА ПОСЛЕДНИХ МОМЕНТОВ:*\n" + "\n".join(battle_log[-6:])
         battle_log_text += f"\n\n🎯 *Охот сегодня:* {hunts_done + 1}/{max_hunts}"
         
         bot.send_message(
@@ -1562,7 +1762,7 @@ def hunt_monster(call, monster_type):
             battle_log_text,
             parse_mode='Markdown'
         )
-
+        
 def upgrade_stat(call, stat):
     """Улучшение характеристики"""
     user_id = call.from_user.id
