@@ -1,10 +1,19 @@
-{
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "numReplicas": 1,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
-  }
-}
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python main.py"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "never"
+
+[deploy.checks]
+liveness.path = "/"
+liveness.initialDelaySeconds = 10
+liveness.timeoutSeconds = 5
+
+[deploy.service]
+minReplicas = 1
+maxReplicas = 1
+cpu = 0.5
+memory = 512
