@@ -823,7 +823,7 @@ def end_battle(call, battle_state, result, log_text=""):
 """
             
             if level_up:
-                result_text += "\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\n"
+              #  result_text += "\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\n"
             
             # Отправляем изображение победы
             try:
