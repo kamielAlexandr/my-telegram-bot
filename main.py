@@ -1463,6 +1463,7 @@ def show_stats(message):
         )
 
 # ================== ЗАПУСК БОТА ==================
+# ================== ЗАПУСК БОТА ==================
 def main():
     print("=" * 50)
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
@@ -1474,9 +1475,15 @@ def main():
         print(f"📝 Имя бота: {bot_info.first_name}")
         
         print("🔄 Бот запускает polling...")
-        bot.infinity_polling(
-            skip_pending=True,
-            timeout=20,
+        # Убираем предыдущие обновления, чтобы избежать конфликта 409
+        bot.remove_webhook()
+        time.sleep(1)
+        
+        # Запускаем polling с параметрами
+        bot.polling(
+            none_stop=True,        # Не останавливаться при ошибках
+            interval=0,            # Интервал между запросами
+            timeout=20,            # Таймаут
             long_polling_timeout=5
         )
         
