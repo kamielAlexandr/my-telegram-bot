@@ -34,7 +34,7 @@ MONSTER_IMAGES = {
     'wolf': 'https://i126.fastpic.org/thumb/2026/0131/38/ce2b3221d3076bcb3db2dedfff33fa38.jpeg',   # Волк
     'boar': 'https://i126.fastpic.org/thumb/2026/0131/25/317fa1bb5307624d5546b7ca5e173725.jpeg',   # Кабан
     'bear': 'https://i126.fastpic.org/thumb/2026/0131/45/2db4265909ceb3e92fc77ab6297b9045.jpeg',   # Медведь
-    'dragon': 'https://i126.fastpic.org/thumb/2026/0131/c2/df5fb497f92b3f7578ca0a0ab53c8ac2.jpeg'  # Дракон
+    'spider': 'https://i126.fastpic.org/thumb/2026/0131/c2/df5fb497f92b3f7578ca0a0ab53c8ac2.jpeg'  # Паук
 }
 
 # Изображения результатов боя доделать
@@ -674,7 +674,7 @@ def get_hunt_keyboard():
     btn2 = types.InlineKeyboardButton('🐺 Волк', callback_data='hunt_wolf')
     btn3 = types.InlineKeyboardButton('🐗 Кабан', callback_data='hunt_boar')
     btn4 = types.InlineKeyboardButton('🐻 Медведь', callback_data='hunt_bear')
-    btn5 = types.InlineKeyboardButton('🐉 Дракон', callback_data='hunt_dragon')
+    btn5 = types.InlineKeyboardButton('🕷️ Паук', callback_data='hunt_dragon')
     markup.add(btn1, btn2, btn3, btn4, btn5)
     return markup
 
@@ -1132,7 +1132,7 @@ def show_hunt_menu(message):
 🐺 *Волк* - быстрый и опасный хищник
 🐗 *Кабан* - мощный боец средней сложности
 🐻 *Медведь* - сильный и выносливый враг
-🐉 *Дракон* - легендарный босс, только для сильнейших!
+🕷️ *Паук* - легендарный босс, только для сильнейших!
 
 🎯 *Охот сегодня:* {hunts_done}/{max_hunts}
 💰 *Совет:* Начинайте с легких монстров и постепенно увеличивайте сложность!
