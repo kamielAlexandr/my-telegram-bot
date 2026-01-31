@@ -1684,7 +1684,7 @@ def hunt_monster(call, monster_type):
         """
         
         if level_up:
-            result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️\n"
+            #result_text += "\n\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\nПолучено 1 очко навыка! 🏋️\n"
             # Отправляем изображение повышения уровня
             try:
                 send_battle_result_image(call.message.chat.id, 'level_up', result_text)
