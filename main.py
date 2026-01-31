@@ -15,7 +15,7 @@ try:
 except ImportError:
     # Если config.py не существует, используем значения по умолчанию
     BOT_TOKEN = os.environ.get('BOT_TOKEN')
-    DB_PATH = 'data/game_bot.db'
+    DB_PATH = 'game_bot.db''
 # ================== ИЗОБРАЖЕНИЯ ==================
 # Ссылки на изображения (можно заменить на свои)
 
