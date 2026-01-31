@@ -1784,6 +1784,20 @@ def rest_action(call, rest_type):
 
 # ================== ЗАПУСК БОТА ==================
 def main():
+   # Проверяем состояние базы данных
+    print("=" * 50)
+    print("🔍 ПРОВЕРКА СОСТОЯНИЯ БАЗЫ ДАННЫХ")
+    print("=" * 50)
+    
+    if os.path.exists('game_bot.db'):
+        file_size = os.path.getsize('game_bot.db')
+        file_mtime = datetime.datetime.fromtimestamp(os.path.getmtime('game_bot.db'))
+        print(f"📁 Файл БД: game_bot.db")
+        print(f"📏 Размер: {file_size} байт")
+        print(f"🕐 Последнее изменение: {file_mtime}")
+    else:
+        print("⚠️ Внимание: файл БД не найден! Будет создан новый.")
+    
     print("=" * 50)
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print(f"🤖 Используется SQLite база данных")
