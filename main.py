@@ -8,8 +8,6 @@ import random
 import time
 import requests
 import logging
-import shutil
-import glob
 
 try:
     from config import BOT_TOKEN, DB_PATH
@@ -53,12 +51,16 @@ MENU_IMAGES = {
 class Database:
     def __init__(self, db_path='game_bot.db'):
         self.db_path = db_path
+        
+        # Извлекаем директорию из пути
         self.data_dir = os.path.dirname(db_path)
         
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
+        # Если указана директория и она не пустая строка, создаем её
+        if self.data_dir and not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir, exist_ok=True)
             print(f"📁 Создана папка для данных: {self.data_dir}")
         
+        # Инициализируем БД
         self.init_db()
     
     def get_connection(self):
@@ -67,6 +69,7 @@ class Database:
         return conn
     
     def init_db(self):
+        conn = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
@@ -111,6 +114,8 @@ class Database:
             
         except Exception as e:
             print(f"❌ Ошибка при инициализации БД: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             if conn:
                 conn.close()
@@ -134,14 +139,12 @@ class Database:
             conn = self.get_connection()
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO users 
+                INSERT OR IGNORE INTO users 
                 (user_id, username, first_name, last_name, exp_to_next_level) 
                 VALUES (?, ?, ?, ?, 100)
             ''', (user_id, username, first_name, last_name))
             conn.commit()
-            print(f"👤 Создан новый пользователь: {user_id}")
-            return True
-        except sqlite3.IntegrityError:
+            print(f"👤 Создан/обновлен пользователь: {user_id}")
             return True
         except Exception as e:
             print(f"❌ Ошибка при создании пользователя: {e}")
