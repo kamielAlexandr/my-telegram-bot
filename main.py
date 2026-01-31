@@ -822,7 +822,7 @@ def end_battle(call, battle_state, result, log_text=""):
 ❤️ Осталось здоровья: {battle_state['player_health']}
 """
             
-            if level_up:
+            #if level_up:
               #  result_text += "\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\n"
             
             # Отправляем изображение победы
