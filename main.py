@@ -1,4 +1,3 @@
-# main.py - основной файл бота
 import telebot
 from telebot import types
 import os
@@ -7,13 +6,6 @@ import random
 import time
 import requests
 import logging
-
-# ================== ИМПОРТ БАЗЫ ДАННЫХ ==================
-try:
-    from database import db  # PostgreSQL база данных
-except ImportError as e:
-    logging.error(f"❌ Ошибка импорта базы данных: {e}")
-    exit(1)
 
 # ================== НАСТРОЙКИ БОТА ==================
 try:
@@ -24,7 +16,8 @@ except ImportError:
 # Проверяем токен бота
 if not BOT_TOKEN:
     print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
-    print("   Установите переменную окружения или создайте файл config.py")
+    print("   Установите переменную окружения BOT_TOKEN")
+    print("   На Railway: добавьте в Variables секцию")
     exit(1)
 
 # Настройка логирования
@@ -32,7 +25,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('bot.log'),
         logging.StreamHandler()
     ]
 )
@@ -40,6 +32,25 @@ logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# ================== ИМПОРТ БАЗЫ ДАННЫХ ==================
+try:
+    from database import db  # PostgreSQL база данных
+    if db is None:
+        logger.error("❌ База данных не инициализирована")
+        # Создаем простую заглушку для тестирования
+        class DummyDB:
+            def get_user(self, user_id):
+                return None
+            def create_user(self, *args, **kwargs):
+                return False
+            # Добавьте другие методы по необходимости
+        db = DummyDB()
+        logger.warning("⚠️  Используется заглушка базы данных")
+except ImportError as e:
+    logger.error(f"❌ Ошибка импорта базы данных: {e}")
+    exit(1)
+
+# Остальной код остается без изменений...
 # Хранилище временных данных
 temp_user_data = {}
 
