@@ -243,6 +243,15 @@ def update_character_stats(user_id, **kwargs):
         
         cursor = conn.cursor()
         
+        # Если обновляем здоровье, убедимся что оно не превышает максимум
+        if 'health' in kwargs and 'max_health' not in kwargs:
+            # Получаем текущий максимум здоровья
+            cursor.execute("SELECT max_health FROM player_characters WHERE user_id = %s", (user_id,))
+            result = cursor.fetchone()
+            if result:
+                max_health = result[0]
+                kwargs['health'] = min(kwargs['health'], max_health)
+        
         set_clauses = []
         values = []
         for key, value in kwargs.items():
