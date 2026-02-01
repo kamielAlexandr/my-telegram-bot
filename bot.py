@@ -1,6 +1,7 @@
 import os
 import logging
 import random
+import asyncio
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -8,7 +9,9 @@ from telegram.ext import (
     CommandHandler, 
     CallbackQueryHandler,
     ContextTypes,
-    ConversationHandler
+    ConversationHandler,
+    MessageHandler,
+    filters
 )
 from database import (
     init_db, 
@@ -29,10 +32,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Состояния для ConversationHandler
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU = range(4)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE = range(5)
 
 # Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+# Глобальная переменная для хранения данных о боях
+battle_sessions = {}
 
 # --- КЛАВИАТУРЫ ---
 
@@ -43,7 +49,8 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("⚔️ Отправиться в бой", callback_data='battle_menu')],
         [InlineKeyboardButton("🏪 Магазин", callback_data='shop')],
         [InlineKeyboardButton("📊 Статистика", callback_data='stats')],
-        [InlineKeyboardButton("❓ Помощь", callback_data='help')]
+        [InlineKeyboardButton("❓ Помощь", callback_data='help')],
+        [InlineKeyboardButton("🔄 Перезапустить", callback_data='restart')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -55,23 +62,22 @@ def get_race_selection_keyboard():
     for race_key, race_data in races.items():
         keyboard.append([
             InlineKeyboardButton(
-                f"{race_data['name']} ({race_data['strength']}/{race_data['agility']}/{race_data['intelligence']})",
+                f"{race_data['name']} (💪{race_data['strength']}/🏹{race_data['agility']}/🧠{race_data['intelligence']})",
                 callback_data=f'race_{race_key}'
             )
         ])
     
-    # Добавляем кнопку для просмотра подробностей о каждой расе
     keyboard.append([InlineKeyboardButton("📖 Подробнее о расах", callback_data='race_info')])
     return InlineKeyboardMarkup(keyboard)
 
 def get_battle_menu_keyboard():
     """Клавиатура меню боя"""
     keyboard = [
-        [InlineKeyboardButton("🐺 Бой с волком", callback_data='battle_wolf')],
-        [InlineKeyboardButton("🧟 Бой с зомби", callback_data='battle_zombie')],
-        [InlineKeyboardButton("🧙 Бой с магом", callback_data='battle_mage')],
-        [InlineKeyboardButton("🐉 Босс: Дракон", callback_data='battle_dragon')],
-        [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
+        [InlineKeyboardButton("🐺 Волк (Легко)", callback_data='battle_wolf')],
+        [InlineKeyboardButton("🧟 Зомби (Средне)", callback_data='battle_zombie')],
+        [InlineKeyboardButton("🧙 Маг (Сложно)", callback_data='battle_mage')],
+        [InlineKeyboardButton("🐉 Дракон (Босс)", callback_data='battle_dragon')],
+        [InlineKeyboardButton("🔙 Назад в меню", callback_data='back_to_main')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -80,8 +86,16 @@ def get_battle_action_keyboard():
     keyboard = [
         [InlineKeyboardButton("⚔️ Атаковать", callback_data='attack')],
         [InlineKeyboardButton("🛡️ Защищаться", callback_data='defend')],
-        [InlineKeyboardButton("✨ Исп. способность", callback_data='use_ability')],
+        [InlineKeyboardButton("✨ Способность", callback_data='ability')],
         [InlineKeyboardButton("🏃 Сбежать", callback_data='flee')]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_confirm_keyboard():
+    """Клавиатура подтверждения"""
+    keyboard = [
+        [InlineKeyboardButton("✅ Да", callback_data='confirm_yes')],
+        [InlineKeyboardButton("❌ Нет", callback_data='confirm_no')]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -104,85 +118,157 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Если персонажа нет, начинаем создание
         await update.message.reply_text(
-            f"Привет, {user.first_name}! Добро пожаловать в RPG мир!\n"
-            f"Для начала создайте своего персонажа.\n\n"
-            f"Выберите расу:",
+            f"👋 Привет, {user.first_name}! Добро пожаловать в мир RPG!\n\n"
+            f"Ты стоишь на пороге великих приключений.\n"
+            f"Для начала создай своего персонажа.\n\n"
+            f"Выбери расу:",
             reply_markup=get_race_selection_keyboard()
         )
         return CHOOSE_RACE
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда помощи"""
-    await update.message.reply_text(
-        "🎮 *РПГ Бот - Помощь*\n\n"
-        "Основные команды:\n"
-        "/start - Начать игру\n"
-        "/profile - Показать профиль\n"
-        "/battle - Начать бой\n"
-        "/inventory - Инвентарь\n\n"
-        "В игре вы можете:\n"
-        "• Создать персонажа с уникальной расой\n"
-        "• Сражаться с различными противниками\n"
-        "• Повышать уровень и характеристики\n"
-        "• Зарабатывать золото и опыт\n\n"
-        "Удачи в приключениях!",
+    help_text = """
+🎮 *РПГ Бот - Руководство*
+
+*Основные команды:*
+/start - Начать игру или вернуться в меню
+/help - Показать это руководство
+
+*Создание персонажа:*
+1. Выбери расу (у каждой свои бонусы)
+2. Придумай имя
+3. Начни свои приключения!
+
+*Расы и их особенности:*
+• 👤 Человек - Универсал, +1 ко всем статам
+• 🧝 Эльф - Мастер лука, +50% к мане
+• ⛏️ Дварф - Крепкий, +20% к здоровью
+• 👹 Орк - Силач, двойной урон в ярости
+
+*В бою:*
+• ⚔️ Атака - Обычная атака
+• 🛡️ Защита - Уменьшает получаемый урон
+• ✨ Способность - Уникальная способность расы
+• 🏃 Сбежать - Попытаться избежать боя
+
+Удачи в приключениях! 🏹🐉
+"""
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+# --- ОБРАБОТЧИКИ СОЗДАНИЯ ПЕРСОНАЖА ---
+
+async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик выбора расы"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data == 'race_info':
+        # Показываем подробную информацию о расах
+        races = get_all_races()
+        info_text = "📖 *Подробнее о расах:*\n\n"
+        
+        for race_key, race_data in races.items():
+            info_text += (
+                f"*{race_data['name']}*\n"
+                f"💪 Сила: {race_data['strength']}\n"
+                f"🏹 Ловкость: {race_data['agility']}\n"
+                f"🧠 Интеллект: {race_data['intelligence']}\n"
+                f"❤️ Здоровье: {race_data['health']}\n"
+                f"🔮 Мана: {race_data['mana']}\n"
+                f"✨ Способность: {race_data['racial_ability']}\n\n"
+            )
+        
+        await query.edit_message_text(
+            text=info_text + "Выбери расу:",
+            parse_mode='Markdown',
+            reply_markup=get_race_selection_keyboard()
+        )
+        return CHOOSE_RACE
+    
+    # Сохраняем выбранную расу
+    race_key = data[5:]  # Убираем 'race_'
+    context.user_data['selected_race'] = race_key
+    
+    races = get_all_races()
+    race_data = races[race_key]
+    
+    await query.edit_message_text(
+        text=f"🎭 Ты выбрал: *{race_data['name']}*\n\n"
+             f"*Характеристики:*\n"
+             f"💪 Сила: {race_data['strength']}\n"
+             f"🏹 Ловкость: {race_data['agility']}\n"
+             f"🧠 Интеллект: {race_data['intelligence']}\n"
+             f"❤️ Здоровье: {race_data['health']}\n"
+             f"🔮 Мана: {race_data['mana']}\n"
+             f"✨ Способность: {race_data['racial_ability']}\n\n"
+             f"Теперь введи имя для своего персонажа (от 2 до 20 символов):",
         parse_mode='Markdown'
     )
+    return ENTER_NAME
 
-# --- ОБРАБОТЧИКИ КНОПОК ---
+async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ввода имени"""
+    user = update.message.from_user
+    character_name = update.message.text.strip()
+    
+    # Валидация имени
+    if len(character_name) < 2 or len(character_name) > 20:
+        await update.message.reply_text(
+            "❌ Имя должно быть от 2 до 20 символов. Попробуй еще раз:"
+        )
+        return ENTER_NAME
+    
+    # Получаем выбранную расу
+    race_key = context.user_data.get('selected_race', 'human')
+    
+    # Создаем персонажа
+    success, message = create_character(
+        user_id=user.id,
+        username=user.username or user.first_name,
+        character_name=character_name,
+        race=race_key
+    )
+    
+    if success:
+        races = get_all_races()
+        race_data = races[race_key]
+        
+        await update.message.reply_text(
+            f"🎉 *Персонаж создан!*\n\n"
+            f"🏷️ *Имя:* {character_name}\n"
+            f"🎭 *Раса:* {race_data['name']}\n"
+            f"✨ *Способность:* {race_data['racial_ability']}\n\n"
+            f"Твоё приключение начинается! Выбери действие:",
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    else:
+        await update.message.reply_text(
+            f"❌ Ошибка: {message}\n\n"
+            f"Начни заново с /start"
+        )
+        return ConversationHandler.END
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий на кнопки"""
+# --- ОБРАБОТЧИКИ ГЛАВНОГО МЕНЮ ---
+
+async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик главного меню"""
     query = update.callback_query
     await query.answer()
     
     user_id = query.from_user.id
     data = query.data
     
-    # Обработка выбора расы
-    if data.startswith('race_'):
-        if data == 'race_info':
-            # Показываем информацию о расах
-            races = get_all_races()
-            race_info_text = "📖 *Характеристики рас:*\n\n"
-            
-            for race_key, race_data in races.items():
-                race_info_text += (
-                    f"*{race_data['name']}*\n"
-                    f"💪 Сила: {race_data['strength']}\n"
-                    f"🏹 Ловкость: {race_data['agility']}\n"
-                    f"🧠 Интеллект: {race_data['intelligence']}\n"
-                    f"❤️ Здоровье: {race_data['health']}\n"
-                    f"🔮 Мана: {race_data['mana']}\n"
-                    f"✨ Способность: {race_data['racial_ability']}\n\n"
-                )
-            
-            await query.edit_message_text(
-                text=race_info_text,
-                parse_mode='Markdown'
-            )
-            await query.edit_message_reply_markup(get_race_selection_keyboard())
-            return CHOOSE_RACE
-        
-        # Сохраняем выбранную расу в контексте
-        context.user_data['selected_race'] = data[5:]  # Убираем 'race_'
-        
-        await query.edit_message_text(
-            text="Отличный выбор! Теперь введите имя вашего персонажа:"
-        )
-        return ENTER_NAME
-    
-    # Обработка главного меню
-    elif data == 'profile':
+    if data == 'profile':
         await show_profile(query, user_id)
         return MAIN_MENU
     
     elif data == 'battle_menu':
-        await query.edit_message_text(
-            text="⚔️ *Выберите противника:*",
-            parse_mode='Markdown',
-            reply_markup=get_battle_menu_keyboard()
-        )
+        await show_battle_menu(query)
         return BATTLE_MENU
     
     elif data == 'shop':
@@ -194,74 +280,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MAIN_MENU
     
     elif data == 'help':
-        await query.edit_message_text(
-            text="🎮 *РПГ Бот - Помощь*\n\n"
-            "Используйте кнопки для навигации по игре.\n"
-            "• Профиль - просмотр характеристик\n"
-            "• Бой - сражения с монстрами\n"
-            "• Магазин - покупка предметов\n"
-            "• Статистика - ваши достижения",
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
-        )
+        await show_help(query)
         return MAIN_MENU
     
-    elif data == 'back_to_main':
+    elif data == 'restart':
         await query.edit_message_text(
-            text="Главное меню:",
-            reply_markup=get_main_menu_keyboard()
+            text="🔄 Перезапускаю бота...\nНапиши /start чтобы начать заново."
         )
-        return MAIN_MENU
-    
-    # Обработка меню боя
-    elif data.startswith('battle_'):
-        enemy_type = data[7:]  # Убираем 'battle_'
-        await start_battle(query, user_id, enemy_type)
-        return MAIN_MENU
-
-async def start_battle(query, user_id, enemy_type):
-    """Начало боя"""
-    character = get_character(user_id)
-    
-    if not character:
-        await query.edit_message_text(
-            text="У вас нет персонажа! Используйте /start для создания.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        return
-    
-    # Определяем параметры врага в зависимости от типа
-    enemies = {
-        'wolf': {'name': 'Волк', 'health': 30, 'damage': 5, 'exp': 10, 'gold': 5},
-        'zombie': {'name': 'Зомби', 'health': 50, 'damage': 7, 'exp': 15, 'gold': 8},
-        'mage': {'name': 'Маг', 'health': 40, 'damage': 12, 'exp': 20, 'gold': 12},
-        'dragon': {'name': 'Дракон', 'health': 100, 'damage': 20, 'exp': 50, 'gold': 30}
-    }
-    
-    enemy = enemies.get(enemy_type, enemies['wolf'])
-    
-    # Сохраняем данные боя в контексте
-    battle_data = {
-        'enemy': enemy,
-        'enemy_current_health': enemy['health'],
-        'character_current_health': character['health'],
-        'turn': 'player'
-    }
-    
-    # Начинаем бой
-    await query.edit_message_text(
-        text=f"⚔️ *БОЙ НАЧАЛСЯ!*\n\n"
-             f"Ваш противник: *{enemy['name']}*\n"
-             f"Здоровье противника: {enemy['health']}❤️\n\n"
-             f"Ваше здоровье: {character['health']}❤️\n"
-             f"Ваша мана: {character['mana']}🔮\n\n"
-             f"Выберите действие:",
-        parse_mode='Markdown',
-        reply_markup=get_battle_action_keyboard()
-    )
-    
-    # Сохраняем данные боя для дальнейшего использования
-    # В реальном проекте нужно хранить состояние боя для каждого пользователя
+        return ConversationHandler.END
 
 async def show_profile(query, user_id):
     """Показ профиля персонажа"""
@@ -269,30 +295,36 @@ async def show_profile(query, user_id):
     
     if not character:
         await query.edit_message_text(
-            text="У вас еще нет персонажа!",
+            text="❌ У тебя еще нет персонажа!",
             reply_markup=get_main_menu_keyboard()
         )
         return
     
-    # Получаем расу из констант для отображения имени
-    from database import RACES
-    race_name = RACES.get(character['race'], {}).get('name', character['race'])
+    races = get_all_races()
+    race_data = races.get(character['race'], {})
+    
+    # Расчет процентов здоровья и маны
+    health_percent = int((character['health'] / character['max_health']) * 100)
+    mana_percent = int((character['mana'] / character['max_mana']) * 100) if character['max_mana'] > 0 else 0
     
     profile_text = (
-        f"👤 *ПРОФИЛЬ ПЕРСОНАЖА*\n\n"
-        f"🏷️ Имя: {character['character_name']}\n"
-        f"🎭 Раса: {race_name}\n"
-        f"⭐ Уровень: {character['level']}\n"
-        f"📊 Опыт: {character['experience']}/{character['level'] * 100}\n\n"
-        f"💪 *Характеристики:*\n"
-        f"• Сила: {character['strength']}\n"
-        f"• Ловкость: {character['agility']}\n"
-        f"• Интеллект: {character['intelligence']}\n\n"
-        f"❤️ Здоровье: {character['health']}/{character['max_health']}\n"
-        f"🔮 Мана: {character['mana']}/{character['max_mana']}\n"
+        f"👤 *Профиль персонажа*\n\n"
+        f"🏷️ *Имя:* {character['character_name']}\n"
+        f"🎭 *Раса:* {race_data.get('name', character['race'])}\n"
+        f"⭐ *Уровень:* {character['level']}\n"
+        f"📈 *Опыт:* {character['experience']}/{character['level'] * 100}\n\n"
+        f"⚔️ *Характеристики:*\n"
+        f"💪 Сила: {character['strength']}\n"
+        f"🏹 Ловкость: {character['agility']}\n"
+        f"🧠 Интеллект: {character['intelligence']}\n\n"
+        f"❤️ Здоровье: {character['health']}/{character['max_health']} ({health_percent}%)\n"
+        f"🔮 Мана: {character['mana']}/{character['max_mana']} ({mana_percent}%)\n"
         f"💰 Золото: {character['gold']}\n\n"
-        f"⚔️ Победы/Поражения: {character['battle_wins']}/{character['battle_losses']}\n"
-        f"📅 Создан: {character['created_at'].strftime('%d.%m.%Y')}"
+        f"🎯 *Статистика:*\n"
+        f"🏆 Побед: {character['battle_wins']}\n"
+        f"💀 Поражений: {character['battle_losses']}\n\n"
+        f"✨ *Расовая способность:*\n"
+        f"{race_data.get('racial_ability', 'Нет информации')}"
     )
     
     await query.edit_message_text(
@@ -301,17 +333,31 @@ async def show_profile(query, user_id):
         reply_markup=get_main_menu_keyboard()
     )
 
+async def show_battle_menu(query):
+    """Показ меню выбора противника"""
+    await query.edit_message_text(
+        text="⚔️ *Кого будем побеждать?*\n\n"
+             "Выбери противника:\n"
+             "🐺 Волк - Легкий противник\n"
+             "🧟 Зомби - Средней сложности\n"
+             "🧙 Маг - Сложный противник\n"
+             "🐉 Дракон - Очень сложный босс",
+        parse_mode='Markdown',
+        reply_markup=get_battle_menu_keyboard()
+    )
+
 async def show_shop(query):
     """Показ магазина"""
     shop_text = (
-        "🏪 *МАГАЗИН*\n\n"
-        "Товары:\n"
-        "1. 💊 Лечебное зелье (восстанавливает 50 HP) - 20 золота\n"
-        "2. 🔮 Зелье маны (восстанавливает 30 MP) - 15 золота\n"
-        "3. ⚔️ Меч воина (+5 к силе) - 100 золота\n"
-        "4. 🏹 Лук охотника (+5 к ловкости) - 100 золота\n"
-        "5. 📖 Книга магии (+5 к интеллекту) - 100 золота\n\n"
-        "🛒 Функция покупок скоро будет добавлена!"
+        "🏪 *Магазин*\n\n"
+        "Здесь ты можешь купить полезные предметы:\n\n"
+        "1. 💊 Зелье лечения (+50 HP) - 30 золота\n"
+        "2. 🔮 Зелье маны (+30 MP) - 25 золота\n"
+        "3. ⚔️ Обычный меч (+2 к силе) - 50 золота\n"
+        "4. 🏹 Простой лук (+2 к ловкости) - 50 золота\n"
+        "5. 📖 Свиток мудрости (+2 к интеллекту) - 50 золота\n\n"
+        "🛒 *В разработке...*\n"
+        "Скоро ты сможешь покупать предметы!"
     )
     
     await query.edit_message_text(
@@ -326,27 +372,28 @@ async def show_stats(query, user_id):
     
     if not character:
         await query.edit_message_text(
-            text="У вас еще нет персонажа!",
+            text="❌ У тебя еще нет персонажа!",
             reply_markup=get_main_menu_keyboard()
         )
         return
     
-    # Рассчитываем рейтинг
     total_battles = character['battle_wins'] + character['battle_losses']
     win_rate = (character['battle_wins'] / total_battles * 100) if total_battles > 0 else 0
     
     stats_text = (
-        f"📊 *СТАТИСТИКА*\n\n"
-        f"🏆 Уровень: {character['level']}\n"
-        f"🌟 Опыт: {character['experience']}\n"
-        f"💰 Всего золота: {character['gold']}\n\n"
-        f"⚔️ Боевая статистика:\n"
+        f"📊 *Статистика*\n\n"
+        f"⭐ *Уровень:* {character['level']}\n"
+        f"🌟 *Опыт:* {character['experience']}\n"
+        f"💰 *Золото:* {character['gold']}\n\n"
+        f"⚔️ *Боевая статистика:*\n"
         f"• Побед: {character['battle_wins']}\n"
         f"• Поражений: {character['battle_losses']}\n"
         f"• Всего боев: {total_battles}\n"
         f"• Процент побед: {win_rate:.1f}%\n\n"
-        f"🎯 Лучший урон: скоро...\n"
-        f"🛡️ Макс. защита: скоро..."
+        f"📅 *Дата создания:*\n"
+        f"{character['created_at'].strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"🕐 *Последняя активность:*\n"
+        f"{character['last_active'].strftime('%d.%m.%Y %H:%M')}"
     )
     
     await query.edit_message_text(
@@ -355,63 +402,323 @@ async def show_stats(query, user_id):
         reply_markup=get_main_menu_keyboard()
     )
 
-async def create_character_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Создание персонажа после ввода имени"""
-    user = update.message.from_user
-    character_name = update.message.text.strip()
-    
-    if len(character_name) < 2 or len(character_name) > 20:
-        await update.message.reply_text(
-            "Имя должно быть от 2 до 20 символов. Попробуйте еще раз:"
-        )
-        return ENTER_NAME
-    
-    # Получаем выбранную расу из контекста
-    selected_race = context.user_data.get('selected_race', 'human')
-    
-    # Создаем персонажа в базе данных
-    success, message = create_character(
-        user.id,
-        user.username or user.first_name,
-        character_name,
-        selected_race
+async def show_help(query):
+    """Показ помощи"""
+    help_text = """
+🎮 *РПГ Бот - Помощь*
+
+*Управление:*
+Используй кнопки для навигации по игре.
+
+*Основные разделы:*
+• 👤 Профиль - характеристики и статистика
+• ⚔️ Бой - сражения с монстрами
+• 🏪 Магазин - покупка предметов
+• 📊 Статистика - твои достижения
+• ❓ Помощь - эта справка
+
+*Создание персонажа:*
+Выбери расу, которая подходит твоему стилю игры:
+• Человек - сбалансированная раса
+• Эльф - для магических атак
+• Дварф - для защиты и выживания
+• Орк - для максимального урона
+
+*Советы:*
+1. Начни с легких противников
+2. Используй расовые способности
+3. Следи за здоровьем и маной
+4. Повышай уровень для улучшения характеристик
+
+Удачи в приключениях! 🐉
+"""
+    await query.edit_message_text(
+        text=help_text,
+        parse_mode='Markdown',
+        reply_markup=get_main_menu_keyboard()
     )
+
+# --- ОБРАБОТЧИКИ БОЯ ---
+
+async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик меню боя"""
+    query = update.callback_query
+    await query.answer()
     
-    if success:
-        await update.message.reply_text(
-            f"🎉 Поздравляем! Персонаж создан!\n\n"
-            f"Имя: {character_name}\n"
-            f"Раса: {selected_race.capitalize()}\n\n"
-            f"Теперь вы можете отправиться в приключения!",
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data == 'back_to_main':
+        await query.edit_message_text(
+            text="Возвращаюсь в главное меню...",
             reply_markup=get_main_menu_keyboard()
         )
         return MAIN_MENU
-    else:
-        await update.message.reply_text(
-            f"❌ Ошибка: {message}\n\n"
-            f"Попробуйте еще раз с /start"
+    
+    elif data.startswith('battle_'):
+        enemy_type = data[7:]  # Убираем 'battle_'
+        await start_battle(query, user_id, enemy_type)
+        return MAIN_MENU
+
+async def start_battle(query, user_id, enemy_type):
+    """Начало боя"""
+    character = get_character(user_id)
+    
+    if not character:
+        await query.edit_message_text(
+            text="❌ У тебя нет персонажа!",
+            reply_markup=get_main_menu_keyboard()
         )
-        return ConversationHandler.END
+        return
+    
+    # Определяем параметры врага
+    enemies = {
+        'wolf': {
+            'name': '🐺 Волк',
+            'health': 30,
+            'max_health': 30,
+            'min_damage': 3,
+            'max_damage': 8,
+            'exp': 15,
+            'gold': 10,
+            'description': 'Быстрый и опасный хищник леса'
+        },
+        'zombie': {
+            'name': '🧟 Зомби',
+            'health': 50,
+            'max_health': 50,
+            'min_damage': 5,
+            'max_damage': 12,
+            'exp': 25,
+            'gold': 20,
+            'description': 'Медленный, но живучий нежитик'
+        },
+        'mage': {
+            'name': '🧙 Маг',
+            'health': 40,
+            'max_health': 40,
+            'min_damage': 8,
+            'max_damage': 18,
+            'exp': 40,
+            'gold': 35,
+            'description': 'Опасный противник, использующий магию'
+        },
+        'dragon': {
+            'name': '🐉 Дракон',
+            'health': 100,
+            'max_health': 100,
+            'min_damage': 15,
+            'max_damage': 30,
+            'exp': 100,
+            'gold': 80,
+            'description': 'Могучее существо, босс игры'
+        }
+    }
+    
+    enemy = enemies.get(enemy_type, enemies['wolf'])
+    
+    # Создаем сессию боя
+    battle_sessions[user_id] = {
+        'enemy': enemy.copy(),
+        'character': character.copy(),
+        'turn': 0,
+        'player_defending': False,
+        'enemy_defending': False,
+        'log': []
+    }
+    
+    battle_log = battle_sessions[user_id]['log']
+    battle_log.append(f"⚔️ *БОЙ НАЧИНАЕТСЯ!*")
+    battle_log.append(f"Ты встретил: *{enemy['name']}*")
+    battle_log.append(f"📖 {enemy['description']}")
+    battle_log.append(f"❤️ Здоровье врага: {enemy['health']}/{enemy['max_health']}")
+    battle_log.append(f"❤️ Твое здоровье: {character['health']}/{character['max_health']}")
+    battle_log.append("")
+    battle_log.append("Выбери действие:")
+    
+    await query.edit_message_text(
+        text="\n".join(battle_log),
+        parse_mode='Markdown',
+        reply_markup=get_battle_action_keyboard()
+    )
+
+async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик действий в бою"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    
+    if user_id not in battle_sessions:
+        await query.edit_message_text(
+            text="❌ Бой завершен или не найден!",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    
+    battle_data = battle_sessions[user_id]
+    character = battle_data['character']
+    enemy = battle_data['enemy']
+    battle_log = battle_data['log']
+    
+    # Очищаем лог для нового хода
+    battle_log.clear()
+    battle_data['turn'] += 1
+    
+    # Действие игрока
+    if data == 'attack':
+        player_damage = random.randint(character['strength'] // 2, character['strength'])
+        if battle_data['enemy_defending']:
+            player_damage = max(1, player_damage // 2)
+            battle_log.append(f"⚔️ Ты атаковал, но враг защищался!")
+        else:
+            battle_log.append(f"⚔️ Ты нанес {player_damage} урона!")
+        enemy['health'] -= player_damage
+        
+    elif data == 'defend':
+        battle_data['player_defending'] = True
+        battle_log.append(f"🛡️ Ты встал в защитную стойку!")
+        
+    elif data == 'ability':
+        # Использование расовой способности
+        race_abilities = {
+            'human': lambda: battle_log.append("✨ Адаптивность: все твои характеристики увеличены!"),
+            'elf': lambda: battle_log.append("✨ Магический дар: твоя следующая атака будет точной!"),
+            'dwarf': lambda: (battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!"), 
+                             battle_data['player_defending'] == True),
+            'orc': lambda: (battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!"), 
+                           enemy['health'] -= random.randint(character['strength'], character['strength'] * 2))
+        }
+        
+        ability_func = race_abilities.get(character['race'], lambda: battle_log.append("✨ Способность использована!"))
+        ability_func()
+        
+    elif data == 'flee':
+        flee_chance = random.randint(1, 100)
+        if flee_chance > 50:  # 50% шанс сбежать
+            battle_log.append("🏃 Ты успешно сбежал с поля боя!")
+            del battle_sessions[user_id]
+            await query.edit_message_text(
+                text="\n".join(battle_log),
+                parse_mode='Markdown',
+                reply_markup=get_main_menu_keyboard()
+            )
+            return MAIN_MENU
+        else:
+            battle_log.append("🏃 Ты попытался сбежать, но не смог!")
+    
+    # Действие врага
+    if enemy['health'] > 0:
+        enemy_action = random.choice(['attack', 'attack', 'defend'])  # 66% атака, 33% защита
+        
+        if enemy_action == 'attack':
+            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+            if battle_data['player_defending']:
+                enemy_damage = max(1, enemy_damage // 2)
+                battle_log.append(f"🐺 Враг атаковал, но ты защищался!")
+            else:
+                battle_log.append(f"🐺 Враг нанес тебе {enemy_damage} урона!")
+            character['health'] -= enemy_damage
+            battle_data['player_defending'] = False
+        else:
+            battle_data['enemy_defending'] = True
+            battle_log.append(f"🐺 Враг защищается!")
+    
+    # Проверка окончания боя
+    if character['health'] <= 0:
+        battle_log.append("")
+        battle_log.append("💀 *ТЫ ПРОИГРАЛ!*")
+        battle_log.append("Ты был повержен в бою...")
+        
+        # Обновляем статистику в БД
+        update_character_stats(user_id, battle_losses=character['battle_losses'] + 1)
+        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
+        
+        del battle_sessions[user_id]
+        await query.edit_message_text(
+            text="\n".join(battle_log),
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    
+    elif enemy['health'] <= 0:
+        battle_log.append("")
+        battle_log.append("🏆 *ТЫ ПОБЕДИЛ!*")
+        battle_log.append(f"Ты победил {enemy['name']}!")
+        
+        # Награда
+        exp_gained = enemy['exp']
+        gold_gained = enemy['gold']
+        
+        battle_log.append(f"🎁 Получено: {exp_gained} опыта и {gold_gained} золота")
+        
+        # Обновляем данные в БД
+        update_character_stats(
+            user_id, 
+            battle_wins=character['battle_wins'] + 1,
+            gold=character['gold'] + gold_gained
+        )
+        add_experience(user_id, exp_gained)
+        add_gold(user_id, gold_gained)
+        log_battle(user_id, enemy['name'], 'победа', 0, 0, gold_gained, exp_gained)
+        
+        del battle_sessions[user_id]
+        await query.edit_message_text(
+            text="\n".join(battle_log),
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    
+    # Продолжение боя
+    else:
+        battle_log.append("")
+        battle_log.append(f"❤️ Твое здоровье: {max(0, character['health'])}/{character['max_health']}")
+        battle_log.append(f"❤️ Здоровье врага: {max(0, enemy['health'])}/{enemy['max_health']}")
+        battle_log.append(f"🎯 Ход: {battle_data['turn']}")
+        battle_log.append("")
+        battle_log.append("Выбери действие:")
+        
+        await query.edit_message_text(
+            text="\n".join(battle_log),
+            parse_mode='Markdown',
+            reply_markup=get_battle_action_keyboard()
+        )
+
+# --- ОБРАБОТЧИКИ ОШИБОК ---
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена создания персонажа"""
+    """Отмена диалога"""
     await update.message.reply_text(
-        "Создание персонажа отменено. Используйте /start чтобы начать заново."
+        "Действие отменено. Используй /start чтобы начать заново."
     )
     return ConversationHandler.END
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ошибок"""
-    logger.error(f"Ошибка: {context.error}")
+    error = context.error
     
-    if update.callback_query:
-        await update.callback_query.message.reply_text(
-            "❌ Произошла ошибка. Пожалуйста, попробуйте еще раз."
-        )
-    elif update.message:
-        await update.message.reply_text(
-            "❌ Произошла ошибка. Пожалуйста, попробуйте еще раз."
-        )
+    if "Conflict: terminated by other getUpdates request" in str(error):
+        logger.warning("⚠️ Другой экземпляр бота уже запущен. Игнорирую ошибку конфликта.")
+        return
+    
+    logger.error(f"Ошибка: {error}", exc_info=True)
+    
+    try:
+        if update and hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.reply_text(
+                "❌ Произошла ошибка. Попробуй еще раз или перезапусти бота с /start"
+            )
+        elif update and hasattr(update, 'message') and update.message:
+            await update.message.reply_text(
+                "❌ Произошла ошибка. Попробуй еще раз или перезапусти бота с /start"
+            )
+    except Exception as e:
+        logger.error(f"Не удалось отправить сообщение об ошибке: {e}")
+
+# --- ОСНОВНАЯ ФУНКЦИЯ ---
 
 def main():
     """Запуск бота"""
@@ -419,58 +726,71 @@ def main():
     
     # Проверка токена
     if not TOKEN:
-        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден")
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения")
+        print("Добавьте переменную TELEGRAM_BOT_TOKEN в Railway")
         return
+    
+    print(f"✅ Токен найден, длина: {len(TOKEN)} символов")
     
     # Инициализация базы данных
     print("🔄 Инициализация базы данных...")
     try:
         init_db()
-        print("✅ База данных готова")
+        print("✅ База данных инициализирована")
     except Exception as e:
-        print(f"⚠️ Предупреждение: {e}")
+        print(f"⚠️ Предупреждение: не удалось инициализировать БД: {e}")
     
     # Создание приложения
-    application = Application.builder().token(TOKEN).build()
-    
-    # Создание ConversationHandler для управления состоянием
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            CHOOSE_RACE: [
-                CallbackQueryHandler(button_handler, pattern='^race_')
-            ],
-            ENTER_NAME: [
-                CommandHandler('cancel', cancel),
-                CallbackQueryHandler(button_handler),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, create_character_name)
-            ],
-            MAIN_MENU: [
-                CallbackQueryHandler(button_handler)
-            ],
-            BATTLE_MENU: [
-                CallbackQueryHandler(button_handler)
-            ]
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-        allow_reentry=True
-    )
-    
-    # Регистрация обработчиков
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler('help', help_command))
-    application.add_error_handler(error_handler)
-    
-    print("🤖 RPG бот запущен!")
-    print("📱 Перейдите в Telegram и напишите /start")
-    
-    # Запуск бота
-    application.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
-    )
+    try:
+        application = Application.builder().token(TOKEN).build()
+        
+        # Conversation Handler для создания персонажа
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('start', start)],
+            states={
+                CHOOSE_RACE: [
+                    CallbackQueryHandler(choose_race, pattern='^race_')
+                ],
+                ENTER_NAME: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)
+                ],
+                MAIN_MENU: [
+                    CallbackQueryHandler(main_menu_handler)
+                ],
+                BATTLE_MENU: [
+                    CallbackQueryHandler(battle_menu_handler)
+                ]
+            },
+            fallbacks=[CommandHandler('cancel', cancel)],
+            allow_reentry=True
+        )
+        
+        # Регистрация обработчиков
+        application.add_handler(conv_handler)
+        application.add_handler(CommandHandler('help', help_command))
+        
+        # Обработчик действий в бою (отдельный, так как не в ConversationHandler)
+        application.add_handler(CallbackQueryHandler(battle_action_handler, pattern='^(attack|defend|ability|flee)$'))
+        
+        # Обработчик ошибок
+        application.add_error_handler(error_handler)
+        
+        print("🤖 RPG бот запущен!")
+        print("📱 Перейдите в Telegram и напишите /start")
+        
+        # Запуск бота с обработкой конфликтов
+        application.run_polling(
+            drop_pending_updates=True,
+            close_loop=False,
+            allowed_updates=Update.ALL_TYPES
+        )
+        
+    except Exception as e:
+        print(f"❌ Критическая ошибка при запуске бота: {e}")
+        print("\nВозможные решения:")
+        print("1. Проверьте токен бота в Railway Variables")
+        print("2. Убедитесь, что запущен только один экземпляр бота")
+        print("3. Проверьте подключение к интернету")
 
 if __name__ == '__main__':
-    # Для работы с ConversationHandler нужен импорт фильтров
-    from telegram.ext import MessageHandler, filters
     main()
