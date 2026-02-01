@@ -1913,13 +1913,12 @@ def start_polling():
         
     # Запускаем polling с параметрами для Railway
     bot.infinity_polling(
-            skip_pending=True,  # Важно!
-            timeout=30,
-            long_polling_timeout=5,
-            logger_level="INFO",
-            allowed_updates=None
-        )
-    
+        skip_pending=True,  # Важно!
+        timeout=30,
+        long_polling_timeout=5,
+        logger_level="INFO",
+        allowed_updates=None
+    )
     return start_polling  # Возвращаем функцию для запуска
 
 # В конце main.py вместо прямого вызова:
