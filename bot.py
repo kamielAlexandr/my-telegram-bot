@@ -588,7 +588,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             'dwarf': lambda: (battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!"), 
                              battle_data['player_defending'] == True),
             'orc': lambda: (battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!"), 
-                           enemy['health'] -= random.randint(character['strength'], character['strength'] * 2))
+                           enemy['health'] -= random.randint(character['strength'], character['strength'] * 2)
         }
         
         ability_func = race_abilities.get(character['race'], lambda: battle_log.append("✨ Способность использована!"))
