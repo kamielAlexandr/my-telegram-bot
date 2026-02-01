@@ -1,7 +1,6 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
 
 # Константы для рас
 RACES = {
@@ -12,8 +11,7 @@ RACES = {
         "intelligence": 10,
         "health": 100,
         "mana": 50,
-        "racial_ability": "Адаптивность: +1 ко всем характеристикам",
-        "ability_effect": "all_stats_up"
+        "racial_ability": "Адаптивность: +1 ко всем характеристикам"
     },
     "elf": {
         "name": "Эльф",
@@ -22,8 +20,7 @@ RACES = {
         "intelligence": 12,
         "health": 80,
         "mana": 100,
-        "racial_ability": "Магический дар: +50% к мане, точные выстрелы",
-        "ability_effect": "bow_master"
+        "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
     },
     "dwarf": {
         "name": "Дварф",
@@ -32,8 +29,7 @@ RACES = {
         "intelligence": 9,
         "health": 120,
         "mana": 30,
-        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии",
-        "ability_effect": "stone_skin"
+        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
     },
     "orc": {
         "name": "Орк",
@@ -42,8 +38,7 @@ RACES = {
         "intelligence": 6,
         "health": 110,
         "mana": 20,
-        "racial_ability": "Ярость: двойной урон при низком здоровье",
-        "ability_effect": "berserker_rage"
+        "racial_ability": "Ярость: двойной урон при низком здоровье"
     }
 }
 
@@ -62,8 +57,14 @@ def get_connection():
     try:
         conn = psycopg2.connect(database_url, sslmode='require')
         return conn
-    except:
-        return psycopg2.connect(database_url)
+    except Exception as e:
+        print(f"❌ Ошибка подключения к БД: {e}")
+        # Пробуем подключиться без sslmode
+        try:
+            return psycopg2.connect(database_url)
+        except Exception as e2:
+            print(f"❌ Не удалось подключиться к БД: {e2}")
+            return None
 
 def init_db():
     """Инициализация таблиц в базе данных"""
@@ -71,6 +72,10 @@ def init_db():
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для инициализации")
+            return
+        
         cursor = conn.cursor()
         
         # Основная таблица персонажей
@@ -90,7 +95,6 @@ def init_db():
                 mana INTEGER DEFAULT 50,
                 max_mana INTEGER DEFAULT 50,
                 gold INTEGER DEFAULT 100,
-                inventory TEXT DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 battle_wins INTEGER DEFAULT 0,
@@ -98,43 +102,8 @@ def init_db():
             )
         """)
         
-        # Таблица для сохранения выбранных рас и их особенностей
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS race_abilities (
-                id SERIAL PRIMARY KEY,
-                race_key VARCHAR(50) NOT NULL UNIQUE,
-                race_name VARCHAR(100) NOT NULL,
-                ability_name VARCHAR(200) NOT NULL,
-                ability_description TEXT NOT NULL
-            )
-        """)
-        
-        # Заполняем таблицу рас (если она пуста)
-        cursor.execute("SELECT COUNT(*) FROM race_abilities")
-        if cursor.fetchone()[0] == 0:
-            for race_key, race_data in RACES.items():
-                cursor.execute(
-                    "INSERT INTO race_abilities (race_key, race_name, ability_name, ability_description) VALUES (%s, %s, %s, %s)",
-                    (race_key, race_data['name'], race_data['racial_ability'], f"Особая способность: {race_data['racial_ability']}")
-                )
-        
-        # Таблица для боевых действий (логов)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS battle_logs (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                enemy_type VARCHAR(100),
-                result VARCHAR(50),
-                damage_dealt INTEGER,
-                damage_taken INTEGER,
-                gold_earned INTEGER,
-                experience_earned INTEGER,
-                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
         conn.commit()
-        print("✅ База данных инициализирована")
+        print("✅ Таблицы созданы или уже существуют")
         
     except Exception as e:
         print(f"❌ Ошибка при создании таблиц: {e}")
@@ -157,6 +126,9 @@ def create_character(user_id, username, character_name, race):
         race_data = RACES[race]
         
         conn = get_connection()
+        if not conn:
+            return False, "Не удалось подключиться к базе данных"
+        
         cursor = conn.cursor()
         
         # Проверяем, есть ли уже персонаж у пользователя
@@ -178,6 +150,7 @@ def create_character(user_id, username, character_name, race):
         ))
         
         conn.commit()
+        print(f"✅ Персонаж создан для user_id: {user_id}")
         return True, "Персонаж успешно создан!"
         
     except Exception as e:
@@ -197,17 +170,14 @@ def get_character(user_id):
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для получения персонажа")
+            return None
+        
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute("""
-            SELECT *, 
-                   CASE 
-                       WHEN experience < 100 THEN 'Новичок'
-                       WHEN experience < 500 THEN 'Опытный'
-                       WHEN experience < 1000 THEN 'Ветеран'
-                       ELSE 'Легенда'
-                   END as rank
-            FROM player_characters 
+            SELECT * FROM player_characters 
             WHERE user_id = %s
         """, (user_id,))
         
@@ -221,12 +191,6 @@ def get_character(user_id):
                 WHERE user_id = %s
             """, (user_id,))
             conn.commit()
-            
-            # Добавляем данные о расе из констант
-            if character['race'] in RACES:
-                race_info = RACES[character['race']]
-                character['race_name'] = race_info['name']
-                character['racial_ability'] = race_info['racial_ability']
         
         return character
         
@@ -249,6 +213,9 @@ def update_character_stats(user_id, **kwargs):
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            return False
+        
         cursor = conn.cursor()
         
         set_clauses = []
@@ -262,8 +229,8 @@ def update_character_stats(user_id, **kwargs):
         
         cursor.execute(query, values)
         conn.commit()
-        
         return True
+        
     except Exception as e:
         print(f"❌ Ошибка при обновлении персонажа: {e}")
         if conn:
@@ -281,6 +248,9 @@ def add_experience(user_id, exp_amount):
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            return False, False, 0
+        
         cursor = conn.cursor()
         
         # Получаем текущий опыт и уровень
@@ -335,6 +305,9 @@ def add_gold(user_id, gold_amount):
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            return False
+        
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -362,11 +335,13 @@ def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold
     cursor = None
     try:
         conn = get_connection()
+        if not conn:
+            return False
+        
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO battle_logs 
-            (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
+            INSERT INTO battle_logs (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned))
         
