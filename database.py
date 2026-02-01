@@ -1,200 +1,518 @@
-import sqlite3
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
 
-DB_NAME = "rpg_bot.sqlite"
+# Константы для database.py
+RACES = {
+    "human": {
+        "name": "Человек",
+        "strength": 10,
+        "agility": 10,
+        "intelligence": 10,
+        "health": 100,
+        "mana": 50,
+        "racial_ability": "Адаптивность: +1 ко всем характеристикам"
+    },
+    "elf": {
+        "name": "Эльф",
+        "strength": 8,
+        "agility": 14,
+        "intelligence": 12,
+        "health": 80,
+        "mana": 100,
+        "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
+    },
+    "dwarf": {
+        "name": "Дварф",
+        "strength": 14,
+        "agility": 8,
+        "intelligence": 9,
+        "health": 120,
+        "mana": 30,
+        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
+    },
+    "orc": {
+        "name": "Орк",
+        "strength": 16,
+        "agility": 9,
+        "intelligence": 6,
+        "health": 110,
+        "mana": 20,
+        "racial_ability": "Ярость: двойной урон при низком здоровье"
+    }
+}
+
+def get_connection():
+    """Создание подключения к PostgreSQL"""
+    database_url = os.getenv('DATABASE_URL')
+    
+    if not database_url:
+        # Для локальной разработки
+        db_host = os.getenv('PGHOST', 'localhost')
+        db_port = os.getenv('PGPORT', '5432')
+        db_name = os.getenv('PGDATABASE', 'railway')
+        db_user = os.getenv('PGUSER', 'postgres')
+        db_password = os.getenv('PGPASSWORD', '')
+        database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    
+    try:
+        conn = psycopg2.connect(database_url, sslmode='require')
+        return conn
+    except Exception as e:
+        print(f"❌ Ошибка подключения с sslmode=require: {e}")
+        # Пробуем подключиться без sslmode
+        try:
+            conn = psycopg2.connect(database_url)
+            return conn
+        except Exception as e2:
+            print(f"❌ Не удалось подключиться к БД: {e2}")
+            return None
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    # Таблица персонажей
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS characters (
-        user_id INTEGER PRIMARY KEY,
-        username TEXT,
-        character_name TEXT,
-        race TEXT,
-        level INTEGER DEFAULT 1,
-        experience INTEGER DEFAULT 0,
-        health INTEGER,
-        max_health INTEGER,
-        mana INTEGER,
-        max_mana INTEGER,
-        strength INTEGER,
-        agility INTEGER,
-        intelligence INTEGER,
-        equip_str INTEGER DEFAULT 0,
-        equip_def INTEGER DEFAULT 0,
-        gold INTEGER DEFAULT 100,
-        battle_wins INTEGER DEFAULT 0,
-        battle_losses INTEGER DEFAULT 0,
-        last_active DATETIME,
-        created_at DATETIME
-    )''')
+    """Инициализация таблиц в базе данных"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для инициализации")
+            return
+        
+        cursor = conn.cursor()
+        
+        # Удаляем старую таблицу и создаем новую с правильной структурой
+        cursor.execute("DROP TABLE IF EXISTS player_characters")
+        
+        # Создаем таблицу с полной структурой
+        cursor.execute("""
+            CREATE TABLE player_characters (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL UNIQUE,
+                character_name VARCHAR(100) NOT NULL,
+                race VARCHAR(50) NOT NULL,
+                level INTEGER DEFAULT 1,
+                experience INTEGER DEFAULT 0,
+                strength INTEGER DEFAULT 10,
+                agility INTEGER DEFAULT 10,
+                intelligence INTEGER DEFAULT 10,
+                health INTEGER DEFAULT 100,
+                max_health INTEGER DEFAULT 100,
+                mana INTEGER DEFAULT 50,
+                max_mana INTEGER DEFAULT 50,
+                gold INTEGER DEFAULT 100,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                battle_wins INTEGER DEFAULT 0,
+                battle_losses INTEGER DEFAULT 0
+            )
+        """)
+        
+        print("✅ Таблица 'player_characters' создана заново")
+        
+        # Создаем таблицу для логов боев
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS battle_logs (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                enemy_type VARCHAR(100),
+                result VARCHAR(50),
+                damage_dealt INTEGER DEFAULT 0,
+                damage_taken INTEGER DEFAULT 0,
+                gold_earned INTEGER DEFAULT 0,
+                experience_earned INTEGER DEFAULT 0,
+                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        conn.commit()
+        print("✅ База данных инициализирована")
+        
+    except Exception as e:
+        print(f"❌ Ошибка при создании таблиц: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
-    # Таблица предметов
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        type TEXT, 
-        price INTEGER,
-        bonus_str INTEGER DEFAULT 0,
-        bonus_def INTEGER DEFAULT 0,
-        description TEXT
-    )''')
-
-    # Таблица инвентаря
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS inventory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        item_id INTEGER,
-        is_equipped BOOLEAN DEFAULT 0,
-        FOREIGN KEY(user_id) REFERENCES characters(user_id)
-    )''')
-
-    # Наполнение магазина
-    cursor.execute("SELECT COUNT(*) FROM items")
-    if cursor.fetchone()[0] == 0:
-        items = [
-            ('Стальной меч', 'weapon', 50, 5, 0, 'Сила +5'),
-            ('Кожаная броня', 'armor', 40, 0, 3, 'Защита +3'),
-            ('Зелье жизни', 'potion', 20, 0, 0, 'Восстанавливает 50 HP'),
-            ('Топор Гнома', 'weapon', 120, 12, 0, 'Сила +12')
-        ]
-        cursor.executemany("INSERT INTO items (name, type, price, bonus_str, bonus_def, description) VALUES (?,?,?,?,?,?)", items)
-
-    conn.commit()
-    conn.close()
+def create_character(user_id, username, character_name, race):
+    """Создание нового персонажа"""
+    conn = None
+    cursor = None
+    try:
+        # Проверяем, что раса существует
+        if race not in RACES:
+            return False, "Неизвестная раса"
+        
+        race_data = RACES[race]
+        
+        conn = get_connection()
+        if not conn:
+            return False, "Не удалось подключиться к базе данных"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли уже персонаж у пользователя
+        cursor.execute("SELECT id FROM player_characters WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            return False, "У вас уже есть персонаж!"
+        
+        # Создаем персонажа с характеристиками расы
+        cursor.execute("""
+            INSERT INTO player_characters 
+            (user_id, character_name, race, level, experience,
+             strength, agility, intelligence, health, max_health, 
+             mana, max_mana, gold)
+            VALUES (%s, %s, %s, 1, 0, %s, %s, %s, %s, %s, %s, %s, 100)
+        """, (
+            user_id, character_name, race,
+            race_data['strength'], race_data['agility'], race_data['intelligence'],
+            race_data['health'], race_data['health'],
+            race_data['mana'], race_data['mana']
+        ))
+        
+        conn.commit()
+        print(f"✅ Персонаж создан для user_id: {user_id}")
+        return True, "Персонаж успешно создан!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при создании персонажа: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка при создании персонажа: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def get_character(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM characters WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-def create_character(user_id, char_name, race):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    races = {
-        'human': (100, 20, 10, 10, 10),
-        'elf': (80, 50, 8, 15, 12),
-        'dwarf': (130, 10, 12, 8, 5),
-        'orc': (110, 10, 15, 7, 3)
-    }
-    stats = races.get(race, races['human'])
+    """Получение информации о персонаже"""
+    conn = None
+    cursor = None
     try:
-        cursor.execute('''INSERT INTO characters 
-            (user_id, character_name, race, health, max_health, mana, max_mana, strength, agility, intelligence, last_active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (user_id, char_name, race, stats[0], stats[0], stats[1], stats[1], stats[2], stats[3], stats[4], datetime.now(), datetime.now()))
-        conn.commit()
-        return True, "Успех"
+        conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для получения персонажа")
+            return None
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT * FROM player_characters 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        character = cursor.fetchone()
+        
+        if character:
+            # Обновляем время последней активности
+            cursor.execute("""
+                UPDATE player_characters 
+                SET last_active = CURRENT_TIMESTAMP 
+                WHERE user_id = %s
+            """, (user_id,))
+            conn.commit()
+        
+        return character
+        
     except Exception as e:
-        return False, str(e)
+        print(f"❌ Ошибка при получении персонажа: {e}")
+        return None
     finally:
-        conn.close()
-
-def update_character_stats(user_id, **kwargs):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    fields = ", ".join([f"{k} = ?" for k in kwargs.keys()])
-    values = list(kwargs.values()) + [user_id]
-    cursor.execute(f"UPDATE characters SET {fields} WHERE user_id = ?", values)
-    conn.commit()
-    conn.close()
-
-def add_experience(user_id, exp):
-    char = get_character(user_id)
-    new_exp = char['experience'] + exp
-    new_lvl = char['level']
-    if new_exp >= char['level'] * 100:
-        new_lvl += 1
-        new_exp -= char['level'] * 100
-        # При лвлапе даем бонус к статам
-        update_character_stats(user_id, level=new_lvl, experience=new_exp, 
-                               strength=char['strength']+2, max_health=char['max_health']+20, health=char['max_health']+20)
-        return True # Level Up!
-    update_character_stats(user_id, experience=new_exp)
-    return False
-
-def get_inventory(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('''SELECT i.id, it.name, it.type, it.bonus_str, it.bonus_def, i.is_equipped 
-                      FROM inventory i JOIN items it ON i.item_id = it.id WHERE i.user_id = ?''', (user_id,))
-    res = [dict(r) for r in cursor.fetchall()]
-    conn.close()
-    return res
-
-def buy_item(user_id, item_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT gold FROM characters WHERE user_id = ?", (user_id,))
-    gold = cursor.fetchone()[0]
-    cursor.execute("SELECT price, name FROM items WHERE id = ?", (item_id,))
-    item = cursor.fetchone()
-    if gold >= item[0]:
-        cursor.execute("UPDATE characters SET gold = gold - ? WHERE user_id = ?", (item[0], user_id))
-        cursor.execute("INSERT INTO inventory (user_id, item_id) VALUES (?, ?)", (user_id, item_id))
-        conn.commit()
-        conn.close()
-        return True, f"Куплено: {item[1]}"
-    conn.close()
-    return False, "Мало золота!"
-
-def equip_item(user_id, inv_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT it.type, i.is_equipped FROM inventory i JOIN items it ON i.item_id = it.id WHERE i.id = ?", (inv_id,))
-    item_type, is_eq = cursor.fetchone()
-    if is_eq:
-        cursor.execute("UPDATE inventory SET is_equipped = 0 WHERE id = ?", (inv_id,))
-    else:
-        cursor.execute("UPDATE inventory SET is_equipped = 0 WHERE user_id = ? AND item_id IN (SELECT id FROM items WHERE type = ?)", (user_id, item_type))
-        cursor.execute("UPDATE inventory SET is_equipped = 1 WHERE id = ?", (inv_id,))
-    conn.commit()
-    conn.close()
-    recalculate_stats(user_id)
-
-def recalculate_stats(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT SUM(it.bonus_str), SUM(it.bonus_def) FROM inventory i JOIN items it ON i.item_id = it.id WHERE i.user_id = ? AND i.is_equipped = 1", (user_id,))
-    res = cursor.fetchone()
-    update_character_stats(user_id, equip_str=res[0] or 0, equip_def=res[1] or 0)
-    conn.close()
-
-def use_healing_potion(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("SELECT i.id FROM inventory i JOIN items it ON i.item_id = it.id WHERE i.user_id = ? AND it.type = 'potion' LIMIT 1", (user_id,))
-    potion = cursor.fetchone()
-    if potion:
-        cursor.execute("UPDATE characters SET health = MIN(max_health, health + 50) WHERE user_id = ?", (user_id,))
-        cursor.execute("DELETE FROM inventory WHERE id = ?", (potion[0],))
-        conn.commit()
-        conn.close()
-        return True, 50
-    conn.close()
-    return False, 0
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def get_all_races():
-    return {
-        'human': {'name': 'Человек'}, 'elf': {'name': 'Эльф'},
-        'dwarf': {'name': 'Дварф'}, 'orc': {'name': 'Орк'}
-    }
+    """Получение списка всех рас"""
+    return RACES
 
-def get_shop_items():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM items")
-    res = [dict(r) for r in cursor.fetchall()]
-    conn.close()
-    return res
+def update_character_stats(user_id, **kwargs):
+    """Обновление характеристик персонажа"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        set_clauses = []
+        values = []
+        for key, value in kwargs.items():
+            set_clauses.append(f"{key} = %s")
+            values.append(value)
+        
+        values.append(user_id)
+        query = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id = %s"
+        
+        cursor.execute(query, values)
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении персонажа: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def add_experience(user_id, exp_amount):
+    """Добавление опыта персонажу"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, False, 0
+        
+        cursor = conn.cursor()
+        
+        # Получаем текущий опыт и уровень
+        cursor.execute("SELECT experience, level FROM player_characters WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, False, 0
+        
+        current_exp, current_level = result
+        new_exp = current_exp + exp_amount
+        
+        # Проверка повышения уровня (каждые 100 опыта)
+        new_level = current_level
+        level_up = False
+        
+        # Если опыт превысил порог для текущего уровня
+        exp_needed = current_level * 100
+        if new_exp >= exp_needed:
+            new_level = current_level + 1
+            level_up = True
+            
+            # Увеличиваем характеристики при повышении уровня
+            cursor.execute("""
+                UPDATE player_characters 
+                SET experience = %s, level = %s,
+                    strength = strength + 2,
+                    agility = agility + 2,
+                    intelligence = intelligence + 2,
+                    max_health = max_health + 20,
+                    max_mana = max_mana + 10,
+                    health = max_health + 20,  # Восстанавливаем здоровье
+                    mana = max_mana + 10       # Восстанавливаем ману
+                WHERE user_id = %s
+            """, (new_exp, new_level, user_id))
+        else:
+            cursor.execute("""
+                UPDATE player_characters 
+                SET experience = %s
+                WHERE user_id = %s
+            """, (new_exp, user_id))
+        
+        conn.commit()
+        return True, level_up, new_level
+        
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении опыта: {e}")
+        if conn:
+            conn.rollback()
+        return False, False, 0
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def add_gold(user_id, gold_amount):
+    """Добавление золота персонажу"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE player_characters 
+            SET gold = gold + %s 
+            WHERE user_id = %s
+        """, (gold_amount, user_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении золота: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0):
+    """Логирование боя"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, существует ли таблица battle_logs
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS battle_logs (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                enemy_type VARCHAR(100),
+                result VARCHAR(50),
+                damage_dealt INTEGER DEFAULT 0,
+                damage_taken INTEGER DEFAULT 0,
+                gold_earned INTEGER DEFAULT 0,
+                experience_earned INTEGER DEFAULT 0,
+                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            INSERT INTO battle_logs 
+            (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при логировании боя: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_player_stats(user_id):
+    """Получение статистики игрока"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT 
+                character_name,
+                race,
+                level,
+                experience,
+                battle_wins,
+                battle_losses,
+                gold,
+                created_at
+            FROM player_characters 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        return cursor.fetchone()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении статистики: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def heal_character(user_id, amount):
+    """Лечение персонажа"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE player_characters 
+            SET health = LEAST(max_health, health + %s)
+            WHERE user_id = %s
+            RETURNING health, max_health
+        """, (amount, user_id))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        
+        if result:
+            new_health, max_health = result
+            return True, new_health, max_health
+        
+        return False, 0, 0
+        
+    except Exception as e:
+        print(f"❌ Ошибка при лечении персонажа: {e}")
+        if conn:
+            conn.rollback()
+        return False, 0, 0
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def restore_mana(user_id, amount):
+    """Восстановление маны"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE player_characters 
+            SET mana = LEAST(max_mana, mana + %s)
+            WHERE user_id = %s
+            RETURNING mana, max_mana
+        """, (amount, user_id))
+        
+        result = cursor.fetchone()
+        conn.commit()
+        
+        if result:
+            new_mana, max_mana = result
+            return True, new_mana, max_mana
+        
+        return False, 0, 0
+        
+    except Exception as e:
+        print(f"❌ Ошибка при восстановлении маны: {e}")
+        if conn:
+            conn.rollback()
+        return False, 0, 0
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
