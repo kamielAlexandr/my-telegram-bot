@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from database import init_db, save_character, get_character
@@ -13,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 # Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+if not TOKEN:
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN не найден в переменных окружения!")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -44,7 +48,7 @@ async def create_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_character(user_id, name, strength, agility)
         
         await update.message.reply_text(
-            f'Персонаж создан!\n'
+            f'Персонаж создан! ✅\n'
             f'Имя: {name}\n'
             f'Сила: {strength}\n'
             f'Ловкость: {agility}'
@@ -58,24 +62,46 @@ async def create_character(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Просмотр профиля"""
-    user_id = update.effective_user.id
-    character = get_character(user_id)
-    
-    if character:
-        await update.message.reply_text(
-            f'Ваш персонаж:\n'
-            f'Имя: {character["name"]}\n'
-            f'Сила: {character["strength"]}\n'
-            f'Ловкость: {character["agility"]}\n'
-            f'Создан: {character["created_at"].strftime("%d.%m.%Y %H:%M")}'
-        )
-    else:
-        await update.message.reply_text('У вас еще нет персонажа. Используйте /create')
+    try:
+        user_id = update.effective_user.id
+        character = get_character(user_id)
+        
+        if character:
+            await update.message.reply_text(
+                f'Ваш персонаж:\n'
+                f'Имя: {character["name"]}\n'
+                f'Сила: {character["strength"]}\n'
+                f'Ловкость: {character["agility"]}\n'
+                f'Создан: {character["created_at"].strftime("%d.%m.%Y %H:%M")}'
+            )
+        else:
+            await update.message.reply_text('У вас еще нет персонажа. Используйте /create')
+    except Exception as e:
+        logger.error(f"Error getting profile: {e}")
+        await update.message.reply_text('Ошибка при получении профиля')
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверка работы бота"""
+    await update.message.reply_text('Бот работает! ✅')
 
 def main():
     """Запуск бота"""
-    # Инициализация базы данных
-    init_db()
+    print("🚀 Запуск бота...")
+    print(f"Токен: {'Найден' if TOKEN else 'Не найден'}")
+    
+    # Инициализация базы данных с повторными попытками
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            print(f"Попытка подключения к БД ({attempt + 1}/{max_retries})...")
+            init_db()
+            break
+        except Exception as e:
+            print(f"Ошибка подключения: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2)
+            else:
+                print("⚠️ Не удалось подключиться к БД, но бот запустится")
     
     # Создание приложения
     application = Application.builder().token(TOKEN).build()
@@ -84,6 +110,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("create", create_character))
     application.add_handler(CommandHandler("myprofile", my_profile))
+    application.add_handler(CommandHandler("ping", ping))
+    
+    print("🤖 Бот запущен!")
     
     # Запуск бота
     application.run_polling(allowed_updates=Update.ALL_TYPES)
