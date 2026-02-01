@@ -1,62 +1,21 @@
+# bot.py
 import telebot
 from telebot import types
 import os
+import sqlite3
 import datetime
 import random
 import time
 import requests
 import logging
-import sys
 
-# ================== НАСТРОЙКИ БОТА ==================
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-
-# Проверяем токен бота
-if not BOT_TOKEN:
-    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
-    print("   На Railway: добавьте BOT_TOKEN в Variables")
-    exit(1)
-
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# ================== ИМПОРТ БАЗЫ ДАННЫХ ==================
 try:
-    from database import db  # PostgreSQL база данных
-    print("✅ База данных импортирована")
-except ImportError as e:
-    logger.error(f"❌ Ошибка импорта базы данных: {e}")
-    # Создаем заглушку
-    class DummyDB:
-        def get_user(self, *args): return None
-        def create_user(self, *args): return True
-        def update_user(self, *args): return True
-        def complete_character_creation(self, *args): return True
-        def add_exp(self, *args): return False
-        def add_coins(self, *args): return True
-        def can_hunt_today(self, *args): return True, 0, 5
-        def increment_daily_hunts(self, *args): return True
-        def use_skill_point(self, *args): return True
-        def get_inventory(self, *args): return []
-        def add_to_inventory(self, *args): return True
-        def use_item(self, *args): return True
-        def get_race_description(self, race): 
-            return f"{race.capitalize()} - неизвестная раса"
-        def get_top_players(self, *args): return []
-    db = DummyDB()
-    print("⚠️  Используется заглушка базы данных")
+    from config import BOT_TOKEN, DB_PATH
+except ImportError:
+    # Если config.py не существует, используем значения по умолчанию
+    BOT_TOKEN = os.environ.get('BOT_TOKEN')
+    DB_PATH = 'game_bot.db'
 
-# Хранилище временных данных
-temp_user_data = {}
 # ================== ИЗОБРАЖЕНИЯ ==================
 RACE_IMAGES = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
@@ -88,7 +47,406 @@ MENU_IMAGES = {
     'rest': 'https://avatars.mds.yandex.net/get-images-cbir/rest_image/orig'
 }
 
-# ================== КЛАВИАТУРЫ (ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ) ==================
+# ================== БАЗА ДАННЫХ ==================
+class Database:
+    def __init__(self, db_path='game_bot.db'):
+        self.db_path = db_path
+        
+        # Извлекаем директорию из пути
+        self.data_dir = os.path.dirname(db_path)
+        
+        # Если указана директория и она не пустая строка, создаем её
+        if self.data_dir and not os.path.exists(self.data_dir):
+            os.makedirs(self.data_dir, exist_ok=True)
+            print(f"📁 Создана папка для данных: {self.data_dir}")
+        
+        # Инициализируем БД
+        self.init_db()
+    
+    def get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+    
+    def init_db(self):
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    character_name TEXT,
+                    race TEXT,
+                    level INTEGER DEFAULT 1,
+                    exp INTEGER DEFAULT 0,
+                    exp_to_next_level INTEGER DEFAULT 100,
+                    skill_points INTEGER DEFAULT 0,
+                    coins INTEGER DEFAULT 100,
+                    health INTEGER DEFAULT 100,
+                    max_health INTEGER DEFAULT 100,
+                    attack INTEGER DEFAULT 10,
+                    defense INTEGER DEFAULT 5,
+                    daily_hunts INTEGER DEFAULT 0,
+                    last_hunt_date DATE DEFAULT CURRENT_DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    item_type TEXT,
+                    item_name TEXT,
+                    quantity INTEGER DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+                )
+            ''')
+            
+            conn.commit()
+            print("✅ База данных инициализирована")
+            
+        except Exception as e:
+            print(f"❌ Ошибка при инициализации БД: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_user(self, user_id):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+            user = cursor.fetchone()
+            return dict(user) if user else None
+        except Exception as e:
+            print(f"❌ Ошибка при получении пользователя: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
+    def create_user(self, user_id, username="", first_name="", last_name=""):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR IGNORE INTO users 
+                (user_id, username, first_name, last_name, exp_to_next_level) 
+                VALUES (?, ?, ?, ?, 100)
+            ''', (user_id, username, first_name, last_name))
+            conn.commit()
+            print(f"👤 Создан/обновлен пользователь: {user_id}")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при создании пользователя: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def update_user(self, user_id, **kwargs):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            if not kwargs:
+                return False
+            
+            set_clause = ', '.join([f"{key} = ?" for key in kwargs.keys()])
+            values = list(kwargs.values())
+            values.append(user_id)
+            
+            cursor.execute(f'''
+                UPDATE users 
+                SET {set_clause}, last_active = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            ''', values)
+            
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"❌ Ошибка при обновлении пользователя: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def complete_character_creation(self, user_id, character_name, race):
+        try:
+            race_bonuses = {
+                'human': {'attack': 2, 'defense': 2, 'health': 20},
+                'elf': {'attack': 5, 'defense': 0, 'health': 10},
+                'orc': {'attack': 8, 'defense': 3, 'health': 30},
+                'dwarf': {'attack': 3, 'defense': 8, 'health': 25}
+            }
+            
+            if race in race_bonuses:
+                bonus = race_bonuses[race]
+                return self.update_user(
+                    user_id,
+                    character_name=character_name,
+                    race=race,
+                    attack=10 + bonus['attack'],
+                    defense=5 + bonus['defense'],
+                    health=100 + bonus['health'],
+                    max_health=100 + bonus['health'],
+                    coins=100
+                )
+            return self.update_user(user_id, character_name=character_name, race=race)
+        except Exception as e:
+            print(f"❌ Ошибка при создании персонажа: {e}")
+            return False
+    
+    def add_exp(self, user_id, exp_amount):
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False
+            
+            new_exp = user['exp'] + exp_amount
+            new_level = user['level']
+            skill_points_gained = 0
+            
+            while new_exp >= user['exp_to_next_level']:
+                new_exp -= user['exp_to_next_level']
+                new_level += 1
+                skill_points_gained += 1
+                exp_to_next = int(100 * (1.5 ** (new_level - 1)))
+                
+                self.update_user(
+                    user_id,
+                    level=new_level,
+                    exp=new_exp,
+                    exp_to_next_level=exp_to_next,
+                    skill_points=user['skill_points'] + skill_points_gained
+                )
+                user = self.get_user(user_id)
+            
+            if exp_amount > 0 and skill_points_gained == 0:
+                return self.update_user(user_id, exp=new_exp)
+            
+            return skill_points_gained > 0
+        except Exception as e:
+            print(f"❌ Ошибка при добавлении опыта: {e}")
+            return False
+    
+    def add_coins(self, user_id, coins_amount):
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False
+            
+            new_coins = max(0, user['coins'] + coins_amount)
+            return self.update_user(user_id, coins=new_coins)
+        except Exception as e:
+            print(f"❌ Ошибка при добавлении монет: {e}")
+            return False
+    
+    def can_hunt_today(self, user_id):
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False, 0, 5
+            
+            today = datetime.date.today().isoformat()
+            last_hunt_date = user['last_hunt_date']
+            
+            if last_hunt_date != today:
+                self.update_user(user_id, daily_hunts=0, last_hunt_date=today)
+                return True, 0, 5
+            
+            return user['daily_hunts'] < 5, user['daily_hunts'], 5
+        except Exception as e:
+            print(f"❌ Ошибка при проверке охоты: {e}")
+            return False, 0, 5
+    
+    def increment_daily_hunts(self, user_id):
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False
+            
+            today = datetime.date.today().isoformat()
+            
+            if user['last_hunt_date'] != today:
+                return self.update_user(user_id, daily_hunts=1, last_hunt_date=today)
+            
+            return self.update_user(user_id, daily_hunts=user['daily_hunts'] + 1)
+        except Exception as e:
+            print(f"❌ Ошибка при увеличении счетчика охот: {e}")
+            return False
+    
+    def use_skill_point(self, user_id, stat):
+        try:
+            user = self.get_user(user_id)
+            if not user or user['skill_points'] < 1:
+                return False
+            
+            improvements = {
+                'attack': {'attack': user['attack'] + 2},
+                'defense': {'defense': user['defense'] + 2},
+                'health': {'max_health': user['max_health'] + 15, 'health': min(user['health'] + 15, user['max_health'] + 15)}
+            }
+            
+            if stat not in improvements:
+                return False
+            
+            improvement = improvements[stat]
+            improvement['skill_points'] = user['skill_points'] - 1
+            
+            return self.update_user(user_id, **improvement)
+        except Exception as e:
+            print(f"❌ Ошибка при использовании очка навыка: {e}")
+            return False
+    
+    def add_to_inventory(self, user_id, item_type, item_name, quantity=1):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = ? AND item_type = ? AND item_name = ?
+            ''', (user_id, item_type, item_name))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                new_quantity = existing['quantity'] + quantity
+                cursor.execute('''
+                    UPDATE inventory SET quantity = ? 
+                    WHERE id = ?
+                ''', (new_quantity, existing['id']))
+            else:
+                cursor.execute('''
+                    INSERT INTO inventory (user_id, item_type, item_name, quantity)
+                    VALUES (?, ?, ?, ?)
+                ''', (user_id, item_type, item_name, quantity))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при добавлении в инвентарь: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_inventory(self, user_id):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT item_type, item_name, quantity 
+                FROM inventory 
+                WHERE user_id = ? AND quantity > 0
+                ORDER BY item_type, item_name
+            ''', (user_id,))
+            
+            items = cursor.fetchall()
+            return [dict(item) for item in items]
+        except Exception as e:
+            print(f"❌ Ошибка при получении инвентаря: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+    
+    def use_item(self, user_id, item_type, item_name):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = ? AND item_type = ? AND item_name = ?
+            ''', (user_id, item_type, item_name))
+            
+            item = cursor.fetchone()
+            if not item or item['quantity'] < 1:
+                return False
+            
+            if item['quantity'] == 1:
+                cursor.execute('DELETE FROM inventory WHERE id = ?', (item['id'],))
+            else:
+                cursor.execute('''
+                    UPDATE inventory SET quantity = quantity - 1 
+                    WHERE id = ?
+                ''', (item['id'],))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при использовании предмета: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_race_description(self, race):
+        descriptions = {
+            'human': "👨 *Человек* - ⚖️ Сбалансированная раса\n+2 к атаке, +2 к защите, +20 к здоровью",
+            'elf': "🧝 *Эльф* - 🏹 Мастера стрельбы\n+5 к атаке, +10 к здоровью",
+            'orc': "👹 *Орк* - ⚔️ Сильные воины\n+8 к атаке, +3 к защите, +30 к здоровью",
+            'dwarf': "🧙 *Гном* - 🛡️ Непробиваемые защитники\n+3 к атаке, +8 к защите, +25 к здоровью"
+        }
+        return descriptions.get(race, "Неизвестная раса")
+    
+    def get_top_players(self, limit=5):
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT character_name, race, level, exp, coins, attack, defense
+                FROM users 
+                WHERE character_name IS NOT NULL 
+                ORDER BY level DESC, exp DESC, coins DESC
+                LIMIT ?
+            ''', (limit,))
+            
+            top_players = cursor.fetchall()
+            return [dict(player) for player in top_players]
+        except Exception as e:
+            print(f"❌ Ошибка при получении топа игроков: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
+# ================== НАСТРОЙКИ ==================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+if not BOT_TOKEN:
+    print("❌ КРИТИЧЕСКАЯ ОШИБКА: Переменная BOT_TOKEN не установлена.")
+    print("   Установите переменную окружения или создайте файл config.py")
+    exit(1)
+
+db = Database('game_bot.db')
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# Хранилище временных данных
+temp_user_data = {}
+
+# ================== КЛАВИАТУРЫ ==================
 def get_main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = types.KeyboardButton('🎮 Профиль')
@@ -121,21 +479,29 @@ def get_hunt_keyboard():
     return markup
 
 def get_battle_keyboard(battle_state):
+    """Клавиатура для интерактивного боя"""
     markup = types.InlineKeyboardMarkup(row_width=2)
+    
+    # Базовые действия
     btn1 = types.InlineKeyboardButton('🗡️ Атаковать', callback_data='battle_attack')
     btn2 = types.InlineKeyboardButton('🛡️ Блокировать', callback_data='battle_block')
     btn3 = types.InlineKeyboardButton('💥 Супер-удар', callback_data='battle_super')
     
+    # Отображение супер-удара в зависимости от энергии
     energy_emoji = '⚡' * battle_state['energy'] + '○' * (3 - battle_state['energy'])
     btn3.text = f'{energy_emoji} Супер-удар'
     
+    # Если энергии нет, делаем кнопку неактивной
     if battle_state['energy'] < 3:
         btn3.callback_data = 'battle_no_energy'
     
     markup.add(btn1, btn2, btn3)
+    
+    # Дополнительные действия
     btn4 = types.InlineKeyboardButton('🧪 Исп. зелье', callback_data='battle_potion')
     btn5 = types.InlineKeyboardButton('🏃 Бежать', callback_data='battle_flee')
     markup.add(btn4, btn5)
+    
     return markup
 
 def get_upgrade_keyboard():
@@ -180,6 +546,7 @@ def get_rest_keyboard():
 
 # ================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==================
 def get_race_ability_description(race):
+    """Получить описание расовой способности"""
     abilities = {
         'human': "👑 *Сокрушительный удар:* двойной урон от атаки",
         'elf': "🎯 *Точный выстрел:* игнорирует защиту врага, высокий урон",
@@ -189,10 +556,12 @@ def get_race_ability_description(race):
     return abilities.get(race, "Неизвестная способность")
 
 def update_battle_message(call, battle_state, log_text=""):
+    """Обновление сообщения с текущим состоянием боя"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
     
+    # Создаем текст состояния
     health_bar_player = "❤️" * max(1, int((battle_state['player_health'] / battle_state['player_max_health']) * 10))
     health_bar_monster = "❤️" * max(1, int((battle_state['monster_health'] / monster['health']) * 10))
     
@@ -213,11 +582,13 @@ VS
 
 """
     
+    # Добавляем лог последнего раунда
     if log_text:
         status_text += f"{log_text}\n"
     
     status_text += "\n*Выберите действие:*"
     
+    # Обновляем сообщение
     try:
         bot.edit_message_caption(
             chat_id=call.message.chat.id,
@@ -227,9 +598,10 @@ VS
             reply_markup=get_battle_keyboard(battle_state)
         )
     except Exception as e:
-        logger.error(f"Ошибка обновления сообщения: {e}")
+        print(f"Ошибка обновления сообщения: {e}")
 
 def process_battle_action(call, battle_state, action):
+    """Обработка одного действия в бою"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
@@ -238,9 +610,11 @@ def process_battle_action(call, battle_state, action):
     
     # === ХОД ИГРОКА ===
     if action == 'attack':
+        # Базовая атака
         damage = max(1, battle_state['player_attack'] + random.randint(-3, 7))
         damage = max(1, damage - monster['defense'] // 3)
         
+        # Критический удар игрока (15% шанс)
         if random.random() < 0.15:
             damage = int(damage * 1.8)
             battle_log.append(f"🎯 *КРИТИЧЕСКИЙ УДАР!* {damage} урона!")
@@ -248,15 +622,17 @@ def process_battle_action(call, battle_state, action):
             battle_log.append(f"🗡️ *Вы атакуете:* {damage} урона")
         
         battle_state['monster_health'] -= damage
-        battle_state['energy'] = min(3, battle_state['energy'] + 1)
+        battle_state['energy'] = min(3, battle_state['energy'] + 1)  # Получаем энергию
         
     elif action == 'block':
+        # Блок - уменьшает урон от следующей атаки врага
         block_power = battle_state['player_defense'] // 2 + random.randint(0, 5)
         battle_state['last_action'] = 'block'
         battle_log.append(f"🛡️ *Вы готовитесь к защите:* +{block_power} к блоку")
         battle_state['energy'] = min(3, battle_state['energy'] + 1)
         
     elif action == 'super':
+        # Супер-удар в зависимости от расы
         if battle_state['energy'] < 3:
             return 'continue', "❌ Недостаточно энергии!"
         
@@ -264,35 +640,41 @@ def process_battle_action(call, battle_state, action):
         damage = 0
         
         if race == 'human':
+            # Человек: двойная атака
             damage = battle_state['player_attack'] * 2
             battle_log.append(f"👑 *СОКРУШИТЕЛЬНЫЙ УДАР ЧЕЛОВЕКА:* {damage} урона!")
             
         elif race == 'elf':
+            # Эльф: точный выстрел (игнорирует защиту)
             damage = battle_state['player_attack'] + random.randint(10, 20)
             battle_log.append(f"🎯 *ТОЧНЫЙ ВЫСТРЕЛ ЭЛЬФА:* {damage} урона (игнорирует защиту)!")
             
         elif race == 'orc':
+            # Орк: ярость (огромный урон, но теряет здоровье)
             damage = battle_state['player_attack'] * 3
             self_damage = battle_state['player_attack'] // 2
             battle_state['player_health'] -= self_damage
             battle_log.append(f"💢 *ЯРОСТЬ ОРКА:* {damage} урона! (вы теряете {self_damage} HP)")
             
         elif race == 'dwarf':
+            # Гном: удар молота (оглушение + урон)
             damage = battle_state['player_attack'] + battle_state['player_defense']
             battle_log.append(f"⚒️ *УДАР МОЛОТА ГНОМА:* {damage} урона! (оглушение)")
             battle_state['monster_stunned'] = True
         
         battle_state['monster_health'] -= damage
-        battle_state['energy'] = 0
+        battle_state['energy'] = 0  # Тратим всю энергию
         battle_state['last_action'] = 'super'
         
     elif action == 'potion':
+        # Использование зелья
         inventory = db.get_inventory(user_id)
         potions = [item for item in inventory if 'зелье' in item['item_name'].lower()]
         
         if not potions:
             battle_log.append("❌ В инвентаре нет зелий!")
         else:
+            # Используем первое малое зелье
             for potion in potions:
                 if 'малое' in potion['item_name'].lower():
                     db.use_item(user_id, potion['item_type'], potion['item_name'])
@@ -307,6 +689,7 @@ def process_battle_action(call, battle_state, action):
         battle_state['energy'] = min(3, battle_state['energy'] + 1)
         
     elif action == 'flee':
+        # Попытка бегства
         flee_chance = 0.4 + (battle_state['player_health'] / battle_state['player_max_health']) * 0.3
         
         if random.random() < flee_chance:
@@ -314,31 +697,38 @@ def process_battle_action(call, battle_state, action):
             return 'fled', "\n".join(battle_log)
         else:
             battle_log.append("❌ *Не удалось сбежать!* Монстр атакует вас в спину!")
+            # Монстр получает бонус к атаке при неудачном побеге
             monster_damage = int(monster['attack'] * 1.5)
             battle_state['player_health'] -= max(1, monster_damage - battle_state['player_defense'] // 2)
             battle_log.append(f"💢 *Атака в спину:* {monster_damage} урона")
     
+    # Проверяем, жив ли монстр
     if battle_state['monster_health'] <= 0:
         battle_log.append(f"🎉 *{monster['name']} побежден!*")
         return 'player_win', "\n".join(battle_log)
     
     # === ХОД МОНСТРА ===
+    # Если монстр оглушен, пропускает ход
     if battle_state.get('monster_stunned'):
         battle_log.append(f"😵 *{monster['name']} оглушен и пропускает ход!*")
         battle_state['monster_stunned'] = False
     else:
+        # Монстр может атаковать или использовать спецспособность
         monster_action = random.choice(['attack', 'attack', 'attack', 'special'])
         
         if monster_action == 'attack':
             monster_damage = max(1, monster['attack'] + random.randint(-2, 5))
             
+            # Если игрок блокировал в предыдущем ходу
             if battle_state.get('last_action') == 'block':
                 block_reduction = battle_state['player_defense'] + random.randint(0, 10)
                 monster_damage = max(1, monster_damage - block_reduction)
                 battle_log.append(f"🛡️ *Ваш блок поглощает* {block_reduction} урона!")
             
+            # Вычитаем защиту игрока
             monster_damage = max(1, monster_damage - battle_state['player_defense'] // 2)
             
+            # Критический удар монстра
             if random.random() < 0.1:
                 monster_damage = int(monster_damage * 1.7)
                 battle_log.append(f"💀 *КРИТИЧЕСКИЙ удар врага:* {monster_damage} урона!")
@@ -348,7 +738,9 @@ def process_battle_action(call, battle_state, action):
             battle_state['player_health'] -= monster_damage
             
         elif monster_action == 'special':
+            # Спецспособности монстров
             if battle_state['monster_type'] == 'wolf':
+                # Волк: двойная атака
                 attacks = 2
                 total_damage = 0
                 for _ in range(attacks):
@@ -360,17 +752,20 @@ def process_battle_action(call, battle_state, action):
                 battle_log.append(f"🐺 *Быстрая атака волка:* {attacks} удара, {total_damage} урона")
                 
             elif battle_state['monster_type'] == 'spider':
+                # Паук: яд (урон в течение 3 ходов)
                 poison_damage = 5
                 battle_state['poison'] = battle_state.get('poison', 0) + poison_damage
                 battle_state['poison_rounds'] = 3
                 battle_log.append(f"🕷️ *{monster['name']} кусает:* яд наносит {poison_damage} урона в раунд")
             
             elif battle_state['monster_type'] == 'bear':
+                # Медведь: оглушение
                 stun_chance = 0.3
                 if random.random() < stun_chance:
                     battle_state['player_stunned'] = True
                     battle_log.append(f"🐻 *Рев медведя:* вы оглушены на следующий ход!")
     
+    # Применяем эффекты (яд, оглушение)
     if battle_state.get('poison', 0) > 0 and battle_state.get('poison_rounds', 0) > 0:
         poison_damage = battle_state['poison']
         battle_state['player_health'] -= poison_damage
@@ -380,29 +775,37 @@ def process_battle_action(call, battle_state, action):
         if battle_state['poison_rounds'] <= 0:
             battle_state['poison'] = 0
     
+    # Проверяем, жив ли игрок
     if battle_state['player_health'] <= 0:
         battle_log.append("💀 *Вы пали в бою!*")
         return 'monster_win', "\n".join(battle_log)
     
+    # Увеличиваем раунд
     battle_state['round'] += 1
+    
+    # Сбрасываем последнее действие
     battle_state['last_action'] = None
     
     return 'continue', "\n".join(battle_log)
 
 def end_battle(call, battle_state, result, log_text=""):
+    """Завершение боя и начисление наград"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     monster = battle_state['monster']
     
     try:
         if result == 'player_win':
+            # Победа игрока
             exp_gained = monster['exp']
             coins_gained = monster['coins']
             
+            # Бонусы за быструю победу
             if battle_state['round'] <= 5:
                 exp_gained = int(exp_gained * 1.3)
                 coins_gained = int(coins_gained * 1.5)
             
+            # Начисляем награды
             level_up = db.add_exp(user_id, exp_gained)
             db.add_coins(user_id, coins_gained)
             db.update_user(user_id, health=battle_state['player_health'])
@@ -419,6 +822,10 @@ def end_battle(call, battle_state, result, log_text=""):
 ❤️ Осталось здоровья: {battle_state['player_health']}
 """
             
+            if level_up:
+                result_text += "\n✨ *УРОВЕНЬ ПОВЫШЕН!* ✨\n"
+            
+            # Отправляем изображение победы
             try:
                 bot.send_photo(call.message.chat.id, BATTLE_IMAGES['victory'], 
                              caption=result_text, parse_mode='Markdown')
@@ -426,6 +833,7 @@ def end_battle(call, battle_state, result, log_text=""):
                 bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
             
         elif result == 'monster_win':
+            # Поражение игрока
             coins_lost = min(30, user_data['coins'] // 3)
             recovered_health = max(1, user_data['max_health'] // 5)
             
@@ -452,6 +860,7 @@ def end_battle(call, battle_state, result, log_text=""):
                 bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
             
         elif result == 'fled':
+            # Игрок сбежал
             health_lost = user_data['health'] - battle_state['player_health']
             db.update_user(user_id, health=battle_state['player_health'])
             db.increment_daily_hunts(user_id)
@@ -469,10 +878,12 @@ def end_battle(call, battle_state, result, log_text=""):
             
             bot.send_message(call.message.chat.id, result_text, parse_mode='Markdown')
         
+        # Показываем детали боя
         if log_text:
             battle_details = f"*📜 ДЕТАЛИ БОЯ:*\n\n{log_text}"
             bot.send_message(call.message.chat.id, battle_details, parse_mode='Markdown')
         
+        # Возвращаем в главное меню
         time.sleep(1)
         bot.send_message(
             call.message.chat.id,
@@ -481,7 +892,7 @@ def end_battle(call, battle_state, result, log_text=""):
         )
         
     except Exception as e:
-        logger.error(f"❌ Ошибка при завершении боя: {e}")
+        print(f"❌ Ошибка при завершении боя: {e}")
 
 # ================== ОБРАБОТЧИКИ КОМАНД ==================
 @bot.message_handler(commands=['start'])
@@ -732,10 +1143,11 @@ def callback_handler(call):
             )
     
     except Exception as e:
-        logger.error(f"❌ Ошибка в callback_handler: {e}")
+        print(f"❌ Ошибка в callback_handler: {e}")
         bot.answer_callback_query(call.id, "❌ Произошла ошибка!")
 
 def battle_callback_handler(call):
+    """Обработчик действий в бою"""
     user_id = call.from_user.id
     battle_key = f'battle_{user_id}'
     
@@ -750,17 +1162,21 @@ def battle_callback_handler(call):
         bot.answer_callback_query(call.id, "❌ Недостаточно энергии для супер-удара!")
         return
     
+    # Если игрок оглушен, может использовать только зелье или блок
     if battle_state.get('player_stunned') and action not in ['potion', 'block']:
         bot.answer_callback_query(call.id, "❌ Вы оглушены! Можете только блокировать или использовать зелье.")
         battle_state['player_stunned'] = False
         return
     
+    # Обрабатываем действие
     result, log_text = process_battle_action(call, battle_state, action)
     
     if result == 'continue':
+        # Обновляем сообщение боя
         update_battle_message(call, battle_state, log_text)
         temp_user_data[battle_key] = battle_state
     elif result in ['player_win', 'monster_win', 'fled']:
+        # Завершаем бой
         end_battle(call, battle_state, result, log_text)
         if battle_key in temp_user_data:
             del temp_user_data[battle_key]
@@ -782,12 +1198,15 @@ def show_profile(message):
         )
         return
     
+    # Расчет процента здоровья
     health_percent = (user_data['health'] / user_data['max_health']) * 100
     health_bar = "❤️" * int(health_percent / 20) + "♡" * (5 - int(health_percent / 20))
     
+    # Проверяем доступность охоты
     can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
     hunts_text = f"{hunts_done}/{max_hunts}"
     
+    # Описание расовой способности
     race_ability = get_race_ability_description(user_data.get('race', ''))
     
     profile_text = f"""
@@ -867,6 +1286,7 @@ def show_hunt_menu(message):
     )
 
 def hunt_monster(call, monster_type):
+    """Начало интерактивного боя"""
     user_id = call.from_user.id
     user_data = db.get_user(user_id)
     
@@ -874,11 +1294,13 @@ def hunt_monster(call, monster_type):
         bot.answer_callback_query(call.id, "❌ Персонаж не найден!")
         return
     
+    # Проверяем лимит охоты
     can_hunt, hunts_done, max_hunts = db.can_hunt_today(user_id)
     if not can_hunt:
         bot.answer_callback_query(call.id, f"❌ Лимит охоты исчерпан! ({hunts_done}/{max_hunts})")
         return
     
+    # Данные монстров
     monsters = {
         'rat': {
             'name': '🐀 Крыса', 
@@ -934,6 +1356,7 @@ def hunt_monster(call, monster_type):
     except:
         pass
     
+    # Создаем состояние боя
     battle_state = {
         'user_id': user_id,
         'monster_type': monster_type,
@@ -945,12 +1368,14 @@ def hunt_monster(call, monster_type):
         'player_defense': user_data['defense'],
         'player_race': user_data['race'],
         'round': 1,
-        'energy': 0,
+        'energy': 0,  # Энергия для супер-удара
         'last_action': None
     }
     
+    # Сохраняем состояние боя
     temp_user_data[f'battle_{user_id}'] = battle_state
     
+    # Отправляем изображение монстра и клавиатуру боя
     monster_image_url = MONSTER_IMAGES.get(monster_type, MONSTER_IMAGES['rat'])
     battle_start_text = f"""
 ⚔️ *НАЧАЛО БИТВЫ!*
@@ -982,7 +1407,8 @@ def hunt_monster(call, monster_type):
 
 def show_upgrade_menu(message):
     user_id = message.from_user.id
-    user_data = db.get_user(user_id)
+    
+    user_data = db.get_user(message.from_user.id)
     
     if not user_data:
         return
@@ -1064,6 +1490,7 @@ def upgrade_stat(call, stat):
 
 def show_inventory(message):
     user_id = message.from_user.id
+    
     user_data = db.get_user(user_id)
     
     if not user_data:
@@ -1388,6 +1815,8 @@ def rest_action(call, rest_type):
     )
 
 def show_stats(message):
+    """Показать статистику сервера"""
+    conn = None
     try:
         conn = db.get_connection()
         cursor = conn.cursor()
@@ -1455,7 +1884,6 @@ def show_stats(message):
             parse_mode='Markdown',
             reply_markup=get_main_menu()
         )
-        conn.close()
         
     except Exception as e:
         print(f"❌ Ошибка в show_stats: {e}")
@@ -1464,131 +1892,33 @@ def show_stats(message):
             "❌ Ошибка при получении статистики",
             reply_markup=get_main_menu()
         )
+    finally:
+        if conn:
+            conn.close()
 
 # ================== ЗАПУСК БОТА ==================
 def main():
     print("=" * 50)
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
-    print(f"⏰ Время: {datetime.datetime.now()}")
     print("=" * 50)
     
-    # Проверяем наличие BOT_TOKEN
-    if not BOT_TOKEN:
-        print("❌ КРИТИЧЕСКАЯ ОШИБКА: BOT_TOKEN не установлен!")
-        print("   На Railway добавьте переменную BOT_TOKEN в разделе Variables")
-        return
-    
-    # Проверяем наличие DATABASE_URL
-    db_url = os.environ.get('DATABASE_URL')
-    if db_url:
-        print(f"✅ DATABASE_URL найден ({len(db_url)} символов)")
-    else:
-        print("⚠️  DATABASE_URL не найден, работаем в режиме заглушки")
-    
-    # ОЧЕНЬ ВАЖНО: Принудительно удаляем вебхук перед запуском
-    print("🔄 Удаляем вебхук...")
-    try:
-        bot.remove_webhook()
-        print("✅ Вебхук удален")
-        time.sleep(2)  # Даем время Telegram обработать запрос
-    except Exception as e:
-        print(f"⚠️  Не удалось удалить вебхук: {e}")
-    
-    # Проверяем доступность Telegram API
-    print("🔄 Проверяем подключение к Telegram API...")
     try:
         bot_info = bot.get_me()
-        print(f"✅ Бот: @{bot_info.username} (ID: {bot_info.id})")
-        print(f"📝 Имя: {bot_info.first_name}")
+        print(f"🤖 Бот: @{bot_info.username} (ID: {bot_info.id})")
+        print(f"📝 Имя бота: {bot_info.first_name}")
+        
+        print("🔄 Бот запускает polling...")
+        bot.infinity_polling(
+            skip_pending=True,
+            timeout=20,
+            long_polling_timeout=5
+        )
+        
     except Exception as e:
-        print(f"❌ Ошибка подключения к Telegram API: {e}")
-        print("⚠️  Проверьте BOT_TOKEN и интернет соединение")
-        return
-    
-    # Основной цикл бота с защитой от 409 ошибки
-    print("\n" + "=" * 50)
-    print("🚀 НАЧИНАЕМ РАБОТУ БОТА")
-    print("=" * 50)
-    
-    last_409_time = 0
-    error_count = 0
-    max_errors = 10
-    
-    while error_count < max_errors:
-        try:
-            print(f"\n🔄 Запуск polling (попытка {error_count + 1}/{max_errors})...")
-            
-            # Используем polling с параметрами для предотвращения конфликтов
-            bot.polling(
-                none_stop=True,
-                interval=0,
-                timeout=25,
-                long_polling_timeout=20,
-                skip_pending=True,  # КРИТИЧЕСКИ ВАЖНО: пропускаем ожидающие обновления
-                allowed_updates=None
-            )
-            
-            # Если polling завершился без ошибки, перезапускаем
-            print("⚠️  Polling завершился. Перезапуск через 5 секунд...")
-            error_count = 0  # Сбрасываем счетчик ошибок
-            time.sleep(5)
-            
-        except telebot.apihelper.ApiTelegramException as e:
-            error_count += 1
-            
-            if "409" in str(e):
-                current_time = time.time()
-                time_since_last_409 = current_time - last_409_time
-                last_409_time = current_time
-                
-                print("\n" + "=" * 60)
-                print("❌ ОШИБКА 409: Обнаружено несколько экземпляров бота!")
-                print("=" * 60)
-                
-                # Предлагаем решение в зависимости от времени
-                if time_since_last_409 < 30:
-                    wait_time = 30
-                    print(f"⚠️  Частые ошибки 409. Ждем {wait_time} секунд...")
-                else:
-                    wait_time = 15
-                    print(f"🔄 Ожидание {wait_time} секунд...")
-                
-                print("ПРИЧИНЫ И РЕШЕНИЯ:")
-                print("1. На Railway запущено несколько контейнеров")
-                print("2. Проверьте настройки Scale в Railway Dashboard")
-                print("3. Установите Min и Max Containers = 1")
-                print("=" * 60)
-                
-                # Принудительно удаляем вебхук
-                try:
-                    bot.remove_webhook()
-                    print("✅ Вебхук принудительно удален")
-                    time.sleep(2)
-                except:
-                    pass
-                
-                time.sleep(wait_time)
-                
-            else:
-                print(f"❌ Другая ошибка Telegram API: {e}")
-                print(f"🔄 Перезапуск через 10 секунд...")
-                time.sleep(10)
-                
-        except Exception as e:
-            error_count += 1
-            print(f"❌ Неизвестная ошибка: {e}")
-            import traceback
-            traceback.print_exc()
-            print(f"🔄 Перезапуск через 10 секунд...")
-            time.sleep(10)
-            
-        except KeyboardInterrupt:
-            print("\n🛑 Бот остановлен пользователем")
-            break
-    
-    if error_count >= max_errors:
-        print(f"\n❌ Достигнуто максимальное количество ошибок ({max_errors})")
-        print("🛑 Бот остановлен. Проверьте настройки на Railway.")
+        print(f"❌ Критическая ошибка при запуске бота: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
 
 if __name__ == "__main__":
     main()
