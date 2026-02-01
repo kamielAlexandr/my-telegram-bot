@@ -5,7 +5,6 @@
 import os
 import sys
 import time
-import signal
 import threading
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
