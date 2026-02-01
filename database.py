@@ -1,6 +1,8 @@
+import os
+import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-import os
+
 # Константы для рас
 RACES = {
     "human": {
@@ -47,30 +49,17 @@ RACES = {
 
 def get_connection():
     """Создание подключения к PostgreSQL"""
-    # Railway автоматически создает переменную DATABASE_URL
     database_url = os.getenv('DATABASE_URL')
-
-    # Для локальной разработки - используем другой вариант
+    
     if not database_url:
-        # Получаем отдельные параметры из переменных окружения
         db_host = os.getenv('PGHOST', 'localhost')
         db_port = os.getenv('PGPORT', '5432')
         db_name = os.getenv('PGDATABASE', 'railway')
         db_user = os.getenv('PGUSER', 'postgres')
         db_password = os.getenv('PGPASSWORD', '')
-        
         database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
-    print(f"Connecting to database: {database_url[:50]}...")  # Логируем URL (без пароля полностью)
     
     try:
-        return psycopg2.connect(database_url, sslmode='require')
-    except Exception as e:
-        print(f"Connection error: {e}")
-        # Пробуем подключиться без sslmode для локальной разработки
-        if "sslmode" in str(e).lower():
-            return psycopg2.connect(database_url)
-        raise
         conn = psycopg2.connect(database_url, sslmode='require')
         return conn
     except:
@@ -156,9 +145,7 @@ def init_db():
             cursor.close()
         if conn:
             conn.close()
-            
-def save_character(user_id, name, strength, agility):
-    """Сохранение персонажа в базу данных"""
+
 def create_character(user_id, username, character_name, race):
     """Создание нового персонажа"""
     conn = None
@@ -205,17 +192,14 @@ def create_character(user_id, username, character_name, race):
             conn.close()
 
 def get_character(user_id):
-    """Получение персонажа по user_id"""
     """Получение информации о персонаже"""
     conn = None
     cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-
+        
         cursor.execute("""
-            SELECT name, strength, agility, created_at
-            FROM player_characters
             SELECT *, 
                    CASE 
                        WHEN experience < 100 THEN 'Новичок'
@@ -226,9 +210,7 @@ def get_character(user_id):
             FROM player_characters 
             WHERE user_id = %s
         """, (user_id,))
-
-        result = cursor.fetchone()
-        return result
+        
         character = cursor.fetchone()
         
         if character:
@@ -247,9 +229,8 @@ def get_character(user_id):
                 character['racial_ability'] = race_info['racial_ability']
         
         return character
-
+        
     except Exception as e:
-        print(f"❌ Ошибка при получении: {e}")
         print(f"❌ Ошибка при получении персонажа: {e}")
         return None
     finally:
@@ -307,7 +288,7 @@ def add_experience(user_id, exp_amount):
         result = cursor.fetchone()
         
         if not result:
-            return False
+            return False, False, 0
         
         current_exp, current_level = result
         new_exp = current_exp + exp_amount
