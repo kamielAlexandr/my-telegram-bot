@@ -1902,23 +1902,27 @@ def main():
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print("=" * 50)
     
-    try:
-        bot_info = bot.get_me()
-        print(f"🤖 Бот: @{bot_info.username} (ID: {bot_info.id})")
-        print(f"📝 Имя бота: {bot_info.first_name}")
+   def start_polling():
+        print("🔄 Запуск polling с защитой от конфликтов...")
         
-        print("🔄 Бот запускает polling...")
+        # Первая попытка - пропустить обновления
+        try:
+            bot.get_updates(offset=-1, timeout=1)
+        except:
+            pass  # Игнорируем ошибки
+        
+        # Запускаем polling с параметрами для Railway
         bot.infinity_polling(
-            skip_pending=True,
-            timeout=20,
-            long_polling_timeout=5
+            skip_pending=True,  # Важно!
+            timeout=30,
+            long_polling_timeout=5,
+            logger_level="INFO",
+            allowed_updates=None
         )
-        
-    except Exception as e:
-        print(f"❌ Критическая ошибка при запуске бота: {e}")
-        import traceback
-        traceback.print_exc()
-        exit(1)
+    
+    return start_polling  # Возвращаем функцию для запуска
 
+# В конце main.py вместо прямого вызова:
 if __name__ == "__main__":
-    main()
+    start_func = main()
+    start_func()
