@@ -41,6 +41,22 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 # Глобальная переменная для хранения данных о боях
 battle_sessions = {}
 
+# Ссылки на изображения (можно заменить на свои)
+IMAGE_URLS = {
+    'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
+    'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
+    'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
+    'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
+    'wolf': 'https://i.imgur.com/5ZtkB9m.png',
+    'zombie': 'https://i.imgur.com/6AulC9n.png',
+    'mage': 'https://i.imgur.com/7BvmD0o.png',
+    'dragon': 'https://i.imgur.com/8CwnE1p.png',
+    'village': 'https://i.imgur.com/9DxoF2q.png',
+    'forest': 'https://i.imgur.com/0EzGk3r.png',
+    'castle': 'https://i.imgur.com/1FyhL4s.png',
+    'dungeon': 'https://i.imgur.com/2GzjM5t.png'
+}
+
 # --- КЛАВИАТУРЫ ---
 
 def get_main_menu_keyboard():
@@ -102,6 +118,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало работы с ботом"""
     user = update.effective_user
     
+    # Отправляем приветственное изображение
+    await update.message.reply_photo(
+        photo=IMAGE_URLS['village'],
+        caption=f"👋 Привет, {user.first_name}! Добро пожаловать в мир RPG!\n\n"
+                f"Ты стоишь на пороге великих приключений.\n"
+                f"Мир ждет своего героя!"
+    )
+    
     # Проверяем, есть ли у пользователя персонаж
     character = get_character(user.id)
     
@@ -115,8 +139,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Если персонажа нет, начинаем создание
         await update.message.reply_text(
-            f"👋 Привет, {user.first_name}! Добро пожаловать в мир RPG!\n\n"
-            f"Ты стоишь на пороге великих приключений.\n"
             f"Для начала создай своего персонажа.\n\n"
             f"Выбери расу:",
             reply_markup=get_race_selection_keyboard()
@@ -171,6 +193,7 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         info_text = "📖 *Подробнее о расах:*\n\n"
         
         for race_key, race_data in races.items():
+            image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
             info_text += (
                 f"*{race_data['name']}*\n"
                 f"💪 Сила: {race_data['strength']}\n"
@@ -194,18 +217,23 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     races = get_all_races()
     race_data = races[race_key]
+    image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
     
-    await query.edit_message_text(
-        text=f"🎭 Ты выбрал: *{race_data['name']}*\n\n"
-             f"*Характеристики:*\n"
-             f"💪 Сила: {race_data['strength']}\n"
-             f"🏹 Ловкость: {race_data['agility']}\n"
-             f"🧠 Интеллект: {race_data['intelligence']}\n"
-             f"❤️ Здоровье: {race_data['health']}\n"
-             f"🔮 Мана: {race_data['mana']}\n"
-             f"✨ Способность: {race_data['racial_ability']}\n\n"
-             f"Теперь введи имя для своего персонажа (от 2 до 20 символов):",
-        parse_mode='Markdown'
+    # Отправляем изображение расы
+    await query.message.reply_photo(
+        photo=image_url,
+        caption=f"🎭 Ты выбрал: *{race_data['name']}*\n\n"
+                f"*Характеристики:*\n"
+                f"💪 Сила: {race_data['strength']}\n"
+                f"🏹 Ловкость: {race_data['agility']}\n"
+                f"🧠 Интеллект: {race_data['intelligence']}\n"
+                f"❤️ Здоровье: {race_data['health']}\n"
+                f"🔮 Мана: {race_data['mana']}\n"
+                f"✨ Способность: {race_data['racial_ability']}"
+    )
+    
+    await query.message.reply_text(
+        f"Теперь введи имя для своего персонажа (от 2 до 20 символов):"
     )
     return ENTER_NAME
 
@@ -235,14 +263,20 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if success:
         races = get_all_races()
         race_data = races[race_key]
+        image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
+        
+        # Отправляем изображение созданного персонажа
+        await update.message.reply_photo(
+            photo=image_url,
+            caption=f"🎉 *Персонаж создан!*\n\n"
+                   f"🏷️ *Имя:* {character_name}\n"
+                   f"🎭 *Раса:* {race_data['name']}\n"
+                   f"✨ *Способность:* {race_data['racial_ability']}",
+            parse_mode='Markdown'
+        )
         
         await update.message.reply_text(
-            f"🎉 *Персонаж создан!*\n\n"
-            f"🏷️ *Имя:* {character_name}\n"
-            f"🎭 *Раса:* {race_data['name']}\n"
-            f"✨ *Способность:* {race_data['racial_ability']}\n\n"
             f"Твоё приключение начинается! Выбери действие:",
-            parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
         return MAIN_MENU
@@ -302,18 +336,21 @@ async def show_profile(query, user_id):
     
     races = get_all_races()
     race_data = races.get(character['race'], {})
+    image_url = IMAGE_URLS.get(character['race'], IMAGE_URLS['human'])
     
     # Расчет процентов здоровья и маны
     health_percent = int((character['health'] / character['max_health']) * 100) if character['max_health'] > 0 else 0
     mana_percent = int((character['mana'] / character['max_mana']) * 100) if character['max_mana'] > 0 else 0
     
+    # Сначала отправляем изображение персонажа
+    await query.message.reply_photo(
+        photo=image_url,
+        caption=f"👤 *{character['character_name']}*\n"
+               f"⭐ Уровень {character['level']} {race_data.get('name', '')}"
+    )
+    
     profile_text = (
-        f"👤 *Профиль персонажа*\n\n"
-        f"🏷️ *Имя:* {character['character_name']}\n"
-        f"🎭 *Раса:* {race_data.get('name', character['race'])}\n"
-        f"⭐ *Уровень:* {character['level']}\n"
-        f"📈 *Опыт:* {character['experience']}/{character['level'] * 100}\n\n"
-        f"⚔️ *Характеристики:*\n"
+        f"*Характеристики:*\n"
         f"💪 Сила: {character['strength']}\n"
         f"🏹 Ловкость: {character['agility']}\n"
         f"🧠 Интеллект: {character['intelligence']}\n\n"
@@ -327,7 +364,7 @@ async def show_profile(query, user_id):
         f"{race_data.get('racial_ability', 'Нет информации')}"
     )
     
-    await query.edit_message_text(
+    await query.message.reply_text(
         text=profile_text,
         parse_mode='Markdown',
         reply_markup=get_main_menu_keyboard()
@@ -335,14 +372,17 @@ async def show_profile(query, user_id):
 
 async def show_battle_menu(query):
     """Показ меню выбора противника"""
-    await query.edit_message_text(
-        text="⚔️ *Кого будем побеждать?*\n\n"
-             "Выбери противника:\n"
-             "🐺 Волк - Легкий противник\n"
+    await query.message.reply_photo(
+        photo=IMAGE_URLS['forest'],
+        caption="⚔️ *Кого будем побеждать?*\n\n"
+                "Выбери противника:"
+    )
+    
+    await query.message.reply_text(
+        text="🐺 Волк - Легкий противник\n"
              "🧟 Зомби - Средней сложности\n"
              "🧙 Маг - Сложный противник\n"
              "🐉 Дракон - Очень сложный босс",
-        parse_mode='Markdown',
         reply_markup=get_battle_menu_keyboard()
     )
 
@@ -480,7 +520,8 @@ async def start_battle(query, user_id, enemy_type):
             'max_damage': 8,
             'exp': 15,
             'gold': 10,
-            'description': 'Быстрый и опасный хищник леса'
+            'description': 'Быстрый и опасный хищник леса',
+            'image': IMAGE_URLS['wolf']
         },
         'zombie': {
             'name': '🧟 Зомби',
@@ -490,7 +531,8 @@ async def start_battle(query, user_id, enemy_type):
             'max_damage': 12,
             'exp': 25,
             'gold': 20,
-            'description': 'Медленный, но живучий нежитик'
+            'description': 'Медленный, но живучий нежитик',
+            'image': IMAGE_URLS['zombie']
         },
         'mage': {
             'name': '🧙 Маг',
@@ -500,7 +542,8 @@ async def start_battle(query, user_id, enemy_type):
             'max_damage': 18,
             'exp': 40,
             'gold': 35,
-            'description': 'Опасный противник, использующий магию'
+            'description': 'Опасный противник, использующий магию',
+            'image': IMAGE_URLS['mage']
         },
         'dragon': {
             'name': '🐉 Дракон',
@@ -510,11 +553,20 @@ async def start_battle(query, user_id, enemy_type):
             'max_damage': 30,
             'exp': 100,
             'gold': 80,
-            'description': 'Могучее существо, босс игры'
+            'description': 'Могучее существо, босс игры',
+            'image': IMAGE_URLS['dragon']
         }
     }
     
     enemy = enemies.get(enemy_type, enemies['wolf'])
+    
+    # Отправляем изображение врага
+    await query.message.reply_photo(
+        photo=enemy['image'],
+        caption=f"⚔️ *БОЙ НАЧИНАЕТСЯ!*\n\n"
+               f"Ты встретил: *{enemy['name']}*\n"
+               f"📖 {enemy['description']}"
+    )
     
     # Создаем сессию боя
     battle_sessions[user_id] = {
@@ -527,17 +579,13 @@ async def start_battle(query, user_id, enemy_type):
     }
     
     battle_log = battle_sessions[user_id]['log']
-    battle_log.append(f"⚔️ *БОЙ НАЧИНАЕТСЯ!*")
-    battle_log.append(f"Ты встретил: *{enemy['name']}*")
-    battle_log.append(f"📖 {enemy['description']}")
     battle_log.append(f"❤️ Здоровье врага: {enemy['health']}/{enemy['max_health']}")
     battle_log.append(f"❤️ Твое здоровье: {character['health']}/{character['max_health']}")
     battle_log.append("")
     battle_log.append("Выбери действие:")
     
-    await query.edit_message_text(
+    await query.message.reply_text(
         text="\n".join(battle_log),
-        parse_mode='Markdown',
         reply_markup=get_battle_action_keyboard()
     )
 
@@ -554,7 +602,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             text="❌ Бой завершен или не найден!",
             reply_markup=get_main_menu_keyboard()
         )
-        return
+        return MAIN_MENU
     
     battle_data = battle_sessions[user_id]
     character = battle_data['character']
@@ -582,24 +630,36 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == 'ability':
         # Использование расовой способности
         if character['race'] == 'human':
-            battle_log.append("✨ Адаптивность: все твои характеристики увеличены!")
+            # Адаптивность: временно увеличивает все характеристики
+            bonus = random.randint(1, 3)
+            battle_log.append(f"✨ Адаптивность: все твои характеристики увеличены на {bonus}!")
             
         elif character['race'] == 'elf':
-            battle_log.append("✨ Магический дар: твоя следующая атака будет точной!")
+            # Магический дар: точная атака с шансом критического урона
+            if random.random() < 0.3:  # 30% шанс
+                damage = character['intelligence'] * 2
+                battle_log.append(f"✨ Магический дар: Критическая атака! Нанесено {damage} урона!")
+                enemy['health'] -= damage
+            else:
+                damage = character['intelligence']
+                battle_log.append(f"✨ Магический дар: Точная атака! Нанесено {damage} урона!")
+                enemy['health'] -= damage
             
         elif character['race'] == 'dwarf':
-            battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!")
+            # Каменная кожа: временно увеличивает защиту и восстанавливает здоровье
+            heal_amount = random.randint(5, 15)
+            character['health'] = min(character['max_health'], character['health'] + heal_amount)
             battle_data['player_defending'] = True
+            battle_log.append(f"✨ Каменная кожа: Ты восстанавливаешь {heal_amount} HP и защищаешься!")
             
         elif character['race'] == 'orc':
-            battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!")
-            damage = random.randint(character['strength'], character['strength'] * 2)
+            # Ярость: сильная атака, но получает урон
+            damage = character['strength'] * 2
+            self_damage = random.randint(1, 5)
             enemy['health'] -= damage
-            battle_log.append(f"💥 Ты нанес {damage} урона в ярости!")
+            character['health'] -= self_damage
+            battle_log.append(f"✨ Ярость: Ты наносишь {damage} урона, но теряешь {self_damage} HP!")
             
-        else:
-            battle_log.append("✨ Способность использована!")
-        
     elif data == 'flee':
         flee_chance = random.randint(1, 100)
         if flee_chance > 50:  # 50% шанс сбежать
@@ -607,10 +667,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             del battle_sessions[user_id]
             await query.edit_message_text(
                 text="\n".join(battle_log),
-                parse_mode='Markdown',
                 reply_markup=get_main_menu_keyboard()
             )
-            return
+            return MAIN_MENU
         else:
             battle_log.append("🏃 Ты попытался сбежать, но не смог!")
     
@@ -631,6 +690,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_data['enemy_defending'] = True
             battle_log.append(f"🐺 Враг защищается!")
     
+    # Сбрасываем защиту врага после его хода
+    battle_data['enemy_defending'] = False
+    
     # Проверка окончания боя
     if character['health'] <= 0:
         battle_log.append("")
@@ -644,10 +706,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         del battle_sessions[user_id]
         await query.edit_message_text(
             text="\n".join(battle_log),
-            parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-        return
+        return MAIN_MENU
     
     elif enemy['health'] <= 0:
         battle_log.append("")
@@ -673,10 +734,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         del battle_sessions[user_id]
         await query.edit_message_text(
             text="\n".join(battle_log),
-            parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-        return
+        return MAIN_MENU
     
     # Продолжение боя
     else:
@@ -689,9 +749,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         
         await query.edit_message_text(
             text="\n".join(battle_log),
-            parse_mode='Markdown',
             reply_markup=get_battle_action_keyboard()
         )
+    return BATTLE_MENU
 
 # --- ОБРАБОТЧИКИ ОШИБОК ---
 
@@ -773,7 +833,8 @@ def main():
                     CallbackQueryHandler(main_menu_handler)
                 ],
                 BATTLE_MENU: [
-                    CallbackQueryHandler(battle_menu_handler)
+                    CallbackQueryHandler(battle_menu_handler),
+                    CallbackQueryHandler(battle_action_handler, pattern='^(attack|defend|ability|flee)$')
                 ]
             },
             fallbacks=[CommandHandler('cancel', cancel)],
@@ -783,9 +844,6 @@ def main():
         # Регистрация обработчиков
         application.add_handler(conv_handler)
         application.add_handler(CommandHandler('help', help_command))
-        
-        # Обработчик действий в бою (отдельный, так как не в ConversationHandler)
-        application.add_handler(CallbackQueryHandler(battle_action_handler, pattern='^(attack|defend|ability|flee)$'))
         
         # Обработчик ошибок
         application.add_error_handler(error_handler)
