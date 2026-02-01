@@ -1920,7 +1920,7 @@ def start_polling():
             allowed_updates=None
         )
     
-return start_polling  # Возвращаем функцию для запуска
+    return start_polling  # Возвращаем функцию для запуска
 
 # В конце main.py вместо прямого вызова:
 if __name__ == "__main__":
