@@ -47,14 +47,14 @@ IMAGE_URLS = {
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
     'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
-    'wolf': 'https://i.imgur.com/5ZtkB9m.png',
-    'zombie': 'https://i.imgur.com/6AulC9n.png',
-    'mage': 'https://i.imgur.com/7BvmD0o.png',
-    'dragon': 'https://i.imgur.com/8CwnE1p.png',
+    'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
+    'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
+    'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
+    'dragon': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
-    'castle': 'https://i.imgur.com/1FyhL4s.png',
-    'dungeon': 'https://i.imgur.com/2GzjM5t.png'
+    'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
+    'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s'
 }
 
 # --- КЛАВИАТУРЫ ---
