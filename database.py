@@ -56,18 +56,30 @@ def get_connection():
         db_password = os.getenv('PGPASSWORD', '')
         database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     
+    print(f"DEBUG: DATABASE_URL = {database_url[:50]}...")  # Логируем начало URL (без пароля)
+    
+    # Пробуем разные варианты подключения
     try:
         conn = psycopg2.connect(database_url, sslmode='require')
+        print("DEBUG: Connected with sslmode=require")
         return conn
     except Exception as e:
-        print(f"❌ Ошибка подключения с sslmode=require: {e}")
-        # Пробуем подключиться без sslmode
+        print(f"DEBUG: Connection with sslmode=require failed: {e}")
         try:
+            # Пробуем без sslmode
             conn = psycopg2.connect(database_url)
+            print("DEBUG: Connected without sslmode")
             return conn
         except Exception as e2:
-            print(f"❌ Не удалось подключиться к БД: {e2}")
-            return None
+            print(f"DEBUG: Connection without sslmode failed: {e2}")
+            # Пробуем с sslmode=disable
+            try:
+                conn = psycopg2.connect(database_url + "?sslmode=disable")
+                print("DEBUG: Connected with sslmode=disable")
+                return conn
+            except Exception as e3:
+                print(f"DEBUG: All connection attempts failed: {e3}")
+                return None
 
 def init_db():
     """Инициализация таблиц в базе данных"""
