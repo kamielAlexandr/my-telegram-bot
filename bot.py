@@ -22,7 +22,8 @@ from database import (
     update_character_stats,
     add_experience,
     add_gold,
-    log_battle
+    log_battle,
+    heal_character
 )
 
 # Настройка логирования
@@ -64,6 +65,7 @@ def get_main_menu_keyboard():
     keyboard = [
         [InlineKeyboardButton("📜 Герой", callback_data='profile')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
+        [InlineKeyboardButton("💊 Лечение (10 золота)", callback_data='heal')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
         [InlineKeyboardButton("📜 Свиток помощи", callback_data='help')],
         [InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')]
@@ -319,12 +321,71 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_help(query)
         return MAIN_MENU
     
+    elif data == 'heal':
+        await heal_character_handler(query, user_id)
+        return MAIN_MENU
+    
     elif data == 'restart':
         await query.edit_message_text(
             text="🌪 *Магия времени...*\nПерезапускаю мир.\nНапиши /start, чтобы переродиться.",
             parse_mode='Markdown'
         )
         return ConversationHandler.END
+
+async def heal_character_handler(query, user_id):
+    """Обработчик лечения персонажа"""
+    character = get_character(user_id)
+    
+    if not character:
+        await query.edit_message_text(
+            text="❌ Герой не найден!",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return
+    
+    # Проверяем, нужно ли лечение
+    if character['health'] >= character['max_health']:
+        await query.edit_message_text(
+            text="💚 Ты уже полностью здоров!",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Стоимость лечения - 10 золота
+    heal_cost = 10
+    
+    if character['gold'] < heal_cost:
+        await query.edit_message_text(
+            text=f"💰 Недостаточно золота! Нужно {heal_cost} золота, у тебя {character['gold']}.",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Лечение - восстанавливаем 50 HP
+    heal_amount = 50
+    success, new_health, max_health = heal_character(user_id, heal_amount)
+    
+    if success:
+        # Вычитаем золото
+        update_character_stats(user_id, gold=character['gold'] - heal_cost)
+        
+        await query.edit_message_text(
+            text=f"💚 *Ты исцелен!*\n\n"
+                 f"Восстановлено: *{heal_amount}* HP\n"
+                 f"Новое здоровье: *{new_health}/{max_health}*\n"
+                 f"Потрачено: *{heal_cost}* золота\n\n"
+                 f"_Ты готов к новым приключениям!_",
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard()
+        )
+    else:
+        await query.edit_message_text(
+            text="❌ Ошибка при лечении!",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='Markdown'
+        )
 
 async def show_profile(query, user_id):
     """Показ профиля персонажа"""
@@ -464,6 +525,7 @@ async def show_help(query):
 🏚 **Места:**
 • 👤 **Герой** - Твой статус и инвентарь
 • ⚔️ **Битва** - Охота на монстров
+• 💊 **Лечение** - Восстановление здоровья за золото
 • 🛍 **Торговец** - Трата золота (в разработке)
 
 🗡 **Советы бывалых:**
@@ -506,8 +568,6 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await start_battle(query, user_id, enemy_type)
         return IN_BATTLE
 
-# --- ИЗМЕНЕНИЯ В ФУНКЦИИ START_BATTLE ---
-
 async def start_battle(query, user_id, enemy_type):
     """Начало боя"""
     character = get_character(user_id)
@@ -519,7 +579,7 @@ async def start_battle(query, user_id, enemy_type):
         )
         return
 
-    # !!! ДОБАВЛЕНА ПРОВЕРКА ЗДОРОВЬЯ !!!
+    # Проверка здоровья
     if character['health'] <= 1:
         await query.edit_message_text(
             text="🤕 *Ты слишком ранен!*\n\n"
@@ -528,9 +588,8 @@ async def start_battle(query, user_id, enemy_type):
             reply_markup=get_main_menu_keyboard()
         )
         return
-    # -----------------------------------
     
-    # Определяем параметры врага (этот блок без изменений)
+    # Определяем параметры врага
     enemies = {
         'wolf': {
             'name': '🐺 Бешеный Волк',
@@ -543,7 +602,6 @@ async def start_battle(query, user_id, enemy_type):
             'description': 'Его глаза горят голодом, а клыки обнажены.',
             'image': IMAGE_URLS['wolf']
         },
-        # ... остальные враги ...
         'zombie': {
             'name': '🧟 Гниющий Зомби',
             'health': 50,
@@ -614,8 +672,6 @@ async def start_battle(query, user_id, enemy_type):
         parse_mode='Markdown'
     )
 
-# --- ИЗМЕНЕНИЯ В ФУНКЦИИ BATTLE_ACTION_HANDLER ---
-
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик действий в бою"""
     query = update.callback_query
@@ -640,7 +696,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     battle_data['turn'] += 1
     battle_log = battle_data['log']
     
-    # --- ЛОГИКА БОЯ (ATACK, DEFEND, ABILITY) ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ ---
+    # Действие игрока
     if data == 'attack':
         player_damage = random.randint(character['strength'] // 2, character['strength'])
         if battle_data['enemy_defending']:
@@ -684,9 +740,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         if flee_chance > 50:
             battle_log.append("🏃💨 *ПОБЕГ УДАЛСЯ!* Ты растворился в тени...")
             
-            # !!! ИЗМЕНЕНИЕ: СОХРАНЯЕМ ЗДОРОВЬЕ ПРИ ПОБЕГЕ !!!
+            # Сохраняем здоровье при побеге
             update_character_stats(user_id, health=max(1, character['health']))
-            # -----------------------------------------------
             
             del battle_sessions[user_id]
             await query.edit_message_text(
@@ -698,7 +753,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             battle_log.append("🚫 *НЕУДАЧА!* Враг перекрыл путь к отступлению!")
     
-    # Действие врага (без изменений логики, только расчет)
+    # Действие врага
     if enemy['health'] > 0:
         enemy_action = random.choice(['attack', 'attack', 'defend'])
         
@@ -717,21 +772,18 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     battle_data['enemy_defending'] = False
     
-    # --- ОБРАБОТКА КОНЦА БОЯ ---
-
+    # Обработка конца боя
     if character['health'] <= 0:
         battle_log.append("━━━━━━━━━━━━━━━━")
         battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
         battle_log.append("Ты еле унес ноги, истекая кровью.")
         
-        # !!! ИЗМЕНЕНИЕ: ОБНОВЛЯЕМ ЗДОРОВЬЕ ПРИ ПОРАЖЕНИИ !!!
-        # Ставим 1 HP, чтобы игрок не умер навсегда, но был критически ранен
+        # Обновляем здоровье при поражении
         update_character_stats(
             user_id, 
             battle_losses=character.get('battle_losses', 0) + 1,
             health=1 
         )
-        # ---------------------------------------------------
 
         log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
         del battle_sessions[user_id]
@@ -754,14 +806,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
         battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
         
-        # !!! ИЗМЕНЕНИЕ: СОХРАНЯЕМ ТЕКУЩЕЕ ЗДОРОВЬЕ ПОСЛЕ ПОБЕДЫ !!!
+        # Сохраняем текущее здоровье после победы
         update_character_stats(
             user_id, 
             battle_wins=character.get('battle_wins', 0) + 1,
             gold=character['gold'] + gold_gained,
-            health=character['health']  # <-- Сохраняем текущее HP
+            health=character['health']  # Сохраняем текущее HP
         )
-        # ----------------------------------------------------------
 
         add_experience(user_id, exp_gained)
         add_gold(user_id, gold_gained)
@@ -784,179 +835,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             f"👤 *ТЫ:* `{max(0, character['health'])}` HP\n"
             f"👿 *ВРАГ:* `{max(0, enemy['health'])}` HP\n\n"
             f"{chr(10).join(battle_log)}\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"⚡️ *Твои действия:*"
-        )
-        
-        await query.edit_message_text(
-            text=status_text,
-            parse_mode='Markdown',
-            reply_markup=get_battle_action_keyboard()
-        )
-        return IN_BATTLE
-
-async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик действий в бою"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    data = query.data
-    
-    # Проверяем, существует ли сессия боя
-    if user_id not in battle_sessions:
-        await query.edit_message_text(
-            text="❌ Бой уже завершен. Следы врага остыли.",
-            reply_markup=get_main_menu_keyboard()
-        )
-        return MAIN_MENU
-    
-    battle_data = battle_sessions[user_id]
-    character = battle_data['character']
-    enemy = battle_data['enemy']
-    
-    # Очищаем лог и увеличиваем ход
-    battle_data['log'] = []
-    battle_data['turn'] += 1
-    
-    battle_log = battle_data['log']
-    
-    # Действие игрока
-    if data == 'attack':
-        player_damage = random.randint(character['strength'] // 2, character['strength'])
-        if battle_data['enemy_defending']:
-            player_damage = max(1, player_damage // 2)
-            battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
-        else:
-            battle_log.append(f"⚔️ Ты нанес *{player_damage}* урона!")
-        enemy['health'] -= player_damage
-        
-    elif data == 'defend':
-        battle_data['player_defending'] = True
-        battle_log.append(f"🛡️ Ты поднял щит! Урон будет снижен.")
-        
-    elif data == 'ability':
-        # Использование расовой способности
-        if character['race'] == 'human':
-            bonus = random.randint(1, 3)
-            battle_log.append(f"✨ *Адаптивность!* Характеристики временно выросли на *+{bonus}*!")
-            
-        elif character['race'] == 'elf':
-            if random.random() < 0.3:  # 30% шанс
-                damage = character['intelligence'] * 2
-                battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Магия нанесла *{damage}* урона!")
-                enemy['health'] -= damage
-            else:
-                damage = character['intelligence']
-                battle_log.append(f"🏹 Точный выстрел на *{damage}* урона!")
-                enemy['health'] -= damage
-            
-        elif character['race'] == 'dwarf':
-            heal_amount = random.randint(5, 15)
-            character['health'] = min(character['max_health'], character['health'] + heal_amount)
-            battle_data['player_defending'] = True
-            battle_log.append(f"🏔 *Каменная кожа!* Восстановлено *{heal_amount}* HP и поднят щит!")
-            
-        elif character['race'] == 'orc':
-            damage = character['strength'] * 2
-            self_damage = random.randint(1, 5)
-            enemy['health'] -= damage
-            character['health'] -= self_damage
-            battle_log.append(f"🩸 *ЯРОСТЬ!* Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
-            
-    elif data == 'flee':
-        flee_chance = random.randint(1, 100)
-        if flee_chance > 50:  # 50% шанс сбежать
-            battle_log.append("🏃💨 *ПОБЕГ УДАЛСЯ!* Ты растворился в тени...")
-            del battle_sessions[user_id]
-            await query.edit_message_text(
-                text="\n".join(battle_log),
-                parse_mode='Markdown',
-                reply_markup=get_main_menu_keyboard()
-            )
-            return MAIN_MENU
-        else:
-            battle_log.append("🚫 *НЕУДАЧА!* Враг перекрыл путь к отступлению!")
-    
-    # Действие врага
-    if enemy['health'] > 0:
-        enemy_action = random.choice(['attack', 'attack', 'defend'])  # 66% атака
-        
-        if enemy_action == 'attack':
-            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
-            if battle_data['player_defending']:
-                enemy_damage = max(1, enemy_damage // 2)
-                battle_log.append(f"🛡️ Твой блок поглотил часть урона! Получено *{enemy_damage}* ед.")
-            else:
-                battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
-            character['health'] -= enemy_damage
-            battle_data['player_defending'] = False
-        else:
-            battle_data['enemy_defending'] = True
-            battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
-    
-    # Сбрасываем защиту врага после его хода
-    battle_data['enemy_defending'] = False
-    
-    # Проверка окончания боя
-    if character['health'] <= 0:
-        battle_log.append("━━━━━━━━━━━━━━━━")
-        battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
-        battle_log.append("Твоя история прервалась на этом месте.")
-        
-        # Обновляем статистику в БД
-        update_character_stats(user_id, battle_losses=character.get('battle_losses', 0) + 1)
-        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
-        
-        del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="\n".join(battle_log),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
-        )
-        return MAIN_MENU
-    
-    elif enemy['health'] <= 0:
-        battle_log.append("━━━━━━━━━━━━━━━━")
-        battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
-        battle_log.append(f"Монстр {enemy['name']} повержен!")
-        
-        # Награда
-        exp_gained = enemy['exp']
-        gold_gained = enemy['gold']
-        
-        battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
-        battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
-        
-        # Обновляем данные в БД
-        update_character_stats(
-            user_id, 
-            battle_wins=character.get('battle_wins', 0) + 1,
-            gold=character['gold'] + gold_gained
-        )
-        add_experience(user_id, exp_gained)
-        add_gold(user_id, gold_gained)
-        log_battle(user_id, enemy['name'], 'победа', 0, 0, gold_gained, exp_gained)
-        
-        del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="\n".join(battle_log),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
-        )
-        return MAIN_MENU
-    
-    # Продолжение боя
-    else:
-        # Красивое отображение текущего статуса
-        status_text = (
-            f"⚔️ *Ход №{battle_data['turn']}*\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"👤 *ТЫ:* `{max(0, character['health'])}` HP\n"
-            f"👿 *ВРАГ:* `{max(0, enemy['health'])}` HP\n\n"
-            f"{chr(10).join(battle_log)}\n" # Вставляем лог действий
             f"━━━━━━━━━━━━━━━━\n"
             f"⚡️ *Твои действия:*"
         )
