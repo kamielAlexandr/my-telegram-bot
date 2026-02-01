@@ -78,21 +78,17 @@ def get_connection():
 
 def init_db():
     """Инициализация таблиц в базе данных"""
-@@ -38,82 +73,311 @@ def init_db():
+    conn = None
+    cursor = None
+    try:
         conn = get_connection()
         cursor = conn.cursor()
-
-        # Создание таблицы, если она не существует
+        
         # Основная таблица персонажей
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_characters (
                 id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                name VARCHAR(100) NOT NULL,
-                strength INTEGER DEFAULT 0,
-                agility INTEGER DEFAULT 0,
                 user_id BIGINT NOT NULL UNIQUE,
-                username VARCHAR(100),
                 character_name VARCHAR(100) NOT NULL,
                 race VARCHAR(50) NOT NULL,
                 level INTEGER DEFAULT 1,
@@ -107,7 +103,6 @@ def init_db():
                 gold INTEGER DEFAULT 100,
                 inventory TEXT DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id)
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 battle_wins INTEGER DEFAULT 0,
                 battle_losses INTEGER DEFAULT 0
@@ -148,13 +143,11 @@ def init_db():
                 battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
+        
         conn.commit()
-        print("✅ Таблица создана или уже существует")
         print("✅ База данных инициализирована")
-
+        
     except Exception as e:
-        print(f"❌ Ошибка при создании таблицы: {e}")
         print(f"❌ Ошибка при создании таблиц: {e}")
         if conn:
             conn.rollback()
@@ -163,7 +156,7 @@ def init_db():
             cursor.close()
         if conn:
             conn.close()
-
+            
 def save_character(user_id, name, strength, agility):
     """Сохранение персонажа в базу данных"""
 def create_character(user_id, username, character_name, race):
