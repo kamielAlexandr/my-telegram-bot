@@ -2,6 +2,7 @@ import os
 import logging
 import random
 import asyncio
+import time
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -32,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Состояния для ConversationHandler
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE = range(5)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU = range(4)
 
 # Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -91,15 +92,11 @@ def get_battle_action_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_confirm_keyboard():
-    """Клавиатура подтверждения"""
-    keyboard = [
-        [InlineKeyboardButton("✅ Да", callback_data='confirm_yes')],
-        [InlineKeyboardButton("❌ Нет", callback_data='confirm_no')]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
 # --- КОМАНДЫ БОТА ---
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start"""
+    return await start(update, context)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало работы с ботом"""
@@ -154,7 +151,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Удачи в приключениях! 🏹🐉
 """
-    await update.message.reply_text(help_text, parse_mode='Markdown')
+    if update.message:
+        await update.message.reply_text(help_text, parse_mode='Markdown')
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(help_text, parse_mode='Markdown')
 
 # --- ОБРАБОТЧИКИ СОЗДАНИЯ ПЕРСОНАЖА ---
 
@@ -304,7 +304,7 @@ async def show_profile(query, user_id):
     race_data = races.get(character['race'], {})
     
     # Расчет процентов здоровья и маны
-    health_percent = int((character['health'] / character['max_health']) * 100)
+    health_percent = int((character['health'] / character['max_health']) * 100) if character['max_health'] > 0 else 0
     mana_percent = int((character['mana'] / character['max_mana']) * 100) if character['max_mana'] > 0 else 0
     
     profile_text = (
@@ -321,8 +321,8 @@ async def show_profile(query, user_id):
         f"🔮 Мана: {character['mana']}/{character['max_mana']} ({mana_percent}%)\n"
         f"💰 Золото: {character['gold']}\n\n"
         f"🎯 *Статистика:*\n"
-        f"🏆 Побед: {character['battle_wins']}\n"
-        f"💀 Поражений: {character['battle_losses']}\n\n"
+        f"🏆 Побед: {character.get('battle_wins', 0)}\n"
+        f"💀 Поражений: {character.get('battle_losses', 0)}\n\n"
         f"✨ *Расовая способность:*\n"
         f"{race_data.get('racial_ability', 'Нет информации')}"
     )
@@ -377,8 +377,8 @@ async def show_stats(query, user_id):
         )
         return
     
-    total_battles = character['battle_wins'] + character['battle_losses']
-    win_rate = (character['battle_wins'] / total_battles * 100) if total_battles > 0 else 0
+    total_battles = character.get('battle_wins', 0) + character.get('battle_losses', 0)
+    win_rate = (character.get('battle_wins', 0) / total_battles * 100) if total_battles > 0 else 0
     
     stats_text = (
         f"📊 *Статистика*\n\n"
@@ -386,8 +386,8 @@ async def show_stats(query, user_id):
         f"🌟 *Опыт:* {character['experience']}\n"
         f"💰 *Золото:* {character['gold']}\n\n"
         f"⚔️ *Боевая статистика:*\n"
-        f"• Побед: {character['battle_wins']}\n"
-        f"• Поражений: {character['battle_losses']}\n"
+        f"• Побед: {character.get('battle_wins', 0)}\n"
+        f"• Поражений: {character.get('battle_losses', 0)}\n"
         f"• Всего боев: {total_battles}\n"
         f"• Процент побед: {win_rate:.1f}%\n\n"
         f"📅 *Дата создания:*\n"
@@ -458,7 +458,6 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif data.startswith('battle_'):
         enemy_type = data[7:]  # Убираем 'battle_'
         await start_battle(query, user_id, enemy_type)
-        return MAIN_MENU
 
 async def start_battle(query, user_id, enemy_type):
     """Начало боя"""
@@ -555,7 +554,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             text="❌ Бой завершен или не найден!",
             reply_markup=get_main_menu_keyboard()
         )
-        return MAIN_MENU
+        return
     
     battle_data = battle_sessions[user_id]
     character = battle_data['character']
@@ -581,21 +580,16 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"🛡️ Ты встал в защитную стойку!")
         
     elif data == 'ability':
-        # Использование расовой способности - ИСПРАВЛЕННЫЙ БЛОК
+        # Использование расовой способности
         if character['race'] == 'human':
             battle_log.append("✨ Адаптивность: все твои характеристики увеличены!")
-            character['strength'] += 1
-            character['agility'] += 1
-            character['intelligence'] += 1
             
         elif character['race'] == 'elf':
             battle_log.append("✨ Магический дар: твоя следующая атака будет точной!")
-            battle_data['next_attack_critical'] = True
             
         elif character['race'] == 'dwarf':
             battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!")
             battle_data['player_defending'] = True
-            battle_data['extra_defense'] = True
             
         elif character['race'] == 'orc':
             battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!")
@@ -616,7 +610,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode='Markdown',
                 reply_markup=get_main_menu_keyboard()
             )
-            return MAIN_MENU
+            return
         else:
             battle_log.append("🏃 Ты попытался сбежать, но не смог!")
     
@@ -626,25 +620,16 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         
         if enemy_action == 'attack':
             enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
-            
-            # Учитываем защиту игрока
-            if battle_data.get('player_defending', False):
-                reduction = 2  # Обычная защита уменьшает урон вдвое
-                if battle_data.get('extra_defense', False):  # Дополнительная защита дварфа
-                    reduction = 4
-                enemy_damage = max(1, enemy_damage // reduction)
+            if battle_data['player_defending']:
+                enemy_damage = max(1, enemy_damage // 2)
                 battle_log.append(f"🐺 Враг атаковал, но ты защищался!")
             else:
                 battle_log.append(f"🐺 Враг нанес тебе {enemy_damage} урона!")
-                
             character['health'] -= enemy_damage
             battle_data['player_defending'] = False
-            battle_data['enemy_defending'] = False
-            
         else:
             battle_data['enemy_defending'] = True
             battle_log.append(f"🐺 Враг защищается!")
-            battle_data['player_defending'] = False
     
     # Проверка окончания боя
     if character['health'] <= 0:
@@ -662,7 +647,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-        return MAIN_MENU
+        return
     
     elif enemy['health'] <= 0:
         battle_log.append("")
@@ -691,7 +676,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode='Markdown',
             reply_markup=get_main_menu_keyboard()
         )
-        return MAIN_MENU
+        return
     
     # Продолжение боя
     else:
@@ -722,17 +707,26 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     error = context.error
     
     if "Conflict: terminated by other getUpdates request" in str(error):
-        logger.warning("⚠️ Другой экземпляр бота уже запущен. Игнорирую ошибку конфликта.")
+        logger.warning("⚠️ Обнаружен конфликт с другим экземпляром бота.")
+        logger.warning("⚠️ Перезапускаю бота через 5 секунд...")
+        
+        # Ждем 5 секунд и перезапускаем бота
+        await asyncio.sleep(5)
+        await context.application.stop()
+        await asyncio.sleep(2)
+        await context.application.initialize()
+        await context.application.start()
+        await context.application.updater.start_polling()
         return
     
     logger.error(f"Ошибка: {error}", exc_info=True)
     
     try:
-        if update and hasattr(update, 'callback_query') and update.callback_query:
+        if update and update.callback_query:
             await update.callback_query.message.reply_text(
                 "❌ Произошла ошибка. Попробуй еще раз или перезапусти бота с /start"
             )
-        elif update and hasattr(update, 'message') and update.message:
+        elif update and update.message:
             await update.message.reply_text(
                 "❌ Произошла ошибка. Попробуй еще раз или перезапусти бота с /start"
             )
@@ -767,7 +761,7 @@ def main():
         
         # Conversation Handler для создания персонажа
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('start', start)],
+            entry_points=[CommandHandler('start', start_command)],
             states={
                 CHOOSE_RACE: [
                     CallbackQueryHandler(choose_race, pattern='^race_')
