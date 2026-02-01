@@ -1,247 +1,162 @@
+# database_postgres.py
 import os
 import psycopg2
-from psycopg2.extras import DictCursor
-from datetime import datetime
+from psycopg2.extras import RealDictCursor
+import datetime
 import logging
-import time
 
 logger = logging.getLogger(__name__)
 
-class PostgreSQLDatabase:
+class PostgresDatabase:
     def __init__(self):
-        # Получаем URL базы данных из переменных окружения Railway
-        self.database_url = os.environ.get('DATABASE_URL')
+        self.connection_string = os.environ.get('DATABASE_URL')
+        if not self.connection_string:
+            # Для локальной разработки
+            self.connection_string = os.environ.get('POSTGRES_URL', 'postgresql://postgres:postgres@localhost:5432/game_bot')
         
-        # На Railway проверьте также другие возможные имена переменных
-        if not self.database_url:
-            self.database_url = os.environ.get('POSTGRESQL_URL')
-        
-        if not self.database_url:
-            # Проверяем, не запущено ли локально
-            if os.environ.get('RAILWAY_ENVIRONMENT'):
-                # На Railway, но DATABASE_URL не установлен
-                logger.error("❌ ОШИБКА: DATABASE_URL не установлена на Railway!")
-                logger.error("   Добавьте переменную DATABASE_URL в разделе Variables")
-                logger.error("   Или создайте PostgreSQL базу через New -> Database")
-                # Создаем заглушку, чтобы бот мог работать без БД
-                self.database_url = None
-                return
-            else:
-                # Локальная разработка
-                logger.warning("⚠️  DATABASE_URL не установлена, работаем без БД")
-                self.database_url = None
-                return
-        
-        # Исправляем формат URL для psycopg2
-        if self.database_url.startswith("postgres://"):
-            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
-        
-        logger.info(f"✅ DATABASE_URL обнаружена")
-        
-        # Пытаемся подключиться
-        self.retry_connection()
-    
-    def retry_connection(self):
-        """Повторные попытки подключения к БД"""
-        if not self.database_url:
-            logger.error("❌ Нет DATABASE_URL для подключения")
-            return False
-        
-        max_retries = 3
-        retry_delay = 2
-        
-        for attempt in range(max_retries):
-            try:
-                self.init_db()
-                logger.info(f"✅ База данных успешно инициализирована")
-                return True
-            except Exception as e:
-                logger.error(f"❌ Попытка {attempt + 1}/{max_retries}: {e}")
-                if attempt < max_retries - 1:
-                    logger.info(f"🔄 Повторная попытка через {retry_delay} секунд...")
-                    time.sleep(retry_delay)
-                else:
-                    logger.error("❌ Не удалось подключиться к базе данных")
-                    return False
+        logger.info(f"🔗 Подключение к PostgreSQL: {self.connection_string[:30]}...")
+        self.init_db()
     
     def get_connection(self):
-        """Создать подключение к PostgreSQL"""
-        try:
-            conn = psycopg2.connect(
-                self.database_url,
-                cursor_factory=DictCursor,
-                connect_timeout=10
-            )
-            return conn
-        except Exception as e:
-            logger.error(f"❌ Ошибка подключения к БД: {e}")
-            raise
+        """Получить соединение с базой данных"""
+        conn = psycopg2.connect(self.connection_string)
+        return conn
     
     def init_db(self):
-        """Инициализация таблиц"""
+        """Инициализация таблиц в PostgreSQL"""
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    # Таблица пользователей
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS users (
-                            user_id BIGINT PRIMARY KEY,
-                            username VARCHAR(255),
-                            first_name VARCHAR(255),
-                            last_name VARCHAR(255),
-                            character_name VARCHAR(255),
-                            race VARCHAR(50),
-                            level INTEGER DEFAULT 1,
-                            exp INTEGER DEFAULT 0,
-                            exp_to_next_level INTEGER DEFAULT 100,
-                            skill_points INTEGER DEFAULT 0,
-                            coins INTEGER DEFAULT 100,
-                            health INTEGER DEFAULT 100,
-                            max_health INTEGER DEFAULT 100,
-                            attack INTEGER DEFAULT 10,
-                            defense INTEGER DEFAULT 5,
-                            daily_hunts INTEGER DEFAULT 0,
-                            last_hunt_date DATE DEFAULT CURRENT_DATE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    
-                    # Таблица инвентаря
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS inventory (
-                            id SERIAL PRIMARY KEY,
-                            user_id BIGINT NOT NULL,
-                            item_type VARCHAR(100),
-                            item_name VARCHAR(255),
-                            quantity INTEGER DEFAULT 1,
-                            UNIQUE(user_id, item_type, item_name),
-                            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-                        )
-                    ''')
-                    
-                    # Автоматически добавляем отсутствующие столбцы
-                    self.add_missing_columns(cursor)
-                    
-                    # Индексы для производительности
-                    cursor.execute('''
-                        CREATE INDEX IF NOT EXISTS idx_users_character_name 
-                        ON users(character_name)
-                    ''')
-                    cursor.execute('''
-                        CREATE INDEX IF NOT EXISTS idx_users_level 
-                        ON users(level DESC)
-                    ''')
-                    cursor.execute('''
-                        CREATE INDEX IF NOT EXISTS idx_inventory_user 
-                        ON inventory(user_id)
-                    ''')
-                    
-                    conn.commit()
-                    logger.info("✅ Таблицы базы данных созданы/проверены")
-                    
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Таблица пользователей
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    character_name TEXT,
+                    race TEXT,
+                    level INTEGER DEFAULT 1,
+                    exp INTEGER DEFAULT 0,
+                    exp_to_next_level INTEGER DEFAULT 100,
+                    skill_points INTEGER DEFAULT 0,
+                    coins INTEGER DEFAULT 100,
+                    health INTEGER DEFAULT 100,
+                    max_health INTEGER DEFAULT 100,
+                    attack INTEGER DEFAULT 10,
+                    defense INTEGER DEFAULT 5,
+                    daily_hunts INTEGER DEFAULT 0,
+                    last_hunt_date DATE DEFAULT CURRENT_DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Таблица инвентаря
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
+                    item_type TEXT,
+                    item_name TEXT,
+                    quantity INTEGER DEFAULT 1
+                )
+            ''')
+            
+            # Таблица для статистики (опционально)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS game_stats (
+                    id SERIAL PRIMARY KEY,
+                    event_type TEXT,
+                    user_id BIGINT,
+                    details JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            conn.commit()
+            cursor.close()
+            logger.info("✅ PostgreSQL база данных инициализирована")
+            
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации БД: {e}")
+            logger.error(f"❌ Ошибка при инициализации PostgreSQL: {e}")
             raise
-    
-    def add_missing_columns(self, cursor):
-        """Добавить отсутствующие столбцы в таблицу users"""
-        columns_to_check = [
-            ('exp_to_next_level', 'INTEGER DEFAULT 100'),
-            ('skill_points', 'INTEGER DEFAULT 0'),
-            ('daily_hunts', 'INTEGER DEFAULT 0'),
-            ('last_hunt_date', 'DATE DEFAULT CURRENT_DATE')
-        ]
-        
-        for column_name, column_type in columns_to_check:
-            try:
-                cursor.execute(f'''
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name='users' AND column_name='{column_name}'
-                ''')
-                if not cursor.fetchone():
-                    cursor.execute(f'''
-                        ALTER TABLE users 
-                        ADD COLUMN {column_name} {column_type}
-                    ''')
-                    logger.info(f"✅ Добавлен столбец {column_name}")
-            except Exception as e:
-                logger.warning(f"⚠️  Не удалось добавить столбец {column_name}: {e}")
+        finally:
+            if conn:
+                conn.close()
     
     def get_user(self, user_id):
-        """Получить пользователя"""
-        if not self.database_url:
-            return None
-            
+        """Получить пользователя по ID"""
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('SELECT * FROM users WHERE user_id = %s', (user_id,))
-                    result = cursor.fetchone()
-                    return dict(result) if result else None
+            conn = self.get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT * FROM users WHERE user_id = %s', (user_id,))
+            user = cursor.fetchone()
+            cursor.close()
+            return dict(user) if user else None
         except Exception as e:
-            logger.error(f"❌ Ошибка получения пользователя {user_id}: {e}")
+            logger.error(f"❌ Ошибка при получении пользователя: {e}")
             return None
+        finally:
+            if conn:
+                conn.close()
     
     def create_user(self, user_id, username="", first_name="", last_name=""):
-        """Создать пользователя"""
-        if not self.database_url:
-            return False
-            
+        """Создать нового пользователя"""
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('''
-                        INSERT INTO users (user_id, username, first_name, last_name, exp_to_next_level)
-                        VALUES (%s, %s, %s, %s, 100)
-                        ON CONFLICT (user_id) DO UPDATE SET
-                            username = EXCLUDED.username,
-                            first_name = EXCLUDED.first_name,
-                            last_name = EXCLUDED.last_name,
-                            last_active = CURRENT_TIMESTAMP
-                    ''', (user_id, username, first_name, last_name))
-                    conn.commit()
-                    return True
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO users (user_id, username, first_name, last_name) 
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id) DO NOTHING
+            ''', (user_id, username, first_name, last_name))
+            conn.commit()
+            cursor.close()
+            logger.info(f"👤 Создан/обновлен пользователь: {user_id}")
+            return True
         except Exception as e:
-            logger.error(f"❌ Ошибка создания пользователя {user_id}: {e}")
+            logger.error(f"❌ Ошибка при создании пользователя: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def update_user(self, user_id, **kwargs):
         """Обновить данные пользователя"""
-        if not self.database_url or not kwargs:
-            return False
-        
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    set_fields = []
-                    values = []
-                    
-                    for key, value in kwargs.items():
-                        set_fields.append(f"{key} = %s")
-                        values.append(value)
-                    
-                    values.append(user_id)
-                    
-                    query = f'''
-                        UPDATE users 
-                        SET {', '.join(set_fields)}, last_active = CURRENT_TIMESTAMP
-                        WHERE user_id = %s
-                    '''
-                    
-                    cursor.execute(query, values)
-                    conn.commit()
-                    return cursor.rowcount > 0
+            if not kwargs:
+                return False
+            
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            set_clause = ', '.join([f"{key} = %s" for key in kwargs.keys()])
+            values = list(kwargs.values())
+            values.append(user_id)
+            
+            query = f'''
+                UPDATE users 
+                SET {set_clause}, last_active = CURRENT_TIMESTAMP
+                WHERE user_id = %s
+            '''
+            
+            cursor.execute(query, values)
+            conn.commit()
+            affected = cursor.rowcount
+            cursor.close()
+            
+            return affected > 0
         except Exception as e:
-            logger.error(f"❌ Ошибка обновления пользователя {user_id}: {e}")
+            logger.error(f"❌ Ошибка при обновлении пользователя: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def complete_character_creation(self, user_id, character_name, race):
         """Завершить создание персонажа"""
-        if not self.database_url:
-            return False
-            
         try:
             race_bonuses = {
                 'human': {'attack': 2, 'defense': 2, 'health': 20},
@@ -262,21 +177,13 @@ class PostgreSQLDatabase:
                     max_health=100 + bonus['health'],
                     coins=100
                 )
-            
-            return self.update_user(
-                user_id, 
-                character_name=character_name, 
-                race=race
-            )
+            return self.update_user(user_id, character_name=character_name, race=race)
         except Exception as e:
-            logger.error(f"❌ Ошибка создания персонажа: {e}")
+            logger.error(f"❌ Ошибка при создании персонажа: {e}")
             return False
     
     def add_exp(self, user_id, exp_amount):
-        """Добавить опыт"""
-        if not self.database_url:
-            return False
-            
+        """Добавить опыт пользователю"""
         try:
             user = self.get_user(user_id)
             if not user:
@@ -306,82 +213,67 @@ class PostgreSQLDatabase:
             
             return skill_points_gained > 0
         except Exception as e:
-            logger.error(f"❌ Ошибка добавления опыта: {e}")
+            logger.error(f"❌ Ошибка при добавлении опыта: {e}")
             return False
     
     def add_coins(self, user_id, coins_amount):
-        """Добавить монеты"""
-        if not self.database_url:
-            return False
-            
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('''
-                        UPDATE users 
-                        SET coins = GREATEST(0, coins + %s)
-                        WHERE user_id = %s
-                    ''', (coins_amount, user_id))
-                    conn.commit()
-                    return cursor.rowcount > 0
-        except Exception as e:
-            logger.error(f"❌ Ошибка добавления монет: {e}")
-            return False
-    
-    def can_hunt_today(self, user_id):
-        """Проверить лимит охоты"""
-        if not self.database_url:
-            return False, 0, 5
-            
-        try:
-            user = self.get_user(user_id)
-            if not user:
-                return False, 0, 5
-            
-            today = datetime.now().date()
-            last_hunt_date = user['last_hunt_date']
-            
-            if not last_hunt_date or last_hunt_date != today:
-                self.update_user(user_id, daily_hunts=0, last_hunt_date=today)
-                return True, 0, 5
-            
-            return user['daily_hunts'] < 5, user['daily_hunts'], 5
-        except Exception as e:
-            logger.error(f"❌ Ошибка проверки охоты: {e}")
-            return False, 0, 5
-    
-    def increment_daily_hunts(self, user_id):
-        """Увеличить счетчик охот"""
-        if not self.database_url:
-            return False
-            
+        """Добавить/убрать монеты"""
         try:
             user = self.get_user(user_id)
             if not user:
                 return False
             
-            today = datetime.now().date()
-            
-            if user['last_hunt_date'] != today:
-                return self.update_user(
-                    user_id, 
-                    daily_hunts=1, 
-                    last_hunt_date=today
-                )
-            
-            return self.update_user(
-                user_id, 
-                daily_hunts=user['daily_hunts'] + 1
-            )
+            new_coins = max(0, user['coins'] + coins_amount)
+            return self.update_user(user_id, coins=new_coins)
         except Exception as e:
-            logger.error(f"❌ Ошибка увеличения счетчика охот: {e}")
+            logger.error(f"❌ Ошибка при добавлении монет: {e}")
+            return False
+    
+    def can_hunt_today(self, user_id):
+        """Проверить, может ли пользователь охотиться сегодня"""
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False, 0, 5
+            
+            today = datetime.date.today()
+            last_hunt_date = user['last_hunt_date']
+            
+            if isinstance(last_hunt_date, str):
+                last_hunt_date = datetime.datetime.strptime(last_hunt_date, '%Y-%m-%d').date()
+            
+            if last_hunt_date != today:
+                self.update_user(user_id, daily_hunts=0, last_hunt_date=today)
+                return True, 0, 5
+            
+            return user['daily_hunts'] < 5, user['daily_hunts'], 5
+        except Exception as e:
+            logger.error(f"❌ Ошибка при проверке охоты: {e}")
+            return False, 0, 5
+    
+    def increment_daily_hunts(self, user_id):
+        """Увеличить счетчик охот"""
+        try:
+            user = self.get_user(user_id)
+            if not user:
+                return False
+            
+            today = datetime.date.today()
+            last_hunt_date = user['last_hunt_date']
+            
+            if isinstance(last_hunt_date, str):
+                last_hunt_date = datetime.datetime.strptime(last_hunt_date, '%Y-%m-%d').date()
+            
+            if last_hunt_date != today:
+                return self.update_user(user_id, daily_hunts=1, last_hunt_date=today)
+            
+            return self.update_user(user_id, daily_hunts=user['daily_hunts'] + 1)
+        except Exception as e:
+            logger.error(f"❌ Ошибка при увеличении счетчика охот: {e}")
             return False
     
     def use_skill_point(self, user_id, stat):
         """Использовать очко навыка"""
-        if not self.database_url:
-            return False
-            
         try:
             user = self.get_user(user_id)
             if not user or user['skill_points'] < 1:
@@ -390,10 +282,7 @@ class PostgreSQLDatabase:
             improvements = {
                 'attack': {'attack': user['attack'] + 2},
                 'defense': {'defense': user['defense'] + 2},
-                'health': {
-                    'max_health': user['max_health'] + 15,
-                    'health': min(user['health'] + 15, user['max_health'] + 15)
-                }
+                'health': {'max_health': user['max_health'] + 15, 'health': min(user['health'] + 15, user['max_health'] + 15)}
             }
             
             if stat not in improvements:
@@ -404,84 +293,126 @@ class PostgreSQLDatabase:
             
             return self.update_user(user_id, **improvement)
         except Exception as e:
-            logger.error(f"❌ Ошибка использования очка навыка: {e}")
+            logger.error(f"❌ Ошибка при использовании очка навыка: {e}")
             return False
     
     def add_to_inventory(self, user_id, item_type, item_name, quantity=1):
         """Добавить предмет в инвентарь"""
-        if not self.database_url:
-            return False
-            
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('''
-                        INSERT INTO inventory (user_id, item_type, item_name, quantity)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (user_id, item_type, item_name) 
-                        DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity
-                    ''', (user_id, item_type, item_name, quantity))
-                    conn.commit()
-                    return True
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = %s AND item_type = %s AND item_name = %s
+            ''', (user_id, item_type, item_name))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                new_quantity = existing[1] + quantity
+                cursor.execute('''
+                    UPDATE inventory SET quantity = %s 
+                    WHERE id = %s
+                ''', (new_quantity, existing[0]))
+            else:
+                cursor.execute('''
+                    INSERT INTO inventory (user_id, item_type, item_name, quantity)
+                    VALUES (%s, %s, %s, %s)
+                ''', (user_id, item_type, item_name, quantity))
+            
+            conn.commit()
+            cursor.close()
+            return True
         except Exception as e:
-            logger.error(f"❌ Ошибка добавления в инвентарь: {e}")
+            logger.error(f"❌ Ошибка при добавлении в инвентарь: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def get_inventory(self, user_id):
-        """Получить инвентарь"""
-        if not self.database_url:
-            return []
-            
+        """Получить инвентарь пользователя"""
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('''
-                        SELECT item_type, item_name, quantity 
-                        FROM inventory 
-                        WHERE user_id = %s AND quantity > 0
-                        ORDER BY item_type, item_name
-                    ''', (user_id,))
-                    results = cursor.fetchall()
-                    return [dict(row) for row in results]
+            conn = self.get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute('''
+                SELECT item_type, item_name, quantity 
+                FROM inventory 
+                WHERE user_id = %s AND quantity > 0
+                ORDER BY item_type, item_name
+            ''', (user_id,))
+            
+            items = cursor.fetchall()
+            cursor.close()
+            return [dict(item) for item in items]
         except Exception as e:
-            logger.error(f"❌ Ошибка получения инвентаря: {e}")
+            logger.error(f"❌ Ошибка при получении инвентаря: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
     
     def use_item(self, user_id, item_type, item_name):
-        """Использовать предмет"""
-        if not self.database_url:
-            return False
-            
+        """Использовать предмет из инвентаря"""
         try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    # Проверяем наличие
-                    cursor.execute('''
-                        SELECT id, quantity FROM inventory 
-                        WHERE user_id = %s AND item_type = %s AND item_name = %s
-                    ''', (user_id, item_type, item_name))
-                    
-                    item = cursor.fetchone()
-                    if not item or item['quantity'] < 1:
-                        return False
-                    
-                    # Удаляем или уменьшаем количество
-                    if item['quantity'] == 1:
-                        cursor.execute('DELETE FROM inventory WHERE id = %s', (item['id'],))
-                    else:
-                        cursor.execute('''
-                            UPDATE inventory SET quantity = quantity - 1 
-                            WHERE id = %s
-                        ''', (item['id'],))
-                    
-                    conn.commit()
-                    return True
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, quantity FROM inventory 
+                WHERE user_id = %s AND item_type = %s AND item_name = %s
+            ''', (user_id, item_type, item_name))
+            
+            item = cursor.fetchone()
+            if not item or item[1] < 1:
+                return False
+            
+            if item[1] == 1:
+                cursor.execute('DELETE FROM inventory WHERE id = %s', (item[0],))
+            else:
+                cursor.execute('''
+                    UPDATE inventory SET quantity = quantity - 1 
+                    WHERE id = %s
+                ''', (item[0],))
+            
+            conn.commit()
+            cursor.close()
+            return True
         except Exception as e:
-            logger.error(f"❌ Ошибка использования предмета: {e}")
+            logger.error(f"❌ Ошибка при использовании предмета: {e}")
             return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_top_players(self, limit=5):
+        """Получить топ игроков"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute('''
+                SELECT character_name, race, level, exp, coins, attack, defense
+                FROM users 
+                WHERE character_name IS NOT NULL 
+                ORDER BY level DESC, exp DESC, coins DESC
+                LIMIT %s
+            ''', (limit,))
+            
+            top_players = cursor.fetchall()
+            cursor.close()
+            return [dict(player) for player in top_players]
+        except Exception as e:
+            logger.error(f"❌ Ошибка при получении топа игроков: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
     
     def get_race_description(self, race):
-        """Описание расы"""
+        """Получить описание расы"""
         descriptions = {
             'human': "👨 *Человек* - ⚖️ Сбалансированная раса\n+2 к атаке, +2 к защите, +20 к здоровью",
             'elf': "🧝 *Эльф* - 🏹 Мастера стрельбы\n+5 к атаке, +10 к здоровью",
@@ -489,27 +420,3 @@ class PostgreSQLDatabase:
             'dwarf': "🧙 *Гном* - 🛡️ Непробиваемые защитники\n+3 к атаке, +8 к защите, +25 к здоровью"
         }
         return descriptions.get(race, "Неизвестная раса")
-    
-    def get_top_players(self, limit=5):
-        """Топ игроков"""
-        if not self.database_url:
-            return []
-            
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute('''
-                        SELECT character_name, race, level, exp, coins, attack, defense
-                        FROM users 
-                        WHERE character_name IS NOT NULL 
-                        ORDER BY level DESC, exp DESC, coins DESC
-                        LIMIT %s
-                    ''', (limit,))
-                    results = cursor.fetchall()
-                    return [dict(row) for row in results]
-        except Exception as e:
-            logger.error(f"❌ Ошибка получения топа игроков: {e}")
-            return []
-
-# Создаем глобальный экземпляр базы данных
-db = PostgreSQLDatabase()
