@@ -1,14 +1,17 @@
 #!/bin/bash
-echo "======================================="
+echo "=========================================="
 echo "🚀 Запуск Hero's Path Bot на Railway"
-echo "======================================="
+echo "=========================================="
 
-# Убиваем возможные предыдущие процессы
-pkill -f "python.*main.py" || true
-pkill -f "python.*telebot" || true
+# Запускаем веб-сервер для healthcheck в фоне
+python3 -m http.server 8080 &
+HEALTH_PID=$!
 
-# Ждем завершения процессов
-sleep 3
+# Даем время Railway проверить healthcheck
+sleep 5
 
-# Запускаем через менеджер
-python bot_manager.py
+# Запускаем бота
+python3 main.py
+
+# Если бот упал, убиваем healthcheck сервер
+kill $HEALTH_PID 2>/dev/null
