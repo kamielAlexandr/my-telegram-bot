@@ -1897,31 +1897,35 @@ def show_stats(message):
             conn.close()
 
 # ================== ЗАПУСК БОТА ==================
-def main():
+if __name__ == "__main__":
     print("=" * 50)
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print("=" * 50)
     
-    print("🤖 Бот:", bot.get_me().username)
-    print("📝 Имя бота:", bot.get_me().first_name)
+    try:
+        print("🤖 Бот:", bot.get_me().username)
+        print("📝 Имя бота:", bot.get_me().first_name)
+    except:
+        pass
     
     print("🔄 Бот запускает polling...")
     
-    # Запуск polling с защитой от конфликтов
-    try:
-        bot.infinity_polling(
-            skip_pending=True,
-            timeout=30,
-            long_polling_timeout=5,
-            logger_level="INFO",
-            allowed_updates=None,
-            restart_on_change=True
-        )
-    except Exception as e:
-        print(f"❌ Критическая ошибка при запуске бота: {e}")
-        return False
-    return True
-
-# ================== ЗАПУСК ==================
-if __name__ == "__main__":
-    main()
+    # Бесконечный цикл с перезапуском при ошибках
+    while True:
+        try:
+            bot.infinity_polling(
+                skip_pending=True,
+                timeout=30,
+                long_polling_timeout=5
+            )
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ Ошибка: {error_msg}")
+            
+            # Если это ошибка 409 (конфликт), ждем дольше
+            if "409" in error_msg or "Conflict" in error_msg:
+                print("⚠️ Другой экземпляр бота запущен. Ждем 10 секунд...")
+                time.sleep(10)
+            else:
+                print("🔄 Перезапуск через 5 секунд...")
+                time.sleep(5)
