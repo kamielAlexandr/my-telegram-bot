@@ -9,12 +9,6 @@ import time
 import requests
 import logging
 
-try:
-    from config import BOT_TOKEN, DB_PATH
-except ImportError:
-    # Если config.py не существует, используем значения по умолчанию
-    BOT_TOKEN = os.environ.get('BOT_TOKEN')
-    DB_PATH = 'game_bot.db'
 
 # ================== ИЗОБРАЖЕНИЯ ==================
 RACE_IMAGES = {
@@ -47,22 +41,21 @@ MENU_IMAGES = {
     'rest': 'https://avatars.mds.yandex.net/get-images-cbir/rest_image/orig'
 }
 
-# ================== БАЗА ДАННЫХ ==================
-class Database:
-    def __init__(self, db_path='game_bot.db'):
-        self.db_path = db_path
-        
-        # Извлекаем директорию из пути
-        self.data_dir = os.path.dirname(db_path)
-        
-        # Если указана директория и она не пустая строка, создаем её
-        if self.data_dir and not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir, exist_ok=True)
-            print(f"📁 Создана папка для данных: {self.data_dir}")
-        
-        # Инициализируем БД
-        self.init_db()
+# В начале main.py, после импортов:
+try:
+    # Пробуем использовать PostgreSQL
+    from database_postgres import PostgresDatabase as Database
+    print("✅ Используем PostgreSQL базу данных")
+except ImportError:
+    # Если не получилось, используем SQLite
+    try:
+        from config import BOT_TOKEN, DB_PATH
+    except ImportError:
+        BOT_TOKEN = os.environ.get('BOT_TOKEN')
+        DB_PATH = 'game_bot.db'
     
+    # Импортируем SQLite базу данных из вашего кода
+    print("⚠️ Используем SQLite (PostgreSQL не найден)")
     def get_connection(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
