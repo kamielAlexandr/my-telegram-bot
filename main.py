@@ -1902,17 +1902,17 @@ def main():
     print("🎮 БОТ 'Hero's Path' ЗАПУЩЕН")
     print("=" * 50)
     
-   def start_polling():
-        print("🔄 Запуск polling с защитой от конфликтов...")
+def start_polling():
+    print("🔄 Запуск polling с защитой от конфликтов...")
         
-        # Первая попытка - пропустить обновления
-        try:
-            bot.get_updates(offset=-1, timeout=1)
-        except:
-            pass  # Игнорируем ошибки
+    # Первая попытка - пропустить обновления
+    try:
+        bot.get_updates(offset=-1, timeout=1)
+    except:
+        pass  # Игнорируем ошибки
         
-        # Запускаем polling с параметрами для Railway
-        bot.infinity_polling(
+    # Запускаем polling с параметрами для Railway
+    bot.infinity_polling(
             skip_pending=True,  # Важно!
             timeout=30,
             long_polling_timeout=5,
@@ -1920,7 +1920,7 @@ def main():
             allowed_updates=None
         )
     
-    return start_polling  # Возвращаем функцию для запуска
+return start_polling  # Возвращаем функцию для запуска
 
 # В конце main.py вместо прямого вызова:
 if __name__ == "__main__":
