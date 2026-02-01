@@ -581,18 +581,30 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"🛡️ Ты встал в защитную стойку!")
         
     elif data == 'ability':
-        # Использование расовой способности
-        race_abilities = {
-            'human': lambda: battle_log.append("✨ Адаптивность: все твои характеристики увеличены!"),
-            'elf': lambda: battle_log.append("✨ Магический дар: твоя следующая атака будет точной!"),
-            'dwarf': lambda: (battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!"), 
-                             battle_data['player_defending'] == True),
-            'orc': lambda: (battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!"), 
-                           enemy['health'] -= random.randint(character['strength'], character['strength'] * 2)
-        }
-        
-        ability_func = race_abilities.get(character['race'], lambda: battle_log.append("✨ Способность использована!"))
-        ability_func()
+        # Использование расовой способности - ИСПРАВЛЕННЫЙ БЛОК
+        if character['race'] == 'human':
+            battle_log.append("✨ Адаптивность: все твои характеристики увеличены!")
+            character['strength'] += 1
+            character['agility'] += 1
+            character['intelligence'] += 1
+            
+        elif character['race'] == 'elf':
+            battle_log.append("✨ Магический дар: твоя следующая атака будет точной!")
+            battle_data['next_attack_critical'] = True
+            
+        elif character['race'] == 'dwarf':
+            battle_log.append("✨ Каменная кожа: ты получаешь дополнительную защиту!")
+            battle_data['player_defending'] = True
+            battle_data['extra_defense'] = True
+            
+        elif character['race'] == 'orc':
+            battle_log.append("✨ Ярость: твой урон увеличен в 2 раза!")
+            damage = random.randint(character['strength'], character['strength'] * 2)
+            enemy['health'] -= damage
+            battle_log.append(f"💥 Ты нанес {damage} урона в ярости!")
+            
+        else:
+            battle_log.append("✨ Способность использована!")
         
     elif data == 'flee':
         flee_chance = random.randint(1, 100)
@@ -614,16 +626,25 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         
         if enemy_action == 'attack':
             enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
-            if battle_data['player_defending']:
-                enemy_damage = max(1, enemy_damage // 2)
+            
+            # Учитываем защиту игрока
+            if battle_data.get('player_defending', False):
+                reduction = 2  # Обычная защита уменьшает урон вдвое
+                if battle_data.get('extra_defense', False):  # Дополнительная защита дварфа
+                    reduction = 4
+                enemy_damage = max(1, enemy_damage // reduction)
                 battle_log.append(f"🐺 Враг атаковал, но ты защищался!")
             else:
                 battle_log.append(f"🐺 Враг нанес тебе {enemy_damage} урона!")
+                
             character['health'] -= enemy_damage
             battle_data['player_defending'] = False
+            battle_data['enemy_defending'] = False
+            
         else:
             battle_data['enemy_defending'] = True
             battle_log.append(f"🐺 Враг защищается!")
+            battle_data['player_defending'] = False
     
     # Проверка окончания боя
     if character['health'] <= 0:
