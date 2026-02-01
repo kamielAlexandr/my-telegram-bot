@@ -78,13 +78,13 @@ def init_db():
         
         cursor = conn.cursor()
         
-        # Основная таблица персонажей
+        # Создаем таблицу с правильной структурой
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_characters (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL UNIQUE,
                 character_name VARCHAR(100) NOT NULL,
-                race VARCHAR(50) NOT NULL,
+                race VARCHAR(50) NOT NULL DEFAULT 'human',
                 level INTEGER DEFAULT 1,
                 experience INTEGER DEFAULT 0,
                 strength INTEGER DEFAULT 10,
@@ -102,8 +102,25 @@ def init_db():
             )
         """)
         
+        # Проверяем и добавляем недостающие колонки
+        columns_to_check = [
+            ('race', 'VARCHAR(50) DEFAULT \'human\' NOT NULL'),
+            ('battle_wins', 'INTEGER DEFAULT 0'),
+            ('battle_losses', 'INTEGER DEFAULT 0'),
+            ('mana', 'INTEGER DEFAULT 50'),
+            ('max_mana', 'INTEGER DEFAULT 50'),
+            ('intelligence', 'INTEGER DEFAULT 10')
+        ]
+        
+        for column_name, column_type in columns_to_check:
+            try:
+                cursor.execute(f"SELECT {column_name} FROM player_characters LIMIT 1")
+            except Exception:
+                print(f"Добавляю колонку '{column_name}' в таблицу...")
+                cursor.execute(f"ALTER TABLE player_characters ADD COLUMN {column_name} {column_type}")
+        
         conn.commit()
-        print("✅ Таблицы созданы или уже существуют")
+        print("✅ База данных инициализирована")
         
     except Exception as e:
         print(f"❌ Ошибка при создании таблиц: {e}")
@@ -139,9 +156,10 @@ def create_character(user_id, username, character_name, race):
         # Создаем персонажа с характеристиками расы
         cursor.execute("""
             INSERT INTO player_characters 
-            (user_id, character_name, race, level, experience,
-             strength, agility, intelligence, health, max_health, mana, max_mana, gold)
-            VALUES (%s, %s, %s, 1, 0, %s, %s, %s, %s, %s, %s, %s, 100)
+            (user_id, character_name, race, 
+             strength, agility, intelligence, 
+             health, max_health, mana, max_mana, gold)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 100)
         """, (
             user_id, character_name, race,
             race_data['strength'], race_data['agility'], race_data['intelligence'],
@@ -191,6 +209,12 @@ def get_character(user_id):
                 WHERE user_id = %s
             """, (user_id,))
             conn.commit()
+            
+            # Добавляем информацию о расе
+            if character.get('race') and character['race'] in RACES:
+                race_info = RACES[character['race']]
+                character['race_name'] = race_info['name']
+                character['racial_ability'] = race_info['racial_ability']
         
         return character
         
@@ -339,6 +363,21 @@ def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold
             return False
         
         cursor = conn.cursor()
+        
+        # Создаем таблицу для логов, если её нет
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS battle_logs (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                enemy_type VARCHAR(100),
+                result VARCHAR(50),
+                damage_dealt INTEGER DEFAULT 0,
+                damage_taken INTEGER DEFAULT 0,
+                gold_earned INTEGER DEFAULT 0,
+                experience_earned INTEGER DEFAULT 0,
+                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         
         cursor.execute("""
             INSERT INTO battle_logs (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
