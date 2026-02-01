@@ -4,9 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python railway_start.py",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 60,
-    "restartPolicyType": "ON_FAILURE"
+    "startCommand": "python bot.py"
   }
 }
