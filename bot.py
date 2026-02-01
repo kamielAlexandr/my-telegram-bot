@@ -51,8 +51,8 @@ IMAGE_URLS = {
     'zombie': 'https://i.imgur.com/6AulC9n.png',
     'mage': 'https://i.imgur.com/7BvmD0o.png',
     'dragon': 'https://i.imgur.com/8CwnE1p.png',
-    'village': 'https://i.imgur.com/9DxoF2q.png',
-    'forest': 'https://i.imgur.com/0EzGk3r.png',
+    'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
+    'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://i.imgur.com/1FyhL4s.png',
     'dungeon': 'https://i.imgur.com/2GzjM5t.png'
 }
