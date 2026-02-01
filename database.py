@@ -81,74 +81,43 @@ def get_connection():
                 print(f"DEBUG: All connection attempts failed: {e3}")
                 return None
 
-def init_db():
-    """Инициализация таблиц в базе данных"""
-    conn = None
-    cursor = None
+def get_connection():
+    """Создание подключения к PostgreSQL"""
+    database_url = os.getenv('DATABASE_URL')
+    
+    if not database_url:
+        # Для локальной разработки
+        db_host = os.getenv('PGHOST', 'localhost')
+        db_port = os.getenv('PGPORT', '5432')
+        db_name = os.getenv('PGDATABASE', 'railway')
+        db_user = os.getenv('PGUSER', 'postgres')
+        db_password = os.getenv('PGPASSWORD', '')
+        database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    
+    print(f"DEBUG: DATABASE_URL = {database_url[:50]}...")  # Логируем начало URL (без пароля)
+    
+    # Пробуем разные варианты подключения
     try:
-        conn = get_connection()
-        if not conn:
-            print("❌ Не удалось подключиться к БД для инициализации")
-            return
-        
-        cursor = conn.cursor()
-        
-        # Удаляем старую таблицу и создаем новую с правильной структурой
-        cursor.execute("DROP TABLE IF EXISTS player_characters")
-        
-        # Создаем таблицу с полной структурой
-        cursor.execute("""
-            CREATE TABLE player_characters (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL UNIQUE,
-                character_name VARCHAR(100) NOT NULL,
-                race VARCHAR(50) NOT NULL,
-                level INTEGER DEFAULT 1,
-                experience INTEGER DEFAULT 0,
-                strength INTEGER DEFAULT 10,
-                agility INTEGER DEFAULT 10,
-                intelligence INTEGER DEFAULT 10,
-                health INTEGER DEFAULT 100,
-                max_health INTEGER DEFAULT 100,
-                mana INTEGER DEFAULT 50,
-                max_mana INTEGER DEFAULT 50,
-                gold INTEGER DEFAULT 100,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                battle_wins INTEGER DEFAULT 0,
-                battle_losses INTEGER DEFAULT 0
-            )
-        """)
-        
-        print("✅ Таблица 'player_characters' создана заново")
-        
-        # Создаем таблицу для логов боев
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS battle_logs (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                enemy_type VARCHAR(100),
-                result VARCHAR(50),
-                damage_dealt INTEGER DEFAULT 0,
-                damage_taken INTEGER DEFAULT 0,
-                gold_earned INTEGER DEFAULT 0,
-                experience_earned INTEGER DEFAULT 0,
-                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        conn.commit()
-        print("✅ База данных инициализирована")
-        
+        conn = psycopg2.connect(database_url, sslmode='require')
+        print("DEBUG: Connected with sslmode=require")
+        return conn
     except Exception as e:
-        print(f"❌ Ошибка при создании таблиц: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        print(f"DEBUG: Connection with sslmode=require failed: {e}")
+        try:
+            # Пробуем без sslmode
+            conn = psycopg2.connect(database_url)
+            print("DEBUG: Connected without sslmode")
+            return conn
+        except Exception as e2:
+            print(f"DEBUG: Connection without sslmode failed: {e2}")
+            # Пробуем с sslmode=disable
+            try:
+                conn = psycopg2.connect(database_url + "?sslmode=disable")
+                print("DEBUG: Connected with sslmode=disable")
+                return conn
+            except Exception as e3:
+                print(f"DEBUG: All connection attempts failed: {e3}")
+                return None
 
 def create_character(user_id, username, character_name, race):
     """Создание нового персонажа"""
