@@ -81,7 +81,7 @@ def init_db():
         
         cursor = conn.cursor()
         
-        # Создаем таблицу с полной структурой
+        # Создаем таблицу, если она не существует
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_characters (
                 id SERIAL PRIMARY KEY,
@@ -90,7 +90,7 @@ def init_db():
                 race VARCHAR(50) NOT NULL,
                 level INTEGER DEFAULT 1,
                 experience INTEGER DEFAULT 0,
-                rank VARCHAR(10) DEFAULT 'E',  -- НОВОЕ ПОЛЕ: ранг охотника
+                rank VARCHAR(10) DEFAULT 'E',
                 strength INTEGER DEFAULT 10,
                 agility INTEGER DEFAULT 10,
                 intelligence INTEGER DEFAULT 10,
@@ -108,7 +108,17 @@ def init_db():
             )
         """)
         
-        print("✅ Таблица 'player_characters' создана")
+        # Проверяем, есть ли столбец rank, если нет - добавляем
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_characters' and column_name='rank'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN rank VARCHAR(10) DEFAULT 'E'")
+            print("✅ Столбец 'rank' добавлен в таблицу 'player_characters'")
+        
+        print("✅ Таблица 'player_characters' создана/обновлена")
         
         # Создаем таблицу для логов боев
         cursor.execute("""
@@ -150,7 +160,7 @@ def init_db():
             cursor.close()
         if conn:
             conn.close()
-
+            
 def create_character(user_id, username, character_name, race):
     """Создание нового персонажа"""
     conn = None
