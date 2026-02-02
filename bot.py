@@ -3,6 +3,7 @@ import logging
 import random
 import asyncio
 import time
+import html
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -951,8 +952,8 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if len(character_name) < 2 or len(character_name) > 20:
         await update.message.reply_text(
-            "❌ *Ошибка летописца!*\nИмя должно быть от 2 до 20 символов. Попробуй еще раз:",
-            parse_mode='Markdown'
+            "❌ <b>Ошибка летописца!</b>\nИмя должно быть от 2 до 20 символов. Попробуй еще раз:",
+            parse_mode='HTML'
         )
         return ENTER_NAME
     
@@ -970,15 +971,18 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         race_data = races[race_key]
         image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
         
+        # Экранируем имя персонажа для HTML
+        escaped_character_name = html.escape(character_name)
+        
         await update.message.reply_photo(
             photo=image_url,
-            caption=f"🎉 *РОЖДЕНИЕ ГЕРОЯ!*\n\n"
-                   f"🏷️ *Имя:* {character_name}\n"
-                   f"🎭 *Раса:* {race_data['name']}\n"
-                   f"✨ *Дар:* {race_data['racial_ability']}\n\n"
-                   f"📈 *Стартовые очки:* `3` (распредели в профиле!)\n"
-                   f"🏆 *Начальный ранг:* `E`",
-            parse_mode='Markdown'
+            caption=f"🎉 <b>РОЖДЕНИЕ ГЕРОЯ!</b>\n\n"
+                   f"🏷️ <b>Имя:</b> {escaped_character_name}\n"
+                   f"🎭 <b>Раса:</b> {race_data['name']}\n"
+                   f"✨ <b>Дар:</b> {race_data['racial_ability']}\n\n"
+                   f"📈 <b>Стартовые очки:</b> 3 (распредели в профиле!)\n"
+                   f"🏆 <b>Начальный ранг:</b> E",
+            parse_mode='HTML'
         )
         
         await update.message.reply_text(
@@ -990,10 +994,9 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"❌ Ошибка магии: {message}\n\n"
             f"Начни заново с /start",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return ConversationHandler.END
-
 # --- ОБРАБОТЧИКИ ПРОКАЧКИ ХАРАКТЕРИСТИК ---
 
 async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
