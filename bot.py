@@ -24,7 +24,8 @@ from database import (
     add_gold,
     log_battle,
     buy_item,
-    get_inventory
+    get_inventory,
+    add_stat_point
 )
 
 # Настройка логирования
@@ -35,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Состояния для ConversationHandler
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU = range(6)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP = range(7)
 
 # Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -57,7 +58,8 @@ IMAGE_URLS = {
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
-    'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg'
+    'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
+    'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg'
 }
 
 # Товары в магазине
@@ -100,7 +102,7 @@ SHOP_ITEMS = {
         'price': 80,
         'type': 'weapon',
         'effect': 2,
-        'available': False,  # Пока недоступно
+        'available': False,
         'message': '🛠 *В разработке* - Оружейник уехал на ярмарку!'
     },
     'hunting_bow': {
@@ -109,7 +111,7 @@ SHOP_ITEMS = {
         'price': 80,
         'type': 'weapon',
         'effect': 2,
-        'available': False,  # Пока недоступно
+        'available': False,
         'message': '🛠 *В разработке* - Мастер по лукам еще не вернулся!'
     },
     'wisdom_scroll': {
@@ -118,7 +120,7 @@ SHOP_ITEMS = {
         'price': 80,
         'type': 'artifact',
         'effect': 2,
-        'available': False,  # Пока недоступно
+        'available': False,
         'message': '🛠 *В разработке* - Мудрец ушел в медитацию!'
     }
 }
@@ -134,7 +136,6 @@ def create_progress_bar(current, maximum, length=10):
     filled = int(length * percent)
     empty = length - filled
     
-    # Используем разные символы для разных уровней заполнения
     if percent >= 1.0:
         return "█" * length
     elif percent >= 0.7:
@@ -155,7 +156,6 @@ def get_health_bar(current, maximum, length=15):
     filled = int(length * percent)
     empty = length - filled
     
-    # Разные символы в зависимости от уровня здоровья
     if percent >= 0.7:
         bar = "🟩" * filled + "⬜" * empty
     elif percent >= 0.4:
@@ -181,28 +181,15 @@ def get_mana_bar(current, maximum, length=10):
 
 def get_xp_progress(level, experience):
     """Рассчитывает прогресс опыта для текущего уровня"""
-    # Для уровня 1 нужно 0 XP, для уровня 2 - 100 XP, для уровня 3 - 300 XP и т.д.
-    # Текущая система: level * 100 XP для следующего уровня
-    
-    # Опыт, необходимый для следующего уровня
     xp_for_next_level = level * 100
-    
-    # Опыт, накопленный на текущем уровне
-    # Для расчета нужно знать, сколько опыта уже было потрачено на предыдущие уровни
-    # Для уровня 1: 0 XP потрачено, для уровня 2: 100 XP потрачено, для уровня 3: 300 XP и т.д.
-    # Формула: (level-1) * level * 100 / 2
     
     xp_spent = 0
     if level > 1:
         xp_spent = ((level - 1) * level * 100) // 2
     
-    # Текущий опыт на уровне
     current_xp_on_level = experience - xp_spent
-    
-    # Максимальный опыт на этом уровне
     max_xp_on_level = level * 100
     
-    # Процент заполнения
     percent = min(current_xp_on_level / max_xp_on_level, 1.0) if max_xp_on_level > 0 else 0
     
     return current_xp_on_level, max_xp_on_level, percent
@@ -217,7 +204,6 @@ def get_xp_bar(level, experience, length=10):
     filled = int(length * percent)
     empty = length - filled
     
-    # Символы для индикатора опыта
     if percent >= 1.0:
         bar = "⭐" * length
     else:
@@ -236,6 +222,30 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("📜 Свиток помощи", callback_data='help')],
         [InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')]
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_level_up_keyboard(stat_points):
+    """Клавиатура распределения характеристик"""
+    keyboard = []
+    
+    if stat_points > 0:
+        keyboard.append([
+            InlineKeyboardButton(f"💪 Увеличить СИЛУ (+1 к урону)", callback_data='levelup_strength')
+        ])
+        keyboard.append([
+            InlineKeyboardButton(f"🏹 Увеличить ЛОВКОСТЬ (+1 к защите)", callback_data='levelup_agility')
+        ])
+        keyboard.append([
+            InlineKeyboardButton(f"🧠 Увеличить ИНТЕЛЛЕКТ (+1 к магии)", callback_data='levelup_intelligence')
+        ])
+        keyboard.append([
+            InlineKeyboardButton(f"🎲 Распределить позже", callback_data='levelup_later')
+        ])
+    else:
+        keyboard.append([
+            InlineKeyboardButton("🔙 В главное меню", callback_data='back_to_main')
+        ])
+    
     return InlineKeyboardMarkup(keyboard)
 
 def get_race_selection_keyboard():
@@ -281,7 +291,6 @@ def get_shop_keyboard(character=None):
     if character:
         gold = character['gold']
         
-        # Доступные зелья
         keyboard.append([
             InlineKeyboardButton(
                 f"💊 Малое зелье здоровья (30 HP) - 25💰",
@@ -310,7 +319,6 @@ def get_shop_keyboard(character=None):
             )
         ])
         
-        # Недоступное оружие (серая кнопка)
         keyboard.append([
             InlineKeyboardButton(
                 f"⚔️ Обычный меч (+2 силы) - 80💰 [НЕТ В НАЛИЧИИ]",
@@ -332,7 +340,6 @@ def get_shop_keyboard(character=None):
             )
         ])
         
-        # Информация о золоте и кнопка назад
         keyboard.append([
             InlineKeyboardButton(f"💰 Твой баланс: {gold}", callback_data='balance_info')
         ])
@@ -354,7 +361,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало работы с ботом"""
     user = update.effective_user
     
-    # Отправляем приветственное изображение
     await update.message.reply_photo(
         photo=IMAGE_URLS['village'],
         caption=f"🏰 *ДОБРО ПОЖАЛОВАТЬ В МИР ГЕРОЕВ!* 🏰\n\n"
@@ -363,19 +369,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Ты стоишь на главной площади деревни. Впереди — великие свершения!"
     )
     
-    # Проверяем, есть ли у пользователя персонаж
     character = get_character(user.id)
     
     if character:
-        # Если персонаж уже есть, показываем главное меню
-        await update.message.reply_text(
-            f"⚔️ С возвращением, *{character['character_name']}*!\nТвой меч все еще остер.",
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode='Markdown'
-        )
-        return MAIN_MENU
+        # Проверяем, есть ли нераспределенные очки характеристик
+        if character.get('stat_points', 0) > 0:
+            await update.message.reply_text(
+                f"⚔️ С возвращением, *{character['character_name']}*!\n"
+                f"✨ У тебя есть {character['stat_points']} очко(в) характеристик для распределения!",
+                parse_mode='Markdown',
+                reply_markup=get_level_up_keyboard(character['stat_points'])
+            )
+            return LEVEL_UP
+        else:
+            await update.message.reply_text(
+                f"⚔️ С возвращением, *{character['character_name']}*!\nТвой меч все еще остер.",
+                reply_markup=get_main_menu_keyboard(),
+                parse_mode='Markdown'
+            )
+            return MAIN_MENU
     else:
-        # Если персонажа нет, начинаем создание
         await update.message.reply_text(
             f"✨ *Создание Легенды*\n\n"
             f"Прежде чем отправиться в путь, выбери своё происхождение:",
@@ -403,18 +416,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚒️ **Дварф** — `Живучесть` (+20% здоровья)
 👹 **Орк** — `Ярость` (Рискованные, но мощные атаки)
 
+📈 **Прокачка:**
+• За каждый уровень получаешь *3 очка характеристик*
+• Можешь распределить их между:
+  💪 *СИЛА* - Увеличивает урон в ближнем бою
+  🏹 *ЛОВКОСТЬ* - Увеличивает защиту и шанс увернуться
+  🧠 *ИНТЕЛЛЕКТ* - Увеличивает магический урон и ману
+
 💊 **Магазин:**
 • Зелья здоровья - Быстрое восстановление в бою
 • Зелья маны - Восполнение магической энергии
-• *Оружие и артефакты пока недоступны*
 
 🔄 **Регенерация:**
 • Здоровье: 5% каждые 5 минут
 • Мана: 10% каждые 5 минут
-_Отдыхай между боями!_
 
 🗡 **Тактика боя:**
-• ⚔️ *Атака* - Базовый удар оружием
+• ⚔️ *Атака* - Базовый удар оружием (зависит от силы)
 • 🛡️ *Защита* - Снижает урон на 50%
 • ✨ *Способность* - Уникальный навык твоей расы
 • 🏃 *Сбежать* - Шанс 50% покинуть бой
@@ -436,7 +454,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if data == 'race_info':
-        # Показываем подробную информацию о расах
         races = get_all_races()
         info_text = "📚 *ЭНЦИКЛОПЕДИЯ РАС*\n━━━━━━━━━━━━━━━━\n"
         
@@ -457,7 +474,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHOOSE_RACE
     
-    # Сохраняем выбранную расу
     race_key = data[5:]  # Убираем 'race_'
     context.user_data['selected_race'] = race_key
     
@@ -465,7 +481,6 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     race_data = races[race_key]
     image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
     
-    # Отправляем изображение расы
     await query.message.reply_photo(
         photo=image_url,
         caption=f"🎭 Твой выбор: *{race_data['name']}*\n━━━━━━━━━━━━━━━━\n"
@@ -490,7 +505,6 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     character_name = update.message.text.strip()
     
-    # Валидация имени
     if len(character_name) < 2 or len(character_name) > 20:
         await update.message.reply_text(
             "❌ *Ошибка летописца!*\nИмя должно быть от 2 до 20 символов. Попробуй еще раз:",
@@ -498,10 +512,8 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ENTER_NAME
     
-    # Получаем выбранную расу
     race_key = context.user_data.get('selected_race', 'human')
     
-    # Создаем персонажа
     success, message = create_character(
         user_id=user.id,
         username=user.username or user.first_name,
@@ -514,14 +526,13 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         race_data = races[race_key]
         image_url = IMAGE_URLS.get(race_key, IMAGE_URLS['human'])
         
-        # Отправляем изображение созданного персонажа
         await update.message.reply_photo(
             photo=image_url,
             caption=f"🎉 *РОЖДЕНИЕ ГЕРОЯ!*\n\n"
                    f"🏷️ *Имя:* {character_name}\n"
                    f"🎭 *Раса:* {race_data['name']}\n"
                    f"✨ *Дар:* {race_data['racial_ability']}\n\n"
-                   f"_Мир открыт перед тобой!_",
+                   f"📈 *Стартовые очки:* `3` (распредели в профиле!)",
             parse_mode='Markdown'
         )
         
@@ -536,6 +547,80 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Начни заново с /start"
         )
         return ConversationHandler.END
+
+# --- ОБРАБОТЧИКИ ПРОКАЧКИ ХАРАКТЕРИСТИК ---
+
+async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик прокачки характеристик"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data == 'back_to_main':
+        await query.edit_message_text(
+            text="Возвращаюсь в главное меню...",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    
+    elif data == 'levelup_later':
+        await query.edit_message_text(
+            text="Хорошо, распределишь характеристики позже в профиле героя.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return MAIN_MENU
+    
+    elif data.startswith('levelup_'):
+        stat_type = data[8:]  # Убираем 'levelup_'
+        
+        if stat_type in ['strength', 'agility', 'intelligence']:
+            success, message = add_stat_point(user_id, stat_type)
+            
+            if success:
+                character = get_character(user_id)
+                stat_points_left = character.get('stat_points', 0)
+                
+                # Отправляем изображение прокачки
+                await query.message.reply_photo(
+                    photo=IMAGE_URLS['levelup'],
+                    caption=f"🌟 *ПОВЫШЕНИЕ ХАРАКТЕРИСТИКИ!* 🌟\n\n"
+                           f"✅ {message}\n"
+                           f"📊 Осталось очков: `{stat_points_left}`",
+                    parse_mode='Markdown'
+                )
+                
+                if stat_points_left > 0:
+                    # Показываем текущие характеристики и предлагаем продолжить
+                    character = get_character(user_id)
+                    
+                    stats_text = (
+                        f"📊 *Текущие характеристики:*\n"
+                        f"💪 Сила: `{character['strength']}`\n"
+                        f"🏹 Ловкость: `{character['agility']}`\n"
+                        f"🧠 Интеллект: `{character['intelligence']}`\n\n"
+                        f"✨ Очков осталось: `{stat_points_left}`"
+                    )
+                    
+                    await query.message.reply_text(
+                        text=stats_text,
+                        reply_markup=get_level_up_keyboard(stat_points_left),
+                        parse_mode='Markdown'
+                    )
+                    return LEVEL_UP
+                else:
+                    await query.message.reply_text(
+                        text="🎯 Все очки распределены! Твой герой стал сильнее!",
+                        reply_markup=get_main_menu_keyboard(),
+                        parse_mode='Markdown'
+                    )
+                    return MAIN_MENU
+            else:
+                await query.answer(f"❌ {message}", show_alert=True)
+                return LEVEL_UP
+    
+    return LEVEL_UP
 
 # --- ОБРАБОТЧИКИ ГЛАВНОГО МЕНЮ ---
 
@@ -609,14 +694,19 @@ async def show_profile(query, user_id):
             seconds_left = int(300 - time_diff.total_seconds()) % 60
             regen_info = f"\n⏳ *Регенерация через:* {minutes_left}:{seconds_left:02d}"
     
-    # Сначала отправляем изображение персонажа
+    # Статистика характеристик
+    stat_points = character.get('stat_points', 0)
+    stats_info = ""
+    if stat_points > 0:
+        stats_info = f"\n\n🎯 *Нераспределенные очки:* `{stat_points}`"
+    
     await query.message.reply_photo(
         photo=image_url,
         caption=f"👤 *ПАСПОРТ ГЕРОЯ: {character['character_name']}*\n"
                f"⭐ Уровень {character['level']} • {race_data.get('name', '')}\n\n"
                f"❤️ ЗДОРОВЬЕ\n{health_bar}\n\n"
                f"🔮 МАНА\n{mana_bar}\n\n"
-               f"✨ ОПЫТ\n{xp_bar}{regen_info}",
+               f"✨ ОПЫТ\n{xp_bar}{regen_info}{stats_info}",
         parse_mode='Markdown'
     )
     
@@ -643,10 +733,24 @@ async def show_profile(query, user_id):
         f"✨ *Расовый навык:*\n_{race_data.get('racial_ability', 'Нет')}_"
     )
     
+    # Добавляем кнопку прокачки, если есть очки
+    keyboard = get_main_menu_keyboard()
+    if stat_points > 0:
+        # Создаем новую клавиатуру с кнопкой прокачки
+        keyboard = [
+            [InlineKeyboardButton("📜 Герой", callback_data='profile')],
+            [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
+            [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
+            [InlineKeyboardButton("🌟 ПРОКАЧАТЬ ХАР-КИ", callback_data='level_up_menu')],
+            [InlineKeyboardButton("📜 Свиток помощи", callback_data='help')],
+            [InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')]
+        ]
+        keyboard = InlineKeyboardMarkup(keyboard)
+    
     await query.message.reply_text(
         text=profile_text,
         parse_mode='Markdown',
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=keyboard
     )
 
 async def show_battle_menu(query):
@@ -654,7 +758,7 @@ async def show_battle_menu(query):
     await query.message.reply_photo(
         photo=IMAGE_URLS['forest'],
         caption="🌲 *ОКРАИНА ЛЕСА* 🌲\n\n"
-                "Ты чувствуешь на себе чьи1-то взгляды. Кто станет твоей целью сегодня?\n\n"
+                "Ты чувствуешь на себе чьи-то взгляды. Кто станет твоей целью сегодня?\n\n"
                 "*Выбери уровень угрозы:*",
         parse_mode='Markdown'
     )
@@ -739,7 +843,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SHOP_MENU
     
     elif data.startswith('buy_'):
-        item_key = data[4:]  # Убираем 'buy_'
+        item_key = data[4:]
         
         if item_key not in SHOP_ITEMS:
             await query.answer("❌ Такого товара нет в продаже!", show_alert=True)
@@ -751,7 +855,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ Этот товар временно недоступен!", show_alert=True)
             return SHOP_MENU
         
-        # Покупаем предмет
         success, message = buy_item(
             user_id=user_id,
             item_type=item['type'],
@@ -761,10 +864,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         if success:
-            # Обновляем информацию о персонаже
             character = get_character(user_id)
             
-            # Показываем подтверждение покупки
             await query.message.reply_text(
                 f"✅ *УСПЕШНАЯ ПОКУПКА!*\n\n"
                 f"🎁 Ты приобрел: {item['name']}\n"
@@ -775,7 +876,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
             
-            # Обновляем магазин
             await query.message.reply_text(
                 text="🛖 *Что еще желаешь?*",
                 reply_markup=get_shop_keyboard(character),
@@ -827,7 +927,6 @@ async def show_stats(query, user_id):
     total_battles = character.get('battle_wins', 0) + character.get('battle_losses', 0)
     win_rate = (character.get('battle_wins', 0) / total_battles * 100) if total_battles > 0 else 0
     
-    # Получаем прогресс опыта
     current_xp, max_xp, percent = get_xp_progress(character['level'], character['experience'])
     
     stats_text = (
@@ -837,6 +936,10 @@ async def show_stats(query, user_id):
         f"✨ *Опыт:* `{character['experience']}` XP\n"
         f"📊 *Прогресс:* `{current_xp}/{max_xp}` ({percent:.1%})\n"
         f"{get_xp_bar(character['level'], character['experience'], length=15)}\n\n"
+        f"💪 *Характеристики:*\n"
+        f"Сила: `{character['strength']}` | "
+        f"Ловкость: `{character['agility']}` | "
+        f"Интеллект: `{character['intelligence']}`\n\n"
         f"❤️ *Здоровье:* `{character['health']}/{character['max_health']}`\n"
         f"{get_health_bar(character['health'], character['max_health'], length=15)}\n\n"
         f"🔮 *Мана:* `{character['mana']}/{character['max_mana']}`\n"
@@ -870,6 +973,14 @@ async def show_help(query):
 • 👤 **Герой** - Твой статус и инвентарь
 • ⚔️ **Битва** - Охота на монстров
 • 🛍 **Торговец** - Покупка зелий
+• 🌟 **Прокачка** - Распределение характеристик
+
+📈 **Система прокачки:**
+• За каждый уровень: *+3 очка характеристик*
+• Распределяй между:
+  💪 *СИЛА* - Урон в ближнем бою
+  🏹 *ЛОВКОСТЬ* - Защита и уворот
+  🧠 *ИНТЕЛЛЕКТ* - Магический урон и мана
 
 💊 **Магазин:**
 • Малое зелье здоровья (30 HP) - 25💰
@@ -878,17 +989,17 @@ async def show_help(query):
 • Большое зелье маны (40 MP) - 40💰
 
 🔄 **Регенерация:**
-• Здоровье восстанавливается 5% каждые 5 минут
-• Мана восстанавливается 10% каждые 5 минут
+• Здоровье: 5% каждые 5 минут
+• Мана: 10% каждые 5 минут
 
 🗡 **Советы бывалых:**
-1. _Не лезь на Дракона первым уровнем!_
-2. Орки сильны, но ранят себя в ярости.
-3. Эльфы часто наносят критические удары магией.
-4. Дварфы живут дольше благодаря защите.
-5. Используй зелья в тяжелых битвах!
+1. _Создавай уникальный билд под свой стиль игры!_
+2. Орки выигрывают от силы, эльфы — от интеллекта.
+3. Не забывай про защиту — ловкость важна всем.
+4. Используй зелья в тяжелых битвах!
+5. Распределяй очки мудро — нельзя сбросить!
 
-_Удачи на тропе войны!_ 🐾
+_Создай свою легенду!_ 🏹
 """
     await query.edit_message_text(
         text=help_text,
@@ -907,7 +1018,6 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = query.data
     
     if data == 'back_to_main':
-        # Удаляем сессию боя если существует
         if user_id in battle_sessions:
             del battle_sessions[user_id]
         
@@ -918,7 +1028,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return MAIN_MENU
     
     elif data.startswith('battle_'):
-        enemy_type = data[7:]  # Убираем 'battle_'
+        enemy_type = data[7:]
         await start_battle(query, user_id, enemy_type)
         return IN_BATTLE
 
@@ -933,7 +1043,6 @@ async def start_battle(query, user_id, enemy_type):
         )
         return
     
-    # Определяем параметры врага
     enemies = {
         'wolf': {
             'name': '🐺 Бешеный Волк',
@@ -983,7 +1092,6 @@ async def start_battle(query, user_id, enemy_type):
     
     enemy = enemies.get(enemy_type, enemies['wolf'])
     
-    # Создаем сессию боя
     battle_sessions[user_id] = {
         'enemy': enemy.copy(),
         'character': character.copy(),
@@ -994,7 +1102,6 @@ async def start_battle(query, user_id, enemy_type):
         'enemy_type': enemy_type
     }
     
-    # Отправляем изображение врага
     await query.message.reply_photo(
         photo=enemy['image'],
         caption=f"🔥 *БОЙ НАЧАЛСЯ!* 🔥\n━━━━━━━━━━━━━━━━\n"
@@ -1006,11 +1113,9 @@ async def start_battle(query, user_id, enemy_type):
     battle_log = battle_sessions[user_id]['log']
     battle_log.append(f"🆚 *Статус:*")
     
-    # Индикатор здоровья игрока
     player_health_bar = get_health_bar(character['health'], character['max_health'], length=10)
     battle_log.append(f"👤 ГЕРОЙ: {player_health_bar}")
     
-    # Индикатор здоровья врага
     enemy_health_bar = get_health_bar(enemy['health'], enemy['max_health'], length=10)
     battle_log.append(f"👿 ВРАГ: {enemy_health_bar}")
     
@@ -1031,7 +1136,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     data = query.data
     
-    # Проверяем, существует ли сессия боя
     if user_id not in battle_sessions:
         await query.edit_message_text(
             text="❌ Бой уже завершен. Следы врага остыли.",
@@ -1043,16 +1147,23 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     character = battle_data['character']
     enemy = battle_data['enemy']
     
-    # Очищаем лог и увеличиваем ход
     battle_data['log'] = []
     battle_data['turn'] += 1
     
     battle_log = battle_data['log']
     
-    # Действие игрока
+    # Действие игрока - теперь с учетом характеристик
     if data == 'attack':
-        player_damage = random.randint(character['strength'] // 2, character['strength'])
-        if battle_data['enemy_defending']:
+        # Урон зависит от силы
+        base_damage = character['strength']
+        player_damage = random.randint(base_damage // 2, base_damage)
+        
+        # Эффект ловкости: шанс на двойной удар
+        agility_bonus = character['agility'] // 10  # Каждые 10 ловкости дают +1% шанс
+        if random.randint(1, 100) <= (5 + agility_bonus):  # Базовый шанс 5% + бонус ловкости
+            player_damage *= 2
+            battle_log.append(f"⚡️ *КРИТИЧЕСКИЙ УДАР!* Ловкость помогла! Нанесено *{player_damage}* урона!")
+        elif battle_data['enemy_defending']:
             player_damage = max(1, player_damage // 2)
             battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
         else:
@@ -1060,41 +1171,50 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         enemy['health'] -= player_damage
         
     elif data == 'defend':
+        # Защита зависит от ловкости
+        agility_bonus = min(character['agility'] // 5, 50)  # Максимум 50% бонуса
         battle_data['player_defending'] = True
-        battle_log.append(f"🛡️ Ты поднял щит! Урон будет снижен.")
+        battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на {50 + agility_bonus}%")
         
     elif data == 'ability':
-        # Использование расовой способности
         if character['race'] == 'human':
-            bonus = random.randint(1, 3)
-            battle_log.append(f"✨ *Адаптивность!* Характеристики временно выросли на *+{bonus}*!")
+            # Адаптивность: увеличение всех характеристик на основе интеллекта
+            int_bonus = character['intelligence'] // 10
+            battle_log.append(f"✨ *Адаптивность!* Все характеристики временно увеличены на *+{int_bonus}*!")
             
         elif character['race'] == 'elf':
+            # Магический дар: урон зависит от интеллекта
+            base_magic = character['intelligence']
             if random.random() < 0.3:  # 30% шанс
-                damage = character['intelligence'] * 2
+                damage = base_magic * 2
                 battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Магия нанесла *{damage}* урона!")
                 enemy['health'] -= damage
             else:
-                damage = character['intelligence']
+                damage = base_magic
                 battle_log.append(f"🏹 Точный выстрел на *{damage}* урона!")
                 enemy['health'] -= damage
             
         elif character['race'] == 'dwarf':
-            heal_amount = random.randint(5, 15)
+            # Каменная кожа: лечение зависит от здоровья
+            heal_amount = character['max_health'] // 10 + random.randint(5, 15)
             character['health'] = min(character['max_health'], character['health'] + heal_amount)
             battle_data['player_defending'] = True
             battle_log.append(f"🏔 *Каменная кожа!* Восстановлено *{heal_amount}* HP и поднят щит!")
             
         elif character['race'] == 'orc':
-            damage = character['strength'] * 2
+            # Ярость: урон зависит от силы
+            damage = character['strength'] * 2 + random.randint(0, 5)
             self_damage = random.randint(1, 5)
             enemy['health'] -= damage
             character['health'] -= self_damage
             battle_log.append(f"🩸 *ЯРОСТЬ!* Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
             
     elif data == 'flee':
-        flee_chance = random.randint(1, 100)
-        if flee_chance > 50:  # 50% шанс сбежать
+        # Шанс сбежать зависит от ловкости
+        agility_bonus = character['agility'] // 5  # Каждые 5 ловкости дают +1% шанс
+        flee_chance = 50 + agility_bonus
+        
+        if random.randint(1, 100) <= flee_chance:
             battle_log.append("🏃💨 *ПОБЕГ УДАЛСЯ!* Ты растворился в тени...")
             del battle_sessions[user_id]
             await query.edit_message_text(
@@ -1108,22 +1228,26 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Действие врага
     if enemy['health'] > 0:
-        enemy_action = random.choice(['attack', 'attack', 'defend'])  # 66% атака
+        enemy_action = random.choice(['attack', 'attack', 'defend'])
         
         if enemy_action == 'attack':
             enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+            
+            # Защита игрока снижает урон
             if battle_data['player_defending']:
-                enemy_damage = max(1, enemy_damage // 2)
-                battle_log.append(f"🛡️ Твой блок поглотил часть урона! Получено *{enemy_damage}* ед.")
+                agility_bonus = min(character['agility'] // 5, 50)
+                reduction = 50 + agility_bonus
+                enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
+                battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
             else:
                 battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
+            
             character['health'] -= enemy_damage
             battle_data['player_defending'] = False
         else:
             battle_data['enemy_defending'] = True
             battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
     
-    # Сбрасываем защиту врага после его хода
     battle_data['enemy_defending'] = False
     
     # Проверка окончания боя
@@ -1132,9 +1256,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
         battle_log.append("Твоя история прервалась на этом месте.")
         
-        # Обновляем статистику в БД
         update_character_stats(user_id, 
-            health=0,  # Устанавливаем здоровье в 0
+            health=0,
             battle_losses=character.get('battle_losses', 0) + 1
         )
         log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
@@ -1153,21 +1276,25 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
         battle_log.append(f"Монстр {enemy['name']} повержен!")
         
-        # Награда
         exp_gained = enemy['exp']
         gold_gained = enemy['gold']
         
         battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
         battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
         
-        # Обновляем данные в БД с текущим здоровьем
+        # Добавляем опыт и проверяем повышение уровня
+        level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
+        
+        if level_up:
+            battle_log.append(f"🎯 *НОВЫЙ УРОВЕНЬ!* Ты достиг {new_level} уровня!")
+            battle_log.append(f"✨ Получено *{stat_points_gained}* очков характеристик!")
+        
         update_character_stats(
             user_id, 
-            health=character['health'],  # Сохраняем текущее здоровье
+            health=character['health'],
             battle_wins=character.get('battle_wins', 0) + 1,
             gold=character['gold'] + gold_gained
         )
-        add_experience(user_id, exp_gained)
         add_gold(user_id, gold_gained)
         log_battle(user_id, enemy['name'], 'победа', 0, 0, gold_gained, exp_gained)
         
@@ -1180,12 +1307,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return MAIN_MENU
     
-    # Продолжение боя - обновляем индикаторы
     else:
-        # Индикатор здоровья игрока
         player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
-        
-        # Индикатор здоровья врага
         enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
         
         status_text = (
@@ -1193,7 +1316,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             f"━━━━━━━━━━━━━━━━\n"
             f"👤 *ТЫ:* {player_health_bar}\n"
             f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
-            f"{chr(10).join(battle_log)}\n"  # Вставляем лог действий
+            f"{chr(10).join(battle_log)}\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"⚡️ *Твои действия:*"
         )
@@ -1205,53 +1328,12 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return IN_BATTLE
 
-# --- ОБРАБОТЧИКИ ОШИБОК ---
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отмена диалога"""
-    await update.message.reply_text(
-        "🚫 Привал. Напиши /start, чтобы продолжить путь."
-    )
-    return ConversationHandler.END
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок"""
-    error = context.error
-    
-    if "Conflict: terminated by other getUpdates request" in str(error):
-        logger.warning("⚠️ Обнаружен конфликт с другим экземпляром бота.")
-        logger.warning("⚠️ Перезапускаю бота через 5 секунд...")
-        
-        # Ждем 5 секунд и перезапускаем бота
-        await asyncio.sleep(5)
-        await context.application.stop()
-        await asyncio.sleep(2)
-        await context.application.initialize()
-        await context.application.start()
-        await context.application.updater.start_polling()
-        return
-    
-    logger.error(f"Ошибка: {error}", exc_info=True)
-    
-    try:
-        if update and update.callback_query:
-            await update.callback_query.message.reply_text(
-                "❌ Магический сбой. Попробуй /start"
-            )
-        elif update and update.message:
-            await update.message.reply_text(
-                "❌ Магический сбой. Попробуй /start"
-            )
-    except Exception as e:
-        logger.error(f"Не удалось отправить сообщение об ошибке: {e}")
-
 # --- ОСНОВНАЯ ФУНКЦИЯ ---
 
 def main():
     """Запуск бота"""
-    print("🚀 Запуск RPG бота...")
+    print("🚀 Запуск RPG бота с системой прокачки...")
     
-    # Проверка токена
     if not TOKEN:
         print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения")
         print("Добавьте переменную TELEGRAM_BOT_TOKEN в Railway")
@@ -1259,7 +1341,6 @@ def main():
     
     print(f"✅ Токен найден, длина: {len(TOKEN)} символов")
     
-    # Инициализация базы данных
     print("🔄 Инициализация базы данных...")
     try:
         init_db()
@@ -1267,11 +1348,9 @@ def main():
     except Exception as e:
         print(f"⚠️ Предупреждение: не удалось инициализировать БД: {e}")
     
-    # Создание приложения
     try:
         application = Application.builder().token(TOKEN).build()
         
-        # Conversation Handler для создания персонажа
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', start_command)],
             states={
@@ -1292,23 +1371,21 @@ def main():
                 ],
                 SHOP_MENU: [
                     CallbackQueryHandler(shop_handler)
+                ],
+                LEVEL_UP: [
+                    CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|levelup_later)')
                 ]
             },
             fallbacks=[CommandHandler('cancel', cancel)],
             allow_reentry=True
         )
         
-        # Регистрация обработчиков
         application.add_handler(conv_handler)
         application.add_handler(CommandHandler('help', help_command))
-        
-        # Обработчик ошибок
-        application.add_error_handler(error_handler)
         
         print("🤖 RPG бот запущен!")
         print("📱 Перейдите в Telegram и напишите /start")
         
-        # Запуск бота с обработкой конфликтов
         application.run_polling(
             drop_pending_updates=True,
             close_loop=False,
