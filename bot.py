@@ -213,15 +213,31 @@ def get_xp_bar(level, experience, length=10):
 
 # --- КЛАВИАТУРЫ ---
 
-def get_main_menu_keyboard():
+def get_main_menu_keyboard(user_id=None):
     """Клавиатура главного меню"""
-    keyboard = [
-        [InlineKeyboardButton("📜 Герой", callback_data='profile')],
-        [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
-        [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
-        [InlineKeyboardButton("📜 Свиток помощи", callback_data='help')],
-        [InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')]
-    ]
+    keyboard = []
+    
+    # Всегда показываем основные кнопки
+    keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile')])
+    keyboard.append([InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')])
+    keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
+    keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
+    keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
+    
+    # Проверяем, есть ли очки характеристик для прокачки
+    if user_id:
+        character = get_character(user_id)
+        if character and character.get('stat_points', 0) > 0:
+            # Вставляем кнопку прокачки ПОСЛЕ "НА БИТВУ!" и ПЕРЕД "Торговец"
+            keyboard = []
+            keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile')])
+            keyboard.append([InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')])
+            # Кнопка прокачки - ТОЛЬКО когда есть очки!
+            keyboard.append([InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ХАР-КИ ({character['stat_points']} очков)", callback_data='level_up_menu')])
+            keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
+            keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
+            keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
+    
     return InlineKeyboardMarkup(keyboard)
 
 def get_level_up_keyboard(character, stat_points):
@@ -229,35 +245,37 @@ def get_level_up_keyboard(character, stat_points):
     keyboard = []
     
     if stat_points > 0:
-        # Отображаем текущие значения характеристик
+        # Заголовок
         keyboard.append([
             InlineKeyboardButton(
-                f"📊 Очков для прокачки: {stat_points}",
+                f"🎯 ОЧКОВ ДЛЯ ПРОКАЧКИ: {stat_points}",
                 callback_data='info_only'
             )
         ])
         
+        # Кнопки характеристик
         keyboard.append([
             InlineKeyboardButton(
-                f"💪 СИЛА: {character['strength']} → {character['strength'] + 1}",
+                f"💪 СИЛА: {character['strength']}",
                 callback_data='levelup_strength'
             )
         ])
         keyboard.append([
             InlineKeyboardButton(
-                f"🏹 ЛОВКОСТЬ: {character['agility']} → {character['agility'] + 1}",
+                f"🏹 ЛОВКОСТЬ: {character['agility']}",
                 callback_data='levelup_agility'
             )
         ])
         keyboard.append([
             InlineKeyboardButton(
-                f"🧠 ИНТЕЛЛЕКТ: {character['intelligence']} → {character['intelligence'] + 1}",
+                f"🧠 ИНТЕЛЛЕКТ: {character['intelligence']}",
                 callback_data='levelup_intelligence'
             )
         ])
         
+        # Кнопка "Назад"
         keyboard.append([
-            InlineKeyboardButton(f"🎲 Распределить позже", callback_data='levelup_later')
+            InlineKeyboardButton(f"🔙 В главное меню", callback_data='back_to_main')
         ])
     else:
         keyboard.append([
@@ -403,7 +421,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(
                 f"⚔️ С возвращением, *{character['character_name']}*!\nТвой меч все еще остер.",
-                reply_markup=get_main_menu_keyboard(),
+                reply_markup=get_main_menu_keyboard(user.id),
                 parse_mode='Markdown'
             )
             return MAIN_MENU
@@ -577,7 +595,7 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             f"Твоё приключение начинается! Куда направимся?",
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(user.id)
         )
         return MAIN_MENU
     else:
@@ -601,98 +619,77 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'back_to_main':
         await query.edit_message_text(
             text="Возвращаюсь в главное меню...",
-            reply_markup=get_main_menu_keyboard(),
-            parse_mode='Markdown'
-        )
-        return MAIN_MENU
-    
-    elif data == 'levelup_later':
-        await query.edit_message_text(
-            text="Хорошо, распределишь характеристики позже в профиле героя.",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return MAIN_MENU
     
     elif data == 'info_only':
         # Это информационная кнопка, ничего не делаем
-        await query.answer("📊 Выбери характеристику для прокачки!", show_alert=False)
+        await query.answer("🎯 Выбери характеристику для прокачки!", show_alert=False)
         return LEVEL_UP
     
     elif data.startswith('levelup_'):
         stat_type = data[8:]  # Убираем 'levelup_'
         
         if stat_type in ['strength', 'agility', 'intelligence']:
-            # Получаем текущего персонажа для отображения изменений
+            # Получаем текущего персонажа ДО прокачки
             character_before = get_character(user_id)
+            old_value = character_before[stat_type]
             
+            # Пытаемся улучшить характеристику
             success, message = add_stat_point(user_id, stat_type)
             
             if success:
-                # Получаем обновленного персонажа
+                # Получаем обновленного персонажа ПОСЛЕ прокачки
                 character_after = get_character(user_id)
-                stat_points_left = character_after.get('stat_points', 0)
-                
-                # Определяем старое и новое значение характеристики
-                old_value = character_before[stat_type]
                 new_value = character_after[stat_type]
+                stat_points_left = character_after.get('stat_points', 0)
                 
                 # Определяем название характеристики для русского отображения
                 stat_names = {
-                    'strength': 'Сила',
-                    'agility': 'Ловкость', 
-                    'intelligence': 'Интеллект'
+                    'strength': 'Сила 💪',
+                    'agility': 'Ловкость 🏹', 
+                    'intelligence': 'Интеллект 🧠'
                 }
                 stat_name = stat_names.get(stat_type, stat_type)
                 
-                # Отправляем сообщение с подтверждением
-                confirmation_text = (
-                    f"🌟 *УСПЕШНАЯ ПРОКАЧКА!* 🌟\n\n"
-                    f"✨ **{stat_name}** улучшена:\n"
-                    f"📈 `{old_value}` → `{new_value}`\n\n"
-                    f"✅ {message}\n"
-                    f"📊 Осталось очков: `{stat_points_left}`"
-                )
-                
-                # Отправляем изображение прокачки
-                await query.message.reply_photo(
-                    photo=IMAGE_URLS['levelup'],
-                    caption=confirmation_text,
+                # Показываем ОЧЕНЬ ЯВНОЕ подтверждение прокачки
+                await query.message.reply_text(
+                    f"✨ *УСПЕШНАЯ ПРОКАЧКА!* ✨\n\n"
+                    f"✅ **{stat_name}** успешно повышена!\n"
+                    f"📊 Было: `{old_value}` → Стало: `{new_value}`\n\n"
+                    f"🎯 Осталось очков: `{stat_points_left}`",
                     parse_mode='Markdown'
                 )
                 
+                # Если еще есть очки, показываем обновленную клавиатуру
                 if stat_points_left > 0:
-                    # Показываем обновленные характеристики и предлагаем продолжить
-                    character = get_character(user_id)
-                    
-                    stats_text = (
-                        f"📊 *Текущие характеристики:*\n\n"
-                        f"💪 **Сила:** `{character['strength']}`\n"
-                        f"🏹 **Ловкость:** `{character['agility']}`\n"
-                        f"🧠 **Интеллект:** `{character['intelligence']}`\n\n"
-                        f"✨ **Очков осталось:** `{stat_points_left}`\n\n"
-                        f"👇 *Выбери следующую характеристику:*"
-                    )
-                    
-                    await query.message.reply_text(
-                        text=stats_text,
-                        reply_markup=get_level_up_keyboard(character, stat_points_left),
+                    # Обновляем сообщение с клавиатурой
+                    await query.edit_message_text(
+                        text=f"🎯 *РАСПРЕДЕЛЕНИЕ ХАРАКТЕРИСТИК*\n\n"
+                             f"📊 Очков доступно: `{stat_points_left}`\n\n"
+                             f"👇 *Выбери следующую характеристику:*",
+                        reply_markup=get_level_up_keyboard(character_after, stat_points_left),
                         parse_mode='Markdown'
                     )
                     return LEVEL_UP
                 else:
-                    # Все очки распределены
+                    # Все очки распределены, возвращаем в главное меню
                     await query.message.reply_text(
-                        text=f"🎯 *ВСЕ ОЧКИ РАСПРЕДЕЛЕНЫ!*\n\n"
-                             f"🏆 Твой герой стал сильнее!\n\n"
-                             f"💪 **Сила:** `{character_after['strength']}`\n"
-                             f"🏹 **Ловкость:** `{character_after['agility']}`\n"
-                             f"🧠 **Интеллект:** `{character_after['intelligence']}`",
-                        reply_markup=get_main_menu_keyboard(),
+                        f"🏆 *ВСЕ ОЧКИ РАСПРЕДЕЛЕНЫ!*\n\n"
+                        f"🎯 Твой герой стал сильнее!\n"
+                        f"📊 Итоговые характеристики:\n"
+                        f"💪 Сила: `{character_after['strength']}`\n"
+                        f"🏹 Ловкость: `{character_after['agility']}`\n"
+                        f"🧠 Интеллект: `{character_after['intelligence']}`\n\n"
+                        f"_Возвращаюсь в главное меню..._",
+                        reply_markup=get_main_menu_keyboard(user_id),
                         parse_mode='Markdown'
                     )
                     return MAIN_MENU
             else:
+                # Ошибка при прокачке
                 await query.answer(f"❌ {message}", show_alert=True)
                 return LEVEL_UP
     
@@ -740,14 +737,14 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if character and character.get('stat_points', 0) > 0:
             await query.edit_message_text(
                 text=f"✨ *РАСПРЕДЕЛЕНИЕ ХАРАКТЕРИСТИК*\n\n"
-                     f"У тебя {character['stat_points']} очко(в) характеристик для распределения!\n\n"
+                     f"🎯 Очков доступно: `{character['stat_points']}`\n\n"
                      f"👇 *Выбери характеристику для улучшения:*",
                 reply_markup=get_level_up_keyboard(character, character['stat_points']),
                 parse_mode='Markdown'
             )
             return LEVEL_UP
         else:
-            await query.answer("У тебя нет очков характеристик для распределения!", show_alert=True)
+            await query.answer("❌ У тебя нет очков характеристик для распределения!", show_alert=True)
             return MAIN_MENU
 
 async def show_profile(query, user_id):
@@ -825,24 +822,10 @@ async def show_profile(query, user_id):
         f"✨ *Расовый навык:*\n_{race_data.get('racial_ability', 'Нет')}_"
     )
     
-    # Добавляем кнопку прокачки, если есть очки
-    keyboard = [
-        [InlineKeyboardButton("📜 Герой", callback_data='profile')],
-        [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
-        [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
-        [InlineKeyboardButton("📜 Свиток помощи", callback_data='help')],
-        [InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')]
-    ]
-    
-    if stat_points > 0:
-        keyboard.insert(3, [InlineKeyboardButton("🌟 ПРОКАЧАТЬ ХАР-КИ", callback_data='level_up_menu')])
-    
-    keyboard = InlineKeyboardMarkup(keyboard)
-    
     await query.message.reply_text(
         text=profile_text,
         parse_mode='Markdown',
-        reply_markup=keyboard
+        reply_markup=get_main_menu_keyboard(user_id)
     )
 
 async def show_battle_menu(query):
@@ -871,7 +854,7 @@ async def show_shop(query, user_id):
     if not character:
         await query.edit_message_text(
             text="❌ Герой не найден!",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return
@@ -914,7 +897,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'back_to_main':
         await query.edit_message_text(
             text="🔙 Ты вышел из лавки на улицу...",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return MAIN_MENU
@@ -1014,7 +997,7 @@ async def show_stats(query, user_id):
     if not character:
         await query.edit_message_text(
             text="❌ У тебя еще нет персонажа!",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return
@@ -1053,7 +1036,7 @@ async def show_stats(query, user_id):
     await query.edit_message_text(
         text=stats_text,
         parse_mode='Markdown',
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=get_main_menu_keyboard(user_id)
     )
 
 async def show_help(query):
@@ -1099,7 +1082,7 @@ _Создай свою легенду!_ 🏹
     await query.edit_message_text(
         text=help_text,
         parse_mode='Markdown',
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=get_main_menu_keyboard(query.from_user.id)
     )
 
 # --- ОБРАБОТЧИКИ БОЯ ---
@@ -1118,7 +1101,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         await query.edit_message_text(
             text="🔙 Ты возвращаешься в безопасность деревни...",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return MAIN_MENU
@@ -1135,7 +1118,7 @@ async def start_battle(query, user_id, enemy_type):
     if not character:
         await query.edit_message_text(
             text="❌ Герой потерян во времени!",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return
@@ -1236,7 +1219,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if user_id not in battle_sessions:
         await query.edit_message_text(
             text="❌ Бой уже завершен. Следы врага остыли.",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode='Markdown'
         )
         return MAIN_MENU
@@ -1318,7 +1301,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text(
                 text="\n".join(battle_log),
                 parse_mode='Markdown',
-                reply_markup=get_main_menu_keyboard()
+                reply_markup=get_main_menu_keyboard(user_id)
             )
             return MAIN_MENU
         else:
@@ -1365,7 +1348,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(
             text="\n".join(battle_log),
             parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(user_id)
         )
         return MAIN_MENU
     
@@ -1401,7 +1384,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(
             text="\n".join(battle_log),
             parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(user_id)
         )
         return MAIN_MENU
     
@@ -1471,7 +1454,7 @@ def main():
                     CallbackQueryHandler(shop_handler)
                 ],
                 LEVEL_UP: [
-                    CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|levelup_later|info_only)')
+                    CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|info_only)')
                 ]
             },
             fallbacks=[CommandHandler('cancel', cancel)],
