@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Константы для database.py
 RACES = {
@@ -103,6 +103,7 @@ def init_db():
                 gold INTEGER DEFAULT 100,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 battle_wins INTEGER DEFAULT 0,
                 battle_losses INTEGER DEFAULT 0
             )
@@ -122,6 +123,19 @@ def init_db():
                 gold_earned INTEGER DEFAULT 0,
                 experience_earned INTEGER DEFAULT 0,
                 battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Создаем таблицу для инвентаря
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS player_inventory (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                item_type VARCHAR(50) NOT NULL,
+                item_name VARCHAR(100) NOT NULL,
+                quantity INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, item_type)
             )
         """)
         
@@ -209,6 +223,9 @@ def get_character(user_id):
         character = cursor.fetchone()
         
         if character:
+            # Проверяем и применяем регенерацию
+            character = apply_regeneration(character)
+            
             # Обновляем время последней активности
             cursor.execute("""
                 UPDATE player_characters 
@@ -222,6 +239,64 @@ def get_character(user_id):
     except Exception as e:
         print(f"❌ Ошибка при получении персонажа: {e}")
         return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def apply_regeneration(character):
+    """Применение регенерации здоровья и маны"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return character
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, прошло ли достаточно времени с последней регенерации
+        last_regeneration = character.get('last_regeneration')
+        current_time = datetime.now()
+        
+        if last_regeneration:
+            # Преобразуем строку в datetime, если нужно
+            if isinstance(last_regeneration, str):
+                last_regeneration = datetime.fromisoformat(last_regeneration.replace('Z', '+00:00'))
+            
+            time_diff = current_time - last_regeneration
+            
+            # Регенерация каждые 5 минут (300 секунд)
+            if time_diff.total_seconds() >= 300:
+                # Рассчитываем регенерацию
+                health_regen = character['max_health'] * 0.05  # 5% от макс. здоровья
+                mana_regen = character['max_mana'] * 0.10  # 10% от макс. маны
+                
+                new_health = min(character['max_health'], character['health'] + int(health_regen))
+                new_mana = min(character['max_mana'], character['mana'] + int(mana_regen))
+                
+                # Обновляем в базе данных
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET health = %s, mana = %s, last_regeneration = CURRENT_TIMESTAMP
+                    WHERE user_id = %s
+                    RETURNING health, mana
+                """, (new_health, new_mana, character['user_id']))
+                
+                result = cursor.fetchone()
+                conn.commit()
+                
+                if result:
+                    character['health'] = result[0]
+                    character['mana'] = result[1]
+                    character['last_regeneration'] = current_time
+        
+        return character
+        
+    except Exception as e:
+        print(f"❌ Ошибка при регенерации: {e}")
+        return character
     finally:
         if cursor:
             cursor.close()
@@ -242,15 +317,6 @@ def update_character_stats(user_id, **kwargs):
             return False
         
         cursor = conn.cursor()
-        
-        # Если обновляем здоровье, убедимся что оно не превышает максимум
-        if 'health' in kwargs and 'max_health' not in kwargs:
-            # Получаем текущий максимум здоровья
-            cursor.execute("SELECT max_health FROM player_characters WHERE user_id = %s", (user_id,))
-            result = cursor.fetchone()
-            if result:
-                max_health = result[0]
-                kwargs['health'] = min(kwargs['health'], max_health)
         
         set_clauses = []
         values = []
@@ -371,6 +437,104 @@ def add_gold(user_id, gold_amount):
         if conn:
             conn.close()
 
+def buy_item(user_id, item_type, item_name, price, effect_amount=None):
+    """Покупка предмета в магазине"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем баланс игрока
+        cursor.execute("SELECT gold FROM player_characters WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Персонаж не найден"
+        
+        current_gold = result[0]
+        
+        if current_gold < price:
+            return False, f"Недостаточно золота! Нужно {price}, есть {current_gold}"
+        
+        # Списываем золото
+        cursor.execute("""
+            UPDATE player_characters 
+            SET gold = gold - %s 
+            WHERE user_id = %s
+        """, (price, user_id))
+        
+        # Применяем эффект предмета, если это зелье
+        if item_type == 'potion':
+            if 'health' in item_name.lower():
+                # Лечебное зелье
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET health = LEAST(max_health, health + %s)
+                    WHERE user_id = %s
+                """, (effect_amount, user_id))
+            elif 'mana' in item_name.lower():
+                # Зелье маны
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET mana = LEAST(max_mana, mana + %s)
+                    WHERE user_id = %s
+                """, (effect_amount, user_id))
+        
+        # Добавляем в инвентарь
+        cursor.execute("""
+            INSERT INTO player_inventory (user_id, item_type, item_name, quantity)
+            VALUES (%s, %s, %s, 1)
+            ON CONFLICT (user_id, item_type) 
+            DO UPDATE SET quantity = player_inventory.quantity + 1
+        """, (user_id, item_type, item_name))
+        
+        conn.commit()
+        return True, f"Предмет '{item_name}' куплен успешно!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при покупке предмета: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка при покупке: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_inventory(user_id):
+    """Получение инвентаря игрока"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT item_type, item_name, quantity 
+            FROM player_inventory 
+            WHERE user_id = %s
+            ORDER BY item_type
+        """, (user_id,))
+        
+        return cursor.fetchall()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении инвентаря: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0):
     """Логирование боя"""
     conn = None
@@ -444,82 +608,6 @@ def get_player_stats(user_id):
     except Exception as e:
         print(f"❌ Ошибка при получении статистики: {e}")
         return None
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def heal_character(user_id, amount):
-    """Лечение персонажа"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE player_characters 
-            SET health = LEAST(max_health, health + %s)
-            WHERE user_id = %s
-            RETURNING health, max_health
-        """, (amount, user_id))
-        
-        result = cursor.fetchone()
-        conn.commit()
-        
-        if result:
-            new_health, max_health = result
-            return True, new_health, max_health
-        
-        return False, 0, 0
-        
-    except Exception as e:
-        print(f"❌ Ошибка при лечении персонажа: {e}")
-        if conn:
-            conn.rollback()
-        return False, 0, 0
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def restore_mana(user_id, amount):
-    """Восстановление маны"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE player_characters 
-            SET mana = LEAST(max_mana, mana + %s)
-            WHERE user_id = %s
-            RETURNING mana, max_mana
-        """, (amount, user_id))
-        
-        result = cursor.fetchone()
-        conn.commit()
-        
-        if result:
-            new_mana, max_mana = result
-            return True, new_mana, max_mana
-        
-        return False, 0, 0
-        
-    except Exception as e:
-        print(f"❌ Ошибка при восстановлении маны: {e}")
-        if conn:
-            conn.rollback()
-        return False, 0, 0
     finally:
         if cursor:
             cursor.close()
