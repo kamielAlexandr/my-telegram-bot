@@ -224,20 +224,38 @@ def get_main_menu_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_level_up_keyboard(stat_points):
-    """Клавиатура распределения характеристик"""
+def get_level_up_keyboard(character, stat_points):
+    """Клавиатура распределения характеристик с отображением текущих значений"""
     keyboard = []
     
     if stat_points > 0:
+        # Отображаем текущие значения характеристик
         keyboard.append([
-            InlineKeyboardButton(f"💪 Увеличить СИЛУ (+1 к урону)", callback_data='levelup_strength')
+            InlineKeyboardButton(
+                f"📊 Очков для прокачки: {stat_points}",
+                callback_data='info_only'
+            )
+        ])
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"💪 СИЛА: {character['strength']} → {character['strength'] + 1}",
+                callback_data='levelup_strength'
+            )
         ])
         keyboard.append([
-            InlineKeyboardButton(f"🏹 Увеличить ЛОВКОСТЬ (+1 к защите)", callback_data='levelup_agility')
+            InlineKeyboardButton(
+                f"🏹 ЛОВКОСТЬ: {character['agility']} → {character['agility'] + 1}",
+                callback_data='levelup_agility'
+            )
         ])
         keyboard.append([
-            InlineKeyboardButton(f"🧠 Увеличить ИНТЕЛЛЕКТ (+1 к магии)", callback_data='levelup_intelligence')
+            InlineKeyboardButton(
+                f"🧠 ИНТЕЛЛЕКТ: {character['intelligence']} → {character['intelligence'] + 1}",
+                callback_data='levelup_intelligence'
+            )
         ])
+        
         keyboard.append([
             InlineKeyboardButton(f"🎲 Распределить позже", callback_data='levelup_later')
         ])
@@ -379,7 +397,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚔️ С возвращением, *{character['character_name']}*!\n"
                 f"✨ У тебя есть {character['stat_points']} очко(в) характеристик для распределения!",
                 parse_mode='Markdown',
-                reply_markup=get_level_up_keyboard(character['stat_points'])
+                reply_markup=get_level_up_keyboard(character, character['stat_points'])
             )
             return LEVEL_UP
         else:
@@ -596,46 +614,80 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MAIN_MENU
     
+    elif data == 'info_only':
+        # Это информационная кнопка, ничего не делаем
+        await query.answer("📊 Выбери характеристику для прокачки!", show_alert=False)
+        return LEVEL_UP
+    
     elif data.startswith('levelup_'):
         stat_type = data[8:]  # Убираем 'levelup_'
         
         if stat_type in ['strength', 'agility', 'intelligence']:
+            # Получаем текущего персонажа для отображения изменений
+            character_before = get_character(user_id)
+            
             success, message = add_stat_point(user_id, stat_type)
             
             if success:
-                character = get_character(user_id)
-                stat_points_left = character.get('stat_points', 0)
+                # Получаем обновленного персонажа
+                character_after = get_character(user_id)
+                stat_points_left = character_after.get('stat_points', 0)
+                
+                # Определяем старое и новое значение характеристики
+                old_value = character_before[stat_type]
+                new_value = character_after[stat_type]
+                
+                # Определяем название характеристики для русского отображения
+                stat_names = {
+                    'strength': 'Сила',
+                    'agility': 'Ловкость', 
+                    'intelligence': 'Интеллект'
+                }
+                stat_name = stat_names.get(stat_type, stat_type)
+                
+                # Отправляем сообщение с подтверждением
+                confirmation_text = (
+                    f"🌟 *УСПЕШНАЯ ПРОКАЧКА!* 🌟\n\n"
+                    f"✨ **{stat_name}** улучшена:\n"
+                    f"📈 `{old_value}` → `{new_value}`\n\n"
+                    f"✅ {message}\n"
+                    f"📊 Осталось очков: `{stat_points_left}`"
+                )
                 
                 # Отправляем изображение прокачки
                 await query.message.reply_photo(
                     photo=IMAGE_URLS['levelup'],
-                    caption=f"🌟 *ПОВЫШЕНИЕ ХАРАКТЕРИСТИКИ!* 🌟\n\n"
-                           f"✅ {message}\n"
-                           f"📊 Осталось очков: `{stat_points_left}`",
+                    caption=confirmation_text,
                     parse_mode='Markdown'
                 )
                 
                 if stat_points_left > 0:
-                    # Показываем текущие характеристики и предлагаем продолжить
+                    # Показываем обновленные характеристики и предлагаем продолжить
                     character = get_character(user_id)
                     
                     stats_text = (
-                        f"📊 *Текущие характеристики:*\n"
-                        f"💪 Сила: `{character['strength']}`\n"
-                        f"🏹 Ловкость: `{character['agility']}`\n"
-                        f"🧠 Интеллект: `{character['intelligence']}`\n\n"
-                        f"✨ Очков осталось: `{stat_points_left}`"
+                        f"📊 *Текущие характеристики:*\n\n"
+                        f"💪 **Сила:** `{character['strength']}`\n"
+                        f"🏹 **Ловкость:** `{character['agility']}`\n"
+                        f"🧠 **Интеллект:** `{character['intelligence']}`\n\n"
+                        f"✨ **Очков осталось:** `{stat_points_left}`\n\n"
+                        f"👇 *Выбери следующую характеристику:*"
                     )
                     
                     await query.message.reply_text(
                         text=stats_text,
-                        reply_markup=get_level_up_keyboard(stat_points_left),
+                        reply_markup=get_level_up_keyboard(character, stat_points_left),
                         parse_mode='Markdown'
                     )
                     return LEVEL_UP
                 else:
+                    # Все очки распределены
                     await query.message.reply_text(
-                        text="🎯 Все очки распределены! Твой герой стал сильнее!",
+                        text=f"🎯 *ВСЕ ОЧКИ РАСПРЕДЕЛЕНЫ!*\n\n"
+                             f"🏆 Твой герой стал сильнее!\n\n"
+                             f"💪 **Сила:** `{character_after['strength']}`\n"
+                             f"🏹 **Ловкость:** `{character_after['agility']}`\n"
+                             f"🧠 **Интеллект:** `{character_after['intelligence']}`",
                         reply_markup=get_main_menu_keyboard(),
                         parse_mode='Markdown'
                     )
@@ -687,8 +739,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         character = get_character(user_id)
         if character and character.get('stat_points', 0) > 0:
             await query.edit_message_text(
-                text=f"✨ У тебя {character['stat_points']} очко(в) характеристик для распределения!",
-                reply_markup=get_level_up_keyboard(character['stat_points']),
+                text=f"✨ *РАСПРЕДЕЛЕНИЕ ХАРАКТЕРИСТИК*\n\n"
+                     f"У тебя {character['stat_points']} очко(в) характеристик для распределения!\n\n"
+                     f"👇 *Выбери характеристику для улучшения:*",
+                reply_markup=get_level_up_keyboard(character, character['stat_points']),
                 parse_mode='Markdown'
             )
             return LEVEL_UP
@@ -759,9 +813,9 @@ async def show_profile(query, user_id):
     profile_text = (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"⚔️ *БОЕВЫЕ ПАРАМЕТРЫ*\n"
-        f"💪 Сила:      `{character['strength']}`\n"
-        f"🏹 Ловкость:  `{character['agility']}`\n"
-        f"🧠 Интеллект: `{character['intelligence']}`\n"
+        f"💪 **Сила:**      `{character['strength']}`\n"
+        f"🏹 **Ловкость:**  `{character['agility']}`\n"
+        f"🧠 **Интеллект:** `{character['intelligence']}`\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💰 *БОГАТСТВО*\n"
         f"Золото: `{character['gold']}` монет\n\n"
@@ -1417,7 +1471,7 @@ def main():
                     CallbackQueryHandler(shop_handler)
                 ],
                 LEVEL_UP: [
-                    CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|levelup_later)')
+                    CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|levelup_later|info_only)')
                 ]
             },
             fallbacks=[CommandHandler('cancel', cancel)],
