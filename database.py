@@ -101,6 +101,7 @@ def init_db():
                 mana INTEGER DEFAULT 50,
                 max_mana INTEGER DEFAULT 50,
                 gold INTEGER DEFAULT 100,
+                stat_points INTEGER DEFAULT 0,  -- Очки характеристик для распределения
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -179,8 +180,8 @@ def create_character(user_id, username, character_name, race):
             INSERT INTO player_characters 
             (user_id, character_name, race, level, experience,
              strength, agility, intelligence, health, max_health, 
-             mana, max_mana, gold)
-            VALUES (%s, %s, %s, 1, 0, %s, %s, %s, %s, %s, %s, %s, 100)
+             mana, max_mana, gold, stat_points)
+            VALUES (%s, %s, %s, 1, 0, %s, %s, %s, %s, %s, %s, %s, 100, 3)
         """, (
             user_id, character_name, race,
             race_data['strength'], race_data['agility'], race_data['intelligence'],
@@ -349,43 +350,42 @@ def add_experience(user_id, exp_amount):
     try:
         conn = get_connection()
         if not conn:
-            return False, False, 0
+            return False, False, 0, 0
         
         cursor = conn.cursor()
         
-        # Получаем текущий опыт и уровень
-        cursor.execute("SELECT experience, level FROM player_characters WHERE user_id = %s", (user_id,))
+        # Получаем текущий опыт, уровень и очки характеристик
+        cursor.execute("SELECT experience, level, stat_points FROM player_characters WHERE user_id = %s", (user_id,))
         result = cursor.fetchone()
         
         if not result:
-            return False, False, 0
+            return False, False, 0, 0
         
-        current_exp, current_level = result
+        current_exp, current_level, current_stat_points = result
         new_exp = current_exp + exp_amount
         
         # Проверка повышения уровня (каждые 100 опыта)
         new_level = current_level
         level_up = False
+        stat_points_gained = 0
         
         # Если опыт превысил порог для текущего уровня
         exp_needed = current_level * 100
         if new_exp >= exp_needed:
             new_level = current_level + 1
             level_up = True
+            stat_points_gained = 3  # Даем 3 очка характеристик за уровень
             
-            # Увеличиваем характеристики при повышении уровня
+            # Увеличиваем характеристики при повышении уровня (базовые бонусы)
             cursor.execute("""
                 UPDATE player_characters 
-                SET experience = %s, level = %s,
-                    strength = strength + 2,
-                    agility = agility + 2,
-                    intelligence = intelligence + 2,
-                    max_health = max_health + 20,
-                    max_mana = max_mana + 10,
-                    health = max_health + 20,  # Восстанавливаем здоровье
-                    mana = max_mana + 10       # Восстанавливаем ману
+                SET experience = %s, level = %s, stat_points = stat_points + %s,
+                    max_health = max_health + 10,
+                    max_mana = max_mana + 5,
+                    health = max_health + 10,  # Восстанавливаем здоровье
+                    mana = max_mana + 5       # Восстанавливаем ману
                 WHERE user_id = %s
-            """, (new_exp, new_level, user_id))
+            """, (new_exp, new_level, stat_points_gained, user_id))
         else:
             cursor.execute("""
                 UPDATE player_characters 
@@ -394,13 +394,75 @@ def add_experience(user_id, exp_amount):
             """, (new_exp, user_id))
         
         conn.commit()
-        return True, level_up, new_level
+        return True, level_up, new_level, stat_points_gained
         
     except Exception as e:
         print(f"❌ Ошибка при добавлении опыта: {e}")
         if conn:
             conn.rollback()
-        return False, False, 0
+        return False, False, 0, 0
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def add_stat_point(user_id, stat_type):
+    """Распределение очка характеристики"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли очки характеристик
+        cursor.execute("SELECT stat_points FROM player_characters WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Персонаж не найден"
+        
+        stat_points = result[0]
+        
+        if stat_points <= 0:
+            return False, "У тебя нет очков характеристик для распределения!"
+        
+        # Определяем, какую характеристику улучшаем
+        if stat_type == 'strength':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET strength = strength + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        elif stat_type == 'agility':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET agility = agility + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        elif stat_type == 'intelligence':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET intelligence = intelligence + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        else:
+            return False, "Неизвестная характеристика"
+        
+        conn.commit()
+        return True, f"Характеристика '{stat_type}' увеличена на 1!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при распределении характеристики: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка: {e}"
     finally:
         if cursor:
             cursor.close()
@@ -595,6 +657,7 @@ def get_player_stats(user_id):
                 race,
                 level,
                 experience,
+                stat_points,
                 battle_wins,
                 battle_losses,
                 gold,
