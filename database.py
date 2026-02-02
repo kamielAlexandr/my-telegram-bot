@@ -81,18 +81,16 @@ def init_db():
         
         cursor = conn.cursor()
         
-        # Удаляем старую таблицу и создаем новую с правильной структурой
-        cursor.execute("DROP TABLE IF EXISTS player_characters")
-        
         # Создаем таблицу с полной структурой
         cursor.execute("""
-            CREATE TABLE player_characters (
+            CREATE TABLE IF NOT EXISTS player_characters (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL UNIQUE,
                 character_name VARCHAR(100) NOT NULL,
                 race VARCHAR(50) NOT NULL,
                 level INTEGER DEFAULT 1,
                 experience INTEGER DEFAULT 0,
+                rank VARCHAR(10) DEFAULT 'E',  -- НОВОЕ ПОЛЕ: ранг охотника
                 strength INTEGER DEFAULT 10,
                 agility INTEGER DEFAULT 10,
                 intelligence INTEGER DEFAULT 10,
@@ -101,7 +99,7 @@ def init_db():
                 mana INTEGER DEFAULT 50,
                 max_mana INTEGER DEFAULT 50,
                 gold INTEGER DEFAULT 100,
-                stat_points INTEGER DEFAULT 0,  -- Очки характеристик для распределения
+                stat_points INTEGER DEFAULT 3,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -110,7 +108,7 @@ def init_db():
             )
         """)
         
-        print("✅ Таблица 'player_characters' создана заново")
+        print("✅ Таблица 'player_characters' создана")
         
         # Создаем таблицу для логов боев
         cursor.execute("""
@@ -178,10 +176,10 @@ def create_character(user_id, username, character_name, race):
         # Создаем персонажа с характеристиками расы
         cursor.execute("""
             INSERT INTO player_characters 
-            (user_id, character_name, race, level, experience,
+            (user_id, character_name, race, level, experience, rank,
              strength, agility, intelligence, health, max_health, 
              mana, max_mana, gold, stat_points)
-            VALUES (%s, %s, %s, 1, 0, %s, %s, %s, %s, %s, %s, %s, 100, 3)
+            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, 100, 3)
         """, (
             user_id, character_name, race,
             race_data['strength'], race_data['agility'], race_data['intelligence'],
@@ -233,6 +231,17 @@ def get_character(user_id):
                 SET last_active = CURRENT_TIMESTAMP 
                 WHERE user_id = %s
             """, (user_id,))
+            
+            # Если ранг не установлен, рассчитываем его
+            if not character.get('rank'):
+                rank = calculate_rank(character['level'], character['experience'])
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET rank = %s
+                    WHERE user_id = %s
+                """, (rank, user_id))
+                character['rank'] = rank
+            
             conn.commit()
         
         return character
@@ -343,6 +352,21 @@ def update_character_stats(user_id, **kwargs):
         if conn:
             conn.close()
 
+def calculate_rank(level, experience):
+    """Определение ранга на основе уровня и опыта"""
+    if level >= 30:
+        return 'S'
+    elif level >= 25:
+        return 'A'
+    elif level >= 20:
+        return 'B'
+    elif level >= 15:
+        return 'C'
+    elif level >= 10:
+        return 'D'
+    else:
+        return 'E'
+
 def add_experience(user_id, exp_amount):
     """Добавление опыта персонажу"""
     conn = None
@@ -355,13 +379,16 @@ def add_experience(user_id, exp_amount):
         cursor = conn.cursor()
         
         # Получаем текущий опыт, уровень и очки характеристик
-        cursor.execute("SELECT experience, level, stat_points FROM player_characters WHERE user_id = %s", (user_id,))
+        cursor.execute("""
+            SELECT experience, level, stat_points, rank 
+            FROM player_characters WHERE user_id = %s
+        """, (user_id,))
         result = cursor.fetchone()
         
         if not result:
             return False, False, 0, 0
         
-        current_exp, current_level, current_stat_points = result
+        current_exp, current_level, current_stat_points, current_rank = result
         new_exp = current_exp + exp_amount
         
         # Проверка повышения уровня (каждые 100 опыта)
@@ -376,17 +403,21 @@ def add_experience(user_id, exp_amount):
             level_up = True
             stat_points_gained = 3  # Даем 3 очка характеристик за уровень
             
+            # Рассчитываем новый ранг
+            new_rank = calculate_rank(new_level, new_exp)
+            
             # Увеличиваем характеристики при повышении уровня (базовые бонусы)
             cursor.execute("""
                 UPDATE player_characters 
-                SET experience = %s, level = %s, stat_points = stat_points + %s,
+                SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
                     max_health = max_health + 10,
                     max_mana = max_mana + 5,
                     health = max_health + 10,  -- Восстанавливаем здоровье
                     mana = max_mana + 5        -- Восстанавливаем ману
                 WHERE user_id = %s
-            """, (new_exp, new_level, stat_points_gained, user_id))
+            """, (new_exp, new_level, stat_points_gained, new_rank, user_id))
         else:
+            # Обновляем только опыт
             cursor.execute("""
                 UPDATE player_characters 
                 SET experience = %s
@@ -608,21 +639,6 @@ def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold
         
         cursor = conn.cursor()
         
-        # Проверяем, существует ли таблица battle_logs
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS battle_logs (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                enemy_type VARCHAR(100),
-                result VARCHAR(50),
-                damage_dealt INTEGER DEFAULT 0,
-                damage_taken INTEGER DEFAULT 0,
-                gold_earned INTEGER DEFAULT 0,
-                experience_earned INTEGER DEFAULT 0,
-                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
         cursor.execute("""
             INSERT INTO battle_logs 
             (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
@@ -656,6 +672,7 @@ def get_player_stats(user_id):
                 character_name,
                 race,
                 level,
+                rank,
                 experience,
                 stat_points,
                 battle_wins,
