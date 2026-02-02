@@ -1249,7 +1249,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
         else:
             battle_log.append(f"⚔️ Ты нанес *{player_damage}* урона!")
+        
         enemy['health'] -= player_damage
+        enemy['health'] = max(0, enemy['health'])  # Не даем здоровью уйти в минус
         
     elif data == 'defend':
         # Защита зависит от ловкости
@@ -1307,52 +1309,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             battle_log.append("🚫 *НЕУДАЧА!* Враг перекрыл путь к отступлению!")
     
-    # Действие врага
-    if enemy['health'] > 0:
-        enemy_action = random.choice(['attack', 'attack', 'defend'])
-        
-        if enemy_action == 'attack':
-            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
-            
-            # Защита игрока снижает урон
-            if battle_data['player_defending']:
-                agility_bonus = min(character['agility'] // 5, 50)
-                reduction = 50 + agility_bonus
-                enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
-                battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
-            else:
-                battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
-            
-            character['health'] -= enemy_damage
-            battle_data['player_defending'] = False
-        else:
-            battle_data['enemy_defending'] = True
-            battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
-    
-    battle_data['enemy_defending'] = False
-    
-    # Проверка окончания боя
-    if character['health'] <= 0:
-        battle_log.append("━━━━━━━━━━━━━━━━")
-        battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
-        battle_log.append("Твоя история прервалась на этом месте.")
-        
-        update_character_stats(user_id, 
-            health=0,
-            battle_losses=character.get('battle_losses', 0) + 1
-        )
-        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
-        
-        del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="\n".join(battle_log),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard(user_id)
-        )
-        return MAIN_MENU
-    
-    elif enemy['health'] <= 0:
+    # Проверяем, не убит ли враг ДО его хода
+    if enemy['health'] <= 0:
         battle_log.append("━━━━━━━━━━━━━━━━")
         battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
         battle_log.append(f"Монстр {enemy['name']} повержен!")
@@ -1364,9 +1322,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
         
         # Добавляем опыт и проверяем повышение уровня
-        level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
+        success, level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
         
-        if level_up:
+        if success and level_up:
             battle_log.append(f"🎯 *НОВЫЙ УРОВЕНЬ!* Ты достиг {new_level} уровня!")
             battle_log.append(f"✨ Получено *{stat_points_gained}* очков характеристик!")
         
@@ -1388,27 +1346,72 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return MAIN_MENU
     
-    else:
-        player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
-        enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
+    # Если враг еще жив, он делает ход
+    if enemy['health'] > 0:
+        enemy_action = random.choice(['attack', 'attack', 'defend'])
         
-        status_text = (
-            f"⚔️ *Ход №{battle_data['turn']}*\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"👤 *ТЫ:* {player_health_bar}\n"
-            f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
-            f"{chr(10).join(battle_log)}\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"⚡️ *Твои действия:*"
+        if enemy_action == 'attack':
+            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+            
+            # Защита игрока снижает урон
+            if battle_data['player_defending']:
+                agility_bonus = min(character['agility'] // 5, 50)
+                reduction = 50 + agility_bonus
+                enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
+                battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
+            else:
+                battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
+            
+            character['health'] -= enemy_damage
+            character['health'] = max(0, character['health'])  # Не даем здоровью уйти в минус
+            battle_data['player_defending'] = False
+        else:
+            battle_data['enemy_defending'] = True
+            battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
+    
+    battle_data['enemy_defending'] = False
+    
+    # Проверка окончания боя (игрок погиб)
+    if character['health'] <= 0:
+        battle_log.append("━━━━━━━━━━━━━━━━")
+        battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
+        battle_log.append("Твоя история прервалась на этом месте.")
+        
+        update_character_stats(user_id, 
+            health=0,
+            battle_losses=character.get('battle_losses', 0) + 1
         )
+        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
+        
+        del battle_sessions[user_id]
         
         await query.edit_message_text(
-            text=status_text,
+            text="\n".join(battle_log),
             parse_mode='Markdown',
-            reply_markup=get_battle_action_keyboard()
+            reply_markup=get_main_menu_keyboard(user_id)
         )
-        return IN_BATTLE
-
+        return MAIN_MENU
+    
+    # Продолжение боя (оба живы)
+    player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
+    enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
+    
+    status_text = (
+        f"⚔️ *Ход №{battle_data['turn']}*\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👤 *ТЫ:* {player_health_bar}\n"
+        f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
+        f"{chr(10).join(battle_log)}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"⚡️ *Твои действия:*"
+    )
+    
+    await query.edit_message_text(
+        text=status_text,
+        parse_mode='Markdown',
+        reply_markup=get_battle_action_keyboard()
+    )
+    return IN_BATTLE
 # --- ОСНОВНАЯ ФУНКЦИЯ ---
 
 def main():
