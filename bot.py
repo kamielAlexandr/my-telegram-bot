@@ -51,13 +51,27 @@ IMAGE_URLS = {
     'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
+    'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
+    'slime': 'https://img.freepik.com/free-photo/green-slime-monster_23-2150911234.jpg',
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
+    'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
     'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
+    'vampire': 'https://img.freepik.com/free-photo/vampire_23-2150762308.jpg',
+    'knight': 'https://img.freepik.com/free-photo/dark-knight_23-2150762270.jpg',
+    'demon': 'https://img.freepik.com/free-photo/demon_23-2150762325.jpg',
+    'lich': 'https://img.freepik.com/free-photo/lich_23-2150911246.jpg',
     'dragon': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
+    'dragon_young': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
+    'dragon_ancient': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
+    'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
+    'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
     'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
+    'training_camp': 'https://img.freepik.com/free-photo/medieval-camp-with-tents-night_107791-16981.jpg',
+    'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
+    'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg'
 }
@@ -96,36 +110,351 @@ SHOP_ITEMS = {
         'effect': 40,
         'available': True
     },
-    'basic_sword': {
-        'name': '⚔️ Обычный меч',
-        'description': '+2 к силе',
-        'price': 80,
+    'rank_d_weapon': {
+        'name': '⚔️ Меч D-ранга',
+        'description': '+5 к силе (требуется D-ранг)',
+        'price': 200,
         'type': 'weapon',
-        'effect': 2,
-        'available': False,
-        'message': '🛠 *В разработке* - Оружейник уехал на ярмарку!'
+        'effect': 5,
+        'available': True,
+        'required_rank': 'D'
     },
-    'hunting_bow': {
-        'name': '🏹 Охотничий лук',
-        'description': '+2 к ловкости',
-        'price': 80,
-        'type': 'weapon',
-        'effect': 2,
-        'available': False,
-        'message': '🛠 *В разработке* - Мастер по лукам еще не вернулся!'
+    'rank_c_armor': {
+        'name': '🛡️ Броня C-ранга',
+        'description': '+10 к здоровью (требуется C-ранг)',
+        'price': 300,
+        'type': 'armor',
+        'effect': 10,
+        'available': True,
+        'required_rank': 'C'
     },
-    'wisdom_scroll': {
-        'name': '📖 Свиток мудрости',
-        'description': '+2 к интеллекту',
-        'price': 80,
+    'rank_b_artifact': {
+        'name': '💎 Артефакт B-ранга',
+        'description': '+15 к интеллекту (требуется B-ранг)',
+        'price': 500,
         'type': 'artifact',
-        'effect': 2,
-        'available': False,
-        'message': '🛠 *В разработке* - Мудрец ушел в медитацию!'
+        'effect': 15,
+        'available': True,
+        'required_rank': 'B'
+    }
+}
+
+# Определение локаций по рангам
+LOCATIONS = {
+    'E': {
+        'name': '🎪 Тренировочный лагерь',
+        'description': 'Начинай свой путь здесь. Враги слабые, но хороши для тренировки.',
+        'enemies': ['wolf', 'goblin', 'slime'],
+        'image': IMAGE_URLS['training_camp'],
+        'min_level': 1,
+        'max_level': 5
+    },
+    'D': {
+        'name': '🌲 Лес призраков',
+        'description': 'Лес наполнен низкоуровневыми монстрами. Подходит для охотников D-ранга.',
+        'enemies': ['wolf', 'zombie', 'goblin_warrior'],
+        'image': IMAGE_URLS['forest'],
+        'min_level': 5,
+        'max_level': 10
+    },
+    'C': {
+        'name': '🪦 Заброшенные катакомбы',
+        'description': 'Катакомбы наполнены опасными существами. Требует навыков C-ранга.',
+        'enemies': ['zombie', 'skeleton', 'mage'],
+        'image': IMAGE_URLS['dungeon'],
+        'min_level': 10,
+        'max_level': 15
+    },
+    'B': {
+        'name': '🏰 Руины древнего замка',
+        'description': 'Замок охраняют могущественные существа. Только для охотников B-ранга.',
+        'enemies': ['mage', 'vampire', 'knight'],
+        'image': IMAGE_URLS['castle'],
+        'min_level': 15,
+        'max_level': 20
+    },
+    'A': {
+        'name': '🌋 Врата в преисподнюю',
+        'description': 'Портал в мир демонов. Только сильнейшие A-ранга могут здесь выжить.',
+        'enemies': ['demon', 'lich', 'dragon_young'],
+        'image': IMAGE_URLS['hell_gate'],
+        'min_level': 20,
+        'max_level': 25
+    },
+    'S': {
+        'name': '⚡ Трон божества',
+        'description': 'Последнее испытание. Только S-ранг может бросить вызов богу.',
+        'enemies': ['dragon_ancient', 'titan', 'fallen_god'],
+        'image': IMAGE_URLS['throne_god'],
+        'min_level': 25,
+        'max_level': 30
+    }
+}
+
+# Расширенный список врагов с учетом рангов
+ENEMIES = {
+    'wolf': {
+        'name': '🐺 Бешеный Волк',
+        'health': 30,
+        'max_health': 30,
+        'min_damage': 3,
+        'max_damage': 8,
+        'exp': 15,
+        'gold': 10,
+        'rank': 'E',
+        'description': 'Его глаза горят голодом, а клыки обнажены.',
+        'image': IMAGE_URLS['wolf']
+    },
+    'goblin': {
+        'name': '👹 Гоблин-разведчик',
+        'health': 25,
+        'max_health': 25,
+        'min_damage': 2,
+        'max_damage': 6,
+        'exp': 10,
+        'gold': 8,
+        'rank': 'E',
+        'description': 'Мелкий и трусливый, но опасный в стае.',
+        'image': IMAGE_URLS['goblin']
+    },
+    'slime': {
+        'name': '🟢 Слизь',
+        'health': 20,
+        'max_health': 20,
+        'min_damage': 1,
+        'max_damage': 4,
+        'exp': 8,
+        'gold': 5,
+        'rank': 'E',
+        'description': 'Желейная масса, медленная, но ядовитая.',
+        'image': IMAGE_URLS['slime']
+    },
+    'zombie': {
+        'name': '🧟 Гниющий Зомби',
+        'health': 50,
+        'max_health': 50,
+        'min_damage': 5,
+        'max_damage': 12,
+        'exp': 25,
+        'gold': 20,
+        'rank': 'D',
+        'description': 'Медленный, но его удары заражают страхом.',
+        'image': IMAGE_URLS['zombie']
+    },
+    'goblin_warrior': {
+        'name': '⚔️ Гоблин-воин',
+        'health': 40,
+        'max_health': 40,
+        'min_damage': 6,
+        'max_damage': 14,
+        'exp': 20,
+        'gold': 15,
+        'rank': 'D',
+        'description': 'Более опытный и опасный, чем его собратья.',
+        'image': IMAGE_URLS['goblin']
+    },
+    'skeleton': {
+        'name': '💀 Скелет-воин',
+        'health': 45,
+        'max_health': 45,
+        'min_damage': 7,
+        'max_damage': 15,
+        'exp': 22,
+        'gold': 18,
+        'rank': 'C',
+        'description': 'Оживленные кости с ржавым мечом.',
+        'image': IMAGE_URLS['skeleton']
+    },
+    'mage': {
+        'name': '🔮 Темный Чернокнижник',
+        'health': 40,
+        'max_health': 40,
+        'min_damage': 8,
+        'max_damage': 18,
+        'exp': 40,
+        'gold': 35,
+        'rank': 'C',
+        'description': 'Окружен темной аурой и шепчет заклинания.',
+        'image': IMAGE_URLS['mage']
+    },
+    'vampire': {
+        'name': '🦇 Молодой вампир',
+        'health': 70,
+        'max_health': 70,
+        'min_damage': 10,
+        'max_damage': 20,
+        'exp': 60,
+        'gold': 50,
+        'rank': 'B',
+        'description': 'Пьет кровь жертв и восстанавливается.',
+        'image': IMAGE_URLS['vampire']
+    },
+    'knight': {
+        'name': '⚔️ Проклятый рыцарь',
+        'health': 80,
+        'max_health': 80,
+        'min_damage': 12,
+        'max_damage': 22,
+        'exp': 70,
+        'gold': 60,
+        'rank': 'B',
+        'description': 'Броня сияет темной энергией.',
+        'image': IMAGE_URLS['knight']
+    },
+    'demon': {
+        'name': '😈 Младший демон',
+        'health': 100,
+        'max_health': 100,
+        'min_damage': 15,
+        'max_damage': 25,
+        'exp': 100,
+        'gold': 80,
+        'rank': 'A',
+        'description': 'Призван из бездны, жаждет разрушения.',
+        'image': IMAGE_URLS['demon']
+    },
+    'lich': {
+        'name': '💀 Лич',
+        'health': 90,
+        'max_health': 90,
+        'min_damage': 18,
+        'max_damage': 28,
+        'exp': 120,
+        'gold': 100,
+        'rank': 'A',
+        'description': 'Бессмертный некромант с армией нежити.',
+        'image': IMAGE_URLS['lich']
+    },
+    'dragon_young': {
+        'name': '🐉 Молодой дракон',
+        'health': 120,
+        'max_health': 120,
+        'min_damage': 20,
+        'max_damage': 30,
+        'exp': 150,
+        'gold': 120,
+        'rank': 'A',
+        'description': 'Еще не достиг полной силы, но уже опасен.',
+        'image': IMAGE_URLS['dragon_young']
+    },
+    'dragon_ancient': {
+        'name': '🐉 Древний Дракон',
+        'health': 200,
+        'max_health': 200,
+        'min_damage': 25,
+        'max_damage': 40,
+        'exp': 300,
+        'gold': 200,
+        'rank': 'S',
+        'description': 'Владыка небес. Его пламя сжигает все живое.',
+        'image': IMAGE_URLS['dragon_ancient']
+    },
+    'titan': {
+        'name': '🏔️ Титан',
+        'health': 250,
+        'max_health': 250,
+        'min_damage': 30,
+        'max_damage': 45,
+        'exp': 350,
+        'gold': 250,
+        'rank': 'S',
+        'description': 'Ходячая гора из плоти и камня.',
+        'image': IMAGE_URLS['titan']
+    },
+    'fallen_god': {
+        'name': '👑 Падший Бог',
+        'health': 300,
+        'max_health': 300,
+        'min_damage': 35,
+        'max_damage': 50,
+        'exp': 500,
+        'gold': 300,
+        'rank': 'S',
+        'description': 'Бывшее божество, жаждущее мести.',
+        'image': IMAGE_URLS['fallen_god']
     }
 }
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
+def calculate_rank(level, experience):
+    """Определение ранга на основе уровня и опыта"""
+    if level >= 30:
+        return 'S'
+    elif level >= 25:
+        return 'A'
+    elif level >= 20:
+        return 'B'
+    elif level >= 15:
+        return 'C'
+    elif level >= 10:
+        return 'D'
+    else:
+        return 'E'
+
+def get_rank_icon(rank):
+    """Получение иконки для ранга"""
+    icons = {
+        'E': '🆕',
+        'D': '🟢',
+        'C': '🔵',
+        'B': '🟣',
+        'A': '🟠',
+        'S': '⚡'
+    }
+    return icons.get(rank, '🆕')
+
+def get_rank_color(rank):
+    """Получение цвета для ранга"""
+    colors = {
+        'E': '#808080',  # Серый
+        'D': '#00FF00',  # Зеленый
+        'C': '#0000FF',  # Синий
+        'B': '#800080',  # Фиолетовый
+        'A': '#FF8C00',  # Оранжевый
+        'S': '#FF0000'   # Красный
+    }
+    return colors.get(rank, '#808080')
+
+def get_available_locations(character_rank, character_level):
+    """Получение доступных локаций для ранга и уровня"""
+    available = []
+    rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    
+    for rank_key, location_data in LOCATIONS.items():
+        rank_index = rank_order.index(rank_key)
+        player_rank_index = rank_order.index(character_rank)
+        
+        # Игрок может посещать локации своего ранга и ниже
+        if rank_index <= player_rank_index:
+            # Проверяем уровень
+            if (character_level >= location_data['min_level'] and 
+                character_level <= location_data['max_level']):
+                available.append((rank_key, location_data))
+    
+    return available
+
+def get_next_rank_info(current_rank, current_level):
+    """Получение информации о следующем ранге"""
+    rank_progression = {
+        'E': {'next': 'D', 'level': 10},
+        'D': {'next': 'C', 'level': 15},
+        'C': {'next': 'B', 'level': 20},
+        'B': {'next': 'A', 'level': 25},
+        'A': {'next': 'S', 'level': 30},
+        'S': {'next': None, 'level': None}
+    }
+    
+    if current_rank == 'S':
+        return "🏆 Ты достиг максимального ранга!"
+    
+    next_rank = rank_progression[current_rank]['next']
+    required_level = rank_progression[current_rank]['level']
+    
+    if current_level >= required_level:
+        return f"{get_rank_icon(next_rank)} {next_rank}-ранг (ДОСТИГНУТ!)"
+    else:
+        return f"{get_rank_icon(next_rank)} {next_rank}-ранг (требуется {required_level} уровень)"
 
 def create_progress_bar(current, maximum, length=10):
     """Создает текстовый индикатор прогресса"""
@@ -180,7 +509,7 @@ def get_mana_bar(current, maximum, length=10):
     return f"{bar} {current}/{maximum}"
 
 def get_xp_progress(level, experience):
-    """Рассчитывает прогресс опыта для текущего уровня"""
+    """Рассчитывает прогресс опета для текущего уровня"""
     xp_for_next_level = level * 100
     
     xp_spent = 0
@@ -217,26 +546,33 @@ def get_main_menu_keyboard(user_id=None):
     """Клавиатура главного меню"""
     keyboard = []
     
+    if user_id:
+        character = get_character(user_id)
+        if character:
+            rank = character.get('rank', 'E')
+            rank_icon = get_rank_icon(rank)
+            
+            # Добавляем строку с рангом
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{rank_icon} {rank}-ранг охотника",
+                    callback_data='rank_info'
+                )
+            ])
+    
     # Всегда показываем основные кнопки
     keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile')])
     keyboard.append([InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')])
-    keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
-    keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
-    keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
     
     # Проверяем, есть ли очки характеристик для прокачки
     if user_id:
         character = get_character(user_id)
         if character and character.get('stat_points', 0) > 0:
-            # Вставляем кнопку прокачки ПОСЛЕ "НА БИТВУ!" и ПЕРЕД "Торговец"
-            keyboard = []
-            keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile')])
-            keyboard.append([InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')])
-            # Кнопка прокачки - ТОЛЬКО когда есть очки!
             keyboard.append([InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ХАР-КИ ({character['stat_points']} очков)", callback_data='level_up_menu')])
-            keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
-            keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
-            keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
+    
+    keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
+    keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
+    keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -300,15 +636,49 @@ def get_race_selection_keyboard():
     keyboard.append([InlineKeyboardButton("ℹ️ Энциклопедия рас", callback_data='race_info')])
     return InlineKeyboardMarkup(keyboard)
 
-def get_battle_menu_keyboard():
-    """Клавиатура меню боя"""
-    keyboard = [
-        [InlineKeyboardButton("🌲 Волк [Легко]", callback_data='battle_wolf')],
-        [InlineKeyboardButton("🪦 Зомби [Средне]", callback_data='battle_zombie')],
-        [InlineKeyboardButton("🔮 Маг [Сложно]", callback_data='battle_mage')],
-        [InlineKeyboardButton("🔥 Дракон [БОСС]", callback_data='battle_dragon')],
-        [InlineKeyboardButton("🔙 Вернуться в лагерь", callback_data='back_to_main')]
-    ]
+def get_battle_menu_keyboard(character):
+    """Клавиатура меню боя с локациями по рангу"""
+    keyboard = []
+    
+    if not character:
+        return InlineKeyboardMarkup(keyboard)
+    
+    rank = character.get('rank', 'E')
+    level = character.get('level', 1)
+    available_locations = get_available_locations(rank, level)
+    
+    for rank_key, location in available_locations:
+        rank_icon = get_rank_icon(rank_key)
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{rank_icon} {location['name']} ({rank_key}-ранг)",
+                callback_data=f'location_{rank_key}'
+            )
+        ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Вернуться в лагерь", callback_data='back_to_main')])
+    return InlineKeyboardMarkup(keyboard)
+
+def get_location_enemies_keyboard(location_rank):
+    """Клавиатура выбора врагов в локации"""
+    keyboard = []
+    
+    location = LOCATIONS.get(location_rank)
+    if not location:
+        return InlineKeyboardMarkup(keyboard)
+    
+    for enemy_key in location['enemies']:
+        enemy = ENEMIES.get(enemy_key)
+        if enemy:
+            rank_icon = get_rank_icon(enemy['rank'])
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{rank_icon} {enemy['name']} ({enemy['rank']}-ранг)",
+                    callback_data=f'battle_{enemy_key}'
+                )
+            ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад к локациям", callback_data='back_to_battle_menu')])
     return InlineKeyboardMarkup(keyboard)
 
 def get_battle_action_keyboard():
@@ -326,6 +696,7 @@ def get_shop_keyboard(character=None):
     
     if character:
         gold = character['gold']
+        rank = character.get('rank', 'E')
         
         keyboard.append([
             InlineKeyboardButton(
@@ -355,26 +726,25 @@ def get_shop_keyboard(character=None):
             )
         ])
         
-        keyboard.append([
-            InlineKeyboardButton(
-                f"⚔️ Обычный меч (+2 силы) - 80💰 [НЕТ В НАЛИЧИИ]",
-                callback_data='unavailable_weapon'
-            )
-        ])
+        # Предметы по рангам
+        shop_items_by_rank = {
+            'D': SHOP_ITEMS['rank_d_weapon'],
+            'C': SHOP_ITEMS['rank_c_armor'],
+            'B': SHOP_ITEMS['rank_b_artifact']
+        }
         
-        keyboard.append([
-            InlineKeyboardButton(
-                f"🏹 Охотничий лук (+2 ловк.) - 80💰 [НЕТ В НАЛИЧИИ]",
-                callback_data='unavailable_weapon'
-            )
-        ])
+        rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+        player_rank_index = rank_order.index(rank)
         
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📖 Свиток мудрости (+2 инт.) - 80💰 [НЕТ В НАЛИЧИИ]",
-                callback_data='unavailable_artifact'
-            )
-        ])
+        for rank_key, item in shop_items_by_rank.items():
+            rank_index = rank_order.index(rank_key)
+            if player_rank_index >= rank_index:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{item['name']} - {item['price']}💰",
+                        callback_data=f'buy_{list(shop_items_by_rank.keys()).index(rank_key)}'
+                    )
+                ])
         
         keyboard.append([
             InlineKeyboardButton(f"💰 Твой баланс: {gold}", callback_data='balance_info')
@@ -443,6 +813,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /start - Вернуться к воротам мира (Главное меню)
 /help - Развернуть этот свиток
 
+🏆 **Система рангов:**
+🆕 E-ранг — Начинающие охотники (уровень 1-9)
+🟢 D-ранг — Рядовые бойцы (уровень 10-14)
+🔵 C-ранг — Средний уровень (уровень 15-19)
+🟣 B-ранг — Сильные охотники (уровень 20-24)
+🟠 A-ранг — Элита (уровень 25-29)
+⚡ S-ранг — Легенды (уровень 30+)
+
+🗺 **Локации по рангам:**
+• E-ранг: 🎪 Тренировочный лагерь
+• D-ранг: 🌲 Лес призраков
+• C-ранг: 🪦 Заброшенные катакомбы
+• B-ранг: 🏰 Руины древнего замка
+• A-ранг: 🌋 Врата в преисподнюю
+• S-ранг: ⚡ Трон божества
+
 👤 **Создание героя:**
 1. Выбери расу (влияет на стиль боя)
 2. Назови героя (это имя войдет в историю)
@@ -463,6 +849,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💊 **Магазин:**
 • Зелья здоровья - Быстрое восстановление в бою
 • Зелья маны - Восполнение магической энергии
+• Оружие и броня по рангам
 
 🔄 **Регенерация:**
 • Здоровье: 5% каждые 5 минут
@@ -589,7 +976,8 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    f"🏷️ *Имя:* {character_name}\n"
                    f"🎭 *Раса:* {race_data['name']}\n"
                    f"✨ *Дар:* {race_data['racial_ability']}\n\n"
-                   f"📈 *Стартовые очки:* `3` (распредели в профиле!)",
+                   f"📈 *Стартовые очки:* `3` (распредели в профиле!)\n"
+                   f"🏆 *Начальный ранг:* `E`",
             parse_mode='Markdown'
         )
         
@@ -710,7 +1098,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MAIN_MENU
     
     elif data == 'battle_menu':
-        await show_battle_menu(query)
+        await show_battle_menu(query, user_id)
         return BATTLE_MENU
     
     elif data == 'shop':
@@ -746,9 +1134,65 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.answer("❌ У тебя нет очков характеристик для распределения!", show_alert=True)
             return MAIN_MENU
+    
+    elif data == 'rank_info':
+        await rank_info_handler(update, context)
+        return MAIN_MENU
+
+async def rank_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик информации о системе рангов"""
+    query = update.callback_query
+    await query.answer()
+    
+    rank_info_text = """
+🏆 *СИСТЕМА РАНГОВ ОХОТНИКОВ*
+
+🆕 *E-ранг* — Начинающие охотники
+• Способности лишь немного выше человеческих
+• Сон Джинву начинал свой путь здесь
+• Доступно: Тренировочный лагерь
+
+🟢 *D-ранг* — Рядовые бойцы
+• Могут справляться с низкоуровневыми подземельями
+• Способны на базовые магические атаки
+• Доступно: Лес призраков
+
+🔵 *C-ранг* — Средний уровень
+• Могут зарабатывать на жизнь рейдами
+• Имеют развитые боевые навыки
+• Доступно: Заброшенные катакомбы
+
+🟣 *B-ранг* — Сильные охотники
+• Часто лидеры в небольших группах
+• Обладают уникальными способностями
+• Доступно: Руины древнего замка
+
+🟠 *A-ранг* — Элита
+• Обладают огромной мощью
+• Могут в одиночку справляться с S-ранговыми угрозами
+• Доступно: Врата в преисподнюю
+
+⚡ *S-ранг* — Высший ранг
+• Магическая сила не поддается измерению
+• Легенды среди охотников
+• Доступно: Трон божества
+
+*Для повышения ранга:*
+1. Повышай уровень персонажа
+2. Набери необходимый опыт
+3. Пройди испытание следующего ранга
+
+_Сила приходит с опытом, охотник. Стремись выше!_
+"""
+    
+    await query.edit_message_text(
+        text=rank_info_text,
+        parse_mode='Markdown',
+        reply_markup=get_main_menu_keyboard(query.from_user.id)
+    )
 
 async def show_profile(query, user_id):
-    """Показ профиля персонажа"""
+    """Показ профиля персонажа с ранговой системой"""
     character = get_character(user_id)
     
     if not character:
@@ -759,6 +1203,14 @@ async def show_profile(query, user_id):
         )
         return
     
+    # Рассчитываем ранг, если его нет в базе
+    if not character.get('rank'):
+        rank = calculate_rank(character['level'], character['experience'])
+        update_character_stats(user_id, rank=rank)
+        character['rank'] = rank
+    
+    rank = character['rank']
+    rank_icon = get_rank_icon(rank)
     races = get_all_races()
     race_data = races.get(character['race'], {})
     image_url = IMAGE_URLS.get(character['race'], IMAGE_URLS['human'])
@@ -767,6 +1219,9 @@ async def show_profile(query, user_id):
     health_bar = get_health_bar(character['health'], character['max_health'])
     mana_bar = get_mana_bar(character['mana'], character['max_mana'])
     xp_bar = get_xp_bar(character['level'], character['experience'])
+    
+    # Получаем следующий ранг
+    next_rank_info = get_next_rank_info(rank, character['level'])
     
     # Проверяем регенерацию
     last_regen = character.get('last_regeneration')
@@ -791,11 +1246,12 @@ async def show_profile(query, user_id):
     
     await query.message.reply_photo(
         photo=image_url,
-        caption=f"👤 *ПАСПОРТ ГЕРОЯ: {character['character_name']}*\n"
-               f"⭐ Уровень {character['level']} • {race_data.get('name', '')}\n\n"
+        caption=f"👤 *ПАСПОРТ ОХОТНИКА: {character['character_name']}*\n"
+               f"{rank_icon} *{rank}-ранг* • ⭐ Уровень {character['level']}\n\n"
                f"❤️ ЗДОРОВЬЕ\n{health_bar}\n\n"
                f"🔮 МАНА\n{mana_bar}\n\n"
-               f"✨ ОПЫТ\n{xp_bar}{regen_info}{stats_info}",
+               f"✨ ОПЫТ\n{xp_bar}{regen_info}{stats_info}\n\n"
+               f"🎯 *Следующий ранг:* {next_rank_info}",
         parse_mode='Markdown'
     )
     
@@ -828,23 +1284,34 @@ async def show_profile(query, user_id):
         reply_markup=get_main_menu_keyboard(user_id)
     )
 
-async def show_battle_menu(query):
-    """Показ меню выбора противника"""
+async def show_battle_menu(query, user_id):
+    """Показ меню выбора локации по рангу"""
+    character = get_character(user_id)
+    
+    if not character:
+        await query.edit_message_text(
+            text="❌ Герой не найден!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    rank = character.get('rank', 'E')
+    rank_icon = get_rank_icon(rank)
+    
     await query.message.reply_photo(
         photo=IMAGE_URLS['forest'],
-        caption="🌲 *ОКРАИНА ЛЕСА* 🌲\n\n"
-                "Ты чувствуешь на себе чьи-то взгляды. Кто станет твоей целью сегодня?\n\n"
-                "*Выбери уровень угрозы:*",
+        caption=f"{rank_icon} *ВЫБОР ЛОКАЦИИ*\n\n"
+                f"📊 *Твой ранг:* {rank_icon} **{rank}-ранг**\n"
+                f"⭐ *Уровень:* {character['level']}\n\n"
+                f"Выбери место для охоты на монстров:",
         parse_mode='Markdown'
     )
     
     await query.message.reply_text(
-        text="🐺 *Волк* - Разминка для новичка\n"
-             "🧟 *Зомби* - Требует сноровки\n"
-             "🧙 *Маг* - Испытание для опытных\n"
-             "🐉 *Дракон* - Смертельная опасность!",
+        text="📜 *Доступные локации:*\n",
         parse_mode='Markdown',
-        reply_markup=get_battle_menu_keyboard()
+        reply_markup=get_battle_menu_keyboard(character)
     )
 
 async def show_shop(query, user_id):
@@ -859,11 +1326,15 @@ async def show_shop(query, user_id):
         )
         return
     
+    rank = character.get('rank', 'E')
+    rank_icon = get_rank_icon(rank)
+    
     await query.message.reply_photo(
         photo=IMAGE_URLS['shop'],
-        caption="🛖 *ЛАВКА СТАРОГО ТОРГОВЦА* 🛖\n\n"
-                "_Пахнет травами и стариной. На прилавке разложены снадобья:_\n\n"
-                f"💰 *Твой кошелек:* `{character['gold']}` золотых",
+        caption=f"🛖 *ЛАВКА СТАРОГО ТОРГОВЦА* 🛖\n\n"
+                f"_Пахнет травами и стариной. На прилавке разложены снадобья:_\n\n"
+                f"💰 *Твой кошелек:* `{character['gold']}` золотых\n"
+                f"{rank_icon} *Твой ранг:* {rank}-ранг",
         parse_mode='Markdown'
     )
     
@@ -874,11 +1345,23 @@ async def show_shop(query, user_id):
         "🔮 *ЭЛИКСИРЫ МАНЫ*\n"
         "• Малый (+20 MP) — `20 золота`\n"
         "• Большой (+40 MP) — `40 золота`\n\n"
-        "⚔️ *Оружие временно отсутствует*\n"
-        "🏹 *Луки временно отсутствуют*\n"
-        "📖 *Артефакты временно отсутствуют*\n\n"
-        "_Торговец бормочет: 'Держи зелья, герой. Остальное — когда повезёт...'_"
+        "⚔️ *Оружие и броня по рангам:*\n"
     )
+    
+    # Добавляем предметы по рангам
+    rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    player_rank_index = rank_order.index(rank)
+    
+    for rank_key, item_key in [('D', 'rank_d_weapon'), ('C', 'rank_c_armor'), ('B', 'rank_b_artifact')]:
+        if item_key in SHOP_ITEMS:
+            item = SHOP_ITEMS[item_key]
+            rank_index = rank_order.index(rank_key)
+            if player_rank_index >= rank_index:
+                shop_text += f"• {item['name']} — `{item['price']} золота`\n"
+            else:
+                shop_text += f"• {item['name']} — `{item['price']} золота` [Требуется {rank_key}-ранг]\n"
+    
+    shop_text += "\n_Торговец бормочет: 'Только лучшие товары для героев!'_"
     
     await query.message.reply_text(
         text=shop_text,
@@ -912,15 +1395,25 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_inventory(query, user_id)
         return SHOP_MENU
     
-    elif data in ['unavailable_weapon', 'unavailable_artifact']:
-        item_type = 'weapon' if 'weapon' in data else 'artifact'
-        item = next((item for item in SHOP_ITEMS.values() if item['type'] == item_type and not item['available']), None)
-        if item:
-            await query.answer(item['message'], show_alert=True)
-        return SHOP_MENU
-    
     elif data.startswith('buy_'):
-        item_key = data[4:]
+        # Определяем, что покупаем
+        if data == 'buy_small_health_potion':
+            item_key = 'small_health_potion'
+        elif data == 'buy_large_health_potion':
+            item_key = 'large_health_potion'
+        elif data == 'buy_small_mana_potion':
+            item_key = 'small_mana_potion'
+        elif data == 'buy_large_mana_potion':
+            item_key = 'large_mana_potion'
+        elif data == 'buy_0':
+            item_key = 'rank_d_weapon'
+        elif data == 'buy_1':
+            item_key = 'rank_c_armor'
+        elif data == 'buy_2':
+            item_key = 'rank_b_artifact'
+        else:
+            await query.answer("❌ Неизвестный товар!", show_alert=True)
+            return SHOP_MENU
         
         if item_key not in SHOP_ITEMS:
             await query.answer("❌ Такого товара нет в продаже!", show_alert=True)
@@ -928,9 +1421,18 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         item = SHOP_ITEMS[item_key]
         
-        if not item['available']:
-            await query.answer("❌ Этот товар временно недоступен!", show_alert=True)
-            return SHOP_MENU
+        # Проверяем ранг для предметов по рангам
+        if 'required_rank' in item:
+            character = get_character(user_id)
+            rank = character.get('rank', 'E')
+            rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+            
+            player_rank_index = rank_order.index(rank)
+            required_rank_index = rank_order.index(item['required_rank'])
+            
+            if player_rank_index < required_rank_index:
+                await query.answer(f"❌ Для этого предмета требуется {item['required_rank']}-ранг!", show_alert=True)
+                return SHOP_MENU
         
         success, message = buy_item(
             user_id=user_id,
@@ -1007,8 +1509,12 @@ async def show_stats(query, user_id):
     
     current_xp, max_xp, percent = get_xp_progress(character['level'], character['experience'])
     
+    rank = character.get('rank', 'E')
+    rank_icon = get_rank_icon(rank)
+    
     stats_text = (
         f"🏆 *ЗАЛ СЛАВЫ: {character['character_name']}*\n"
+        f"{rank_icon} *Ранг:* {rank}-ранг\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"⭐ *Уровень:* `{character['level']}`\n"
         f"✨ *Опыт:* `{character['experience']}` XP\n"
@@ -1047,10 +1553,13 @@ async def show_help(query):
 🕹 **Управление:**
 Используй кнопки под сообщениями.
 
+🏆 **Система рангов:**
+Нажми на кнопку ранга в главном меню для подробной информации!
+
 🏚 **Места:**
 • 👤 **Герой** - Твой статус и инвентарь
-• ⚔️ **Битва** - Охота на монстров
-• 🛍 **Торговец** - Покупка зелий
+• ⚔️ **Битва** - Охота на монстров в локациях по рангу
+• 🛍 **Торговец** - Покупка зелий и снаряжения
 • 🌟 **Прокачка** - Распределение характеристик
 
 📈 **Система прокачки:**
@@ -1065,6 +1574,7 @@ async def show_help(query):
 • Большое зелье здоровья (60 HP) - 50💰
 • Малое зелье маны (20 MP) - 20💰
 • Большое зелье маны (40 MP) - 40💰
+• Оружие и броня доступны по мере повышения ранга
 
 🔄 **Регенерация:**
 • Здоровье: 5% каждые 5 минут
@@ -1075,7 +1585,7 @@ async def show_help(query):
 2. Орки выигрывают от силы, эльфы — от интеллекта.
 3. Не забывай про защиту — ловкость важна всем.
 4. Используй зелья в тяжелых битвах!
-5. Распределяй очки мудро — нельзя сбросить!
+5. Повышай ранг для доступа к новым локациям и снаряжению!
 
 _Создай свою легенду!_ 🏹
 """
@@ -1106,13 +1616,52 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return MAIN_MENU
     
+    elif data.startswith('location_'):
+        location_rank = data[9:]
+        await show_enemies_in_location(query, user_id, location_rank)
+        return BATTLE_MENU
+    
     elif data.startswith('battle_'):
         enemy_type = data[7:]
         await start_battle(query, user_id, enemy_type)
         return IN_BATTLE
+    
+    elif data == 'back_to_battle_menu':
+        await show_battle_menu(query, user_id)
+        return BATTLE_MENU
+
+async def show_enemies_in_location(query, user_id, location_rank):
+    """Показ врагов в выбранной локации"""
+    character = get_character(user_id)
+    location = LOCATIONS.get(location_rank)
+    
+    if not character or not location:
+        await query.edit_message_text(
+            text="❌ Ошибка загрузки локации!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    rank_icon = get_rank_icon(location_rank)
+    
+    # Показываем информацию о локации
+    await query.message.reply_photo(
+        photo=location['image'],
+        caption=f"📍 *{location['name']}*\n{rank_icon} {location_rank}-ранг локация\n\n"
+               f"📜 {location['description']}\n\n"
+               f"⚔️ *Доступные враги:*",
+        parse_mode='Markdown'
+    )
+    
+    await query.message.reply_text(
+        text="Выбери противника для боя:",
+        reply_markup=get_location_enemies_keyboard(location_rank),
+        parse_mode='Markdown'
+    )
 
 async def start_battle(query, user_id, enemy_type):
-    """Начало боя"""
+    """Начало боя с врагом"""
     character = get_character(user_id)
     
     if not character:
@@ -1123,55 +1672,33 @@ async def start_battle(query, user_id, enemy_type):
         )
         return
     
-    enemies = {
-        'wolf': {
-            'name': '🐺 Бешеный Волк',
-            'health': 30,
-            'max_health': 30,
-            'min_damage': 3,
-            'max_damage': 8,
-            'exp': 15,
-            'gold': 10,
-            'description': 'Его глаза горят голодом, а клыки обнажены.',
-            'image': IMAGE_URLS['wolf']
-        },
-        'zombie': {
-            'name': '🧟 Гниющий Зомби',
-            'health': 50,
-            'max_health': 50,
-            'min_damage': 5,
-            'max_damage': 12,
-            'exp': 25,
-            'gold': 20,
-            'description': 'Медленный, но его удары заражают страхом.',
-            'image': IMAGE_URLS['zombie']
-        },
-        'mage': {
-            'name': '🧙 Темный Чернокнижник',
-            'health': 40,
-            'max_health': 40,
-            'min_damage': 8,
-            'max_damage': 18,
-            'exp': 40,
-            'gold': 35,
-            'description': 'Окружен темной аурой и шепчет заклинания.',
-            'image': IMAGE_URLS['mage']
-        },
-        'dragon': {
-            'name': '🐉 Древний Дракон',
-            'health': 100,
-            'max_health': 100,
-            'min_damage': 15,
-            'max_damage': 30,
-            'exp': 100,
-            'gold': 80,
-            'description': 'Владыка небес. Его пламя сжигает все живое.',
-            'image': IMAGE_URLS['dragon']
-        }
-    }
+    enemy = ENEMIES.get(enemy_type)
     
-    enemy = enemies.get(enemy_type, enemies['wolf'])
+    if not enemy:
+        await query.edit_message_text(
+            text="❌ Враг не найден!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
     
+    # Проверяем, доступен ли враг для ранга игрока
+    player_rank = character.get('rank', 'E')
+    enemy_rank = enemy.get('rank', 'E')
+    
+    rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    player_rank_index = rank_order.index(player_rank)
+    enemy_rank_index = rank_order.index(enemy_rank)
+    
+    # Игрок может сражаться с врагами своего ранга и на 1 ранг выше
+    if enemy_rank_index > player_rank_index + 1:
+        await query.answer(
+            f"❌ Этот враг слишком силен для твоего {player_rank}-ранга!",
+            show_alert=True
+        )
+        return
+    
+    # Создаем сессию боя
     battle_sessions[user_id] = {
         'enemy': enemy.copy(),
         'character': character.copy(),
@@ -1182,10 +1709,13 @@ async def start_battle(query, user_id, enemy_type):
         'enemy_type': enemy_type
     }
     
+    enemy_rank_icon = get_rank_icon(enemy_rank)
+    
     await query.message.reply_photo(
         photo=enemy['image'],
         caption=f"🔥 *БОЙ НАЧАЛСЯ!* 🔥\n━━━━━━━━━━━━━━━━\n"
                f"👿 Противник: *{enemy['name']}*\n"
+               f"{enemy_rank_icon} *Ранг врага:* {enemy_rank}\n"
                f"📜 _{enemy['description']}_",
         parse_mode='Markdown'
     )
@@ -1325,8 +1855,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         success, level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
         
         if success and level_up:
+            # Рассчитываем новый ранг
+            new_rank = calculate_rank(new_level, character['experience'] + exp_gained)
             battle_log.append(f"🎯 *НОВЫЙ УРОВЕНЬ!* Ты достиг {new_level} уровня!")
             battle_log.append(f"✨ Получено *{stat_points_gained}* очков характеристик!")
+            
+            if new_rank != character.get('rank', 'E'):
+                battle_log.append(f"🏆 *НОВЫЙ РАНГ!* Теперь ты {get_rank_icon(new_rank)} {new_rank}-ранг охотник!")
         
         update_character_stats(
             user_id, 
@@ -1412,11 +1947,12 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=get_battle_action_keyboard()
     )
     return IN_BATTLE
+
 # --- ОСНОВНАЯ ФУНКЦИЯ ---
 
 def main():
     """Запуск бота"""
-    print("🚀 Запуск RPG бота с системой прокачки...")
+    print("🚀 Запуск RPG бота с системой рангов и локаций...")
     
     if not TOKEN:
         print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения")
@@ -1448,7 +1984,7 @@ def main():
                     CallbackQueryHandler(main_menu_handler)
                 ],
                 BATTLE_MENU: [
-                    CallbackQueryHandler(battle_menu_handler, pattern='^(battle_|back_to_main)')
+                    CallbackQueryHandler(battle_menu_handler, pattern='^(location_|battle_|back_to_main|back_to_battle_menu)')
                 ],
                 IN_BATTLE: [
                     CallbackQueryHandler(battle_action_handler, pattern='^(attack|defend|ability|flee)$')
