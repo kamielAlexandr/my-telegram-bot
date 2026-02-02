@@ -382,8 +382,8 @@ def add_experience(user_id, exp_amount):
                 SET experience = %s, level = %s, stat_points = stat_points + %s,
                     max_health = max_health + 10,
                     max_mana = max_mana + 5,
-                    health = max_health + 10,  # Восстанавливаем здоровье
-                    mana = max_mana + 5       # Восстанавливаем ману
+                    health = max_health + 10,  -- Восстанавливаем здоровье
+                    mana = max_mana + 5        -- Восстанавливаем ману
                 WHERE user_id = %s
             """, (new_exp, new_level, stat_points_gained, user_id))
         else:
