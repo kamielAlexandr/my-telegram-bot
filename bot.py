@@ -27,7 +27,8 @@ from database import (
     buy_item,
     get_inventory,
     add_stat_point,
-    get_top_players
+    get_top_players,
+    use_item  # Новая функция для использования предметов
 )
 
 # Настройка логирования
@@ -38,7 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Состояния для ConversationHandler
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP = range(7)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(8)
 
 # Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -59,7 +60,7 @@ IMAGE_URLS = {
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
     'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
     'vampire': 'https://img.freepik.com/free-photo/vampire_23-2150762308.jpg',
-    'knight': 'https://img.freepik.com/free-photo/dark-knight_23-2150762270.jpg',
+    'knight': 'https://img.freepig.com/free-photo/dark-knight_23-2150762270.jpg',
     'demon': 'https://img.freepik.com/free-photo/demon_23-2150762325.jpg',
     'lich': 'https://img.freepik.com/free-photo/lich_23-2150911246.jpg',
     'dragon': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
@@ -75,7 +76,8 @@ IMAGE_URLS = {
     'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
-    'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg'
+    'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
+    'inventory': 'https://i.pinimg.com/736x/98/5f/16/985f16837a7ed5587d05d2020b40c451.jpg'
 }
 
 # Товары в магазине
@@ -563,7 +565,8 @@ def get_main_menu_keyboard(user_id=None):
             ])
     
     # Всегда показываем основные кнопки
-    keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile')])
+    keyboard.append([InlineKeyboardButton("📜 Герой", callback_data='profile'), 
+                     InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')])
     keyboard.append([InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')])
     
     # Проверяем, есть ли очки характеристик для прокачки
@@ -619,6 +622,56 @@ def get_level_up_keyboard(character, stat_points):
         keyboard.append([
             InlineKeyboardButton("🔙 В главное меню", callback_data='back_to_main')
         ])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+def get_inventory_keyboard(inventory_items, page=0, items_per_page=5):
+    """Клавиатура для инвентаря с пагинацией"""
+    keyboard = []
+    
+    if not inventory_items:
+        keyboard.append([InlineKeyboardButton("🛍 В магазин", callback_data='shop')])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+        return InlineKeyboardMarkup(keyboard)
+    
+    # Определяем, сколько всего страниц
+    total_pages = (len(inventory_items) - 1) // items_per_page + 1
+    start_idx = page * items_per_page
+    end_idx = min(start_idx + items_per_page, len(inventory_items))
+    
+    # Добавляем предметы текущей страницы
+    for item in inventory_items[start_idx:end_idx]:
+        item_text = f"{item['item_name']} ({item['quantity']} шт.)"
+        
+        # Проверяем, можно ли использовать предмет
+        if item['item_type'] == 'potion':
+            # Для зелий добавляем кнопку использования
+            callback_data = f"use_{item['item_key']}"
+            keyboard.append([InlineKeyboardButton(f"✨ Использовать: {item_text}", callback_data=callback_data)])
+        else:
+            # Для других предметов просто информация
+            keyboard.append([InlineKeyboardButton(f"📦 {item_text}", callback_data='item_info')])
+    
+    # Добавляем кнопки пагинации, если нужно
+    pagination_buttons = []
+    
+    if page > 0:
+        pagination_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f'inv_page_{page-1}'))
+    
+    if end_idx < len(inventory_items):
+        pagination_buttons.append(InlineKeyboardButton("Вперед ➡️", callback_data=f'inv_page_{page+1}'))
+    
+    if pagination_buttons:
+        keyboard.append(pagination_buttons)
+    
+    # Информация о странице
+    keyboard.append([InlineKeyboardButton(f"📄 Страница {page+1}/{total_pages}", callback_data='page_info')])
+    
+    # Кнопки действий
+    keyboard.append([
+        InlineKeyboardButton("🛍 В магазин", callback_data='shop'),
+        InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')
+    ])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -753,7 +806,7 @@ def get_shop_keyboard(character=None):
         ])
         
         keyboard.append([
-            InlineKeyboardButton("🛒 Мой инвентарь", callback_data='show_inventory'),
+            InlineKeyboardButton("🎒 Мой инвентарь", callback_data='inventory'),
             InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')
         ])
     
@@ -838,7 +891,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • 👹 *Орк*: Ярость (5 маны) - двойной удор с риском самоповреждения
 
 👤 **Создание героя:**
-1. Выбери расу (влияет на стиль боя)
+1. Выбери расу (влияет на стиль бой)
 2. Назови героя (это имя войдет в историю)
 
 ⚔️ **Классы и Бонусы:**
@@ -853,6 +906,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   💪 *СИЛА* - Увеличивает урон в ближнем бою
   🏹 *ЛОВКОСТЬ* - Увеличивает защиту и шанс увернуться
   🧠 *ИНТЕЛЛЕКТ* - Увеличивает магический урон и ману
+
+🎒 **Инвентарь:**
+• Теперь есть отдельная вкладка инвентаря!
+• Используй зелья для восстановления здоровья и маны
+• Все купленные предметы хранятся в инвентаре
 
 💊 **Магазин:**
 • Зелья здоровья - Быстрое восстановление в бою
@@ -1112,6 +1170,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_profile(query, user_id)
         return MAIN_MENU
     
+    elif data == 'inventory':
+        await show_inventory_menu(query, user_id)
+        return INVENTORY_MENU
+    
     elif data == 'battle_menu':
         await show_battle_menu(query, user_id)
         return BATTLE_MENU
@@ -1157,6 +1219,18 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'top_players':
         await show_top_players(query, user_id)
         return MAIN_MENU
+    
+    elif data.startswith('inv_page_'):
+        # Обработка пагинации инвентаря
+        page = int(data.split('_')[2])
+        await show_inventory_menu(query, user_id, page)
+        return INVENTORY_MENU
+    
+    elif data.startswith('use_'):
+        # Использование предмета из инвентаря
+        item_key = data[4:]  # Убираем 'use_'
+        await use_item_from_inventory(query, user_id, item_key)
+        return INVENTORY_MENU
 
 async def rank_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик информации о системе рангов"""
@@ -1283,8 +1357,11 @@ async def show_profile(query, user_id):
     inventory_text = "🎒 *Инвентарь пуст*"
     if inventory:
         inventory_text = "🎒 *ИНВЕНТАРЬ*\n"
+        total_items = 0
         for item in inventory:
             inventory_text += f"• {item['item_name']}: {item['quantity']} шт.\n"
+            total_items += item['quantity']
+        inventory_text += f"\n📦 Всего предметов: {total_items}"
     
     profile_text = (
         f"━━━━━━━━━━━━━━━━━━\n"
@@ -1306,6 +1383,162 @@ async def show_profile(query, user_id):
         parse_mode='Markdown',
         reply_markup=get_main_menu_keyboard(user_id)
     )
+
+# --- ОБРАБОТЧИКИ ИНВЕНТАРЯ ---
+
+async def show_inventory_menu(query, user_id, page=0):
+    """Показ меню инвентаря"""
+    inventory = get_inventory(user_id)
+    character = get_character(user_id)
+    
+    if not character:
+        await query.edit_message_text(
+            text="❌ Герой не найден!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    if not inventory:
+        await query.message.reply_photo(
+            photo=IMAGE_URLS['inventory'],
+            caption=f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
+                   f"📦 *Пусто!*\n\n"
+                   f"Твой рюкзак легок, как перышко...\n"
+                   f"Загляни в лавку торговца, чтобы заполнить его!",
+            parse_mode='Markdown'
+        )
+        
+        await query.message.reply_text(
+            text="🛍 *Что хочешь сделать?*",
+            reply_markup=get_inventory_keyboard(inventory, page),
+            parse_mode='Markdown'
+        )
+        return INVENTORY_MENU
+    
+    # Рассчитываем статистику инвентаря
+    total_items = sum(item['quantity'] for item in inventory)
+    potions_count = sum(item['quantity'] for item in inventory if item['item_type'] == 'potion')
+    equipment_count = sum(item['quantity'] for item in inventory if item['item_type'] in ['weapon', 'armor', 'artifact'])
+    
+    inventory_text = f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
+    inventory_text += f"📊 *Статистика:*\n"
+    inventory_text += f"📦 Всего предметов: `{total_items}`\n"
+    inventory_text += f"💊 Зелий: `{potions_count}`\n"
+    inventory_text += f"⚔️ Снаряжения: `{equipment_count}`\n\n"
+    inventory_text += f"👇 *Выбери предмет для использования:*"
+    
+    await query.message.reply_photo(
+        photo=IMAGE_URLS['inventory'],
+        caption=inventory_text,
+        parse_mode='Markdown'
+    )
+    
+    # Показываем инвентарь с пагинацией
+    await query.message.reply_text(
+        text="📋 *Список предметов:*",
+        reply_markup=get_inventory_keyboard(inventory, page),
+        parse_mode='Markdown'
+    )
+    
+    return INVENTORY_MENU
+
+async def use_item_from_inventory(query, user_id, item_key):
+    """Использование предмета из инвентаря"""
+    inventory = get_inventory(user_id)
+    
+    # Находим предмет в инвентаре
+    item_to_use = None
+    for item in inventory:
+        if item['item_key'] == item_key:
+            item_to_use = item
+            break
+    
+    if not item_to_use:
+        await query.answer("❌ Предмет не найден в инвентаре!", show_alert=True)
+        return
+    
+    # Используем предмет
+    success, message = use_item(
+        user_id=user_id,
+        item_key=item_to_use['item_key'],
+        item_type=item_to_use['item_type'],
+        item_name=item_to_use['item_name'],
+        effect_amount=item_to_use['effect_amount']
+    )
+    
+    if success:
+        # Показываем сообщение об успешном использовании
+        await query.answer(message, show_alert=True)
+        
+        # Получаем обновленного персонажа
+        character = get_character(user_id)
+        
+        # Показываем обновленный инвентарь
+        inventory = get_inventory(user_id)
+        
+        if inventory:
+            # Обновляем сообщение с инвентарем
+            total_items = sum(item['quantity'] for item in inventory)
+            
+            await query.edit_message_text(
+                text=f"✅ *Предмет использован!*\n\n"
+                     f"{message}\n\n"
+                     f"📦 В инвентаре осталось `{total_items}` предметов",
+                reply_markup=get_inventory_keyboard(inventory, 0),
+                parse_mode='Markdown'
+            )
+        else:
+            # Инвентарь пуст
+            await query.edit_message_text(
+                text=f"✅ *Предмет использован!*\n\n"
+                     f"{message}\n\n"
+                     f"🎒 Твой инвентарь теперь пуст",
+                reply_markup=get_inventory_keyboard([], 0),
+                parse_mode='Markdown'
+            )
+    else:
+        await query.answer(f"❌ {message}", show_alert=True)
+
+async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик меню инвентаря"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data == 'back_to_main':
+        await query.edit_message_text(
+            text="🔙 Возвращаюсь в главное меню...",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return MAIN_MENU
+    
+    elif data == 'shop':
+        await show_shop(query, user_id)
+        return SHOP_MENU
+    
+    elif data.startswith('inv_page_'):
+        page = int(data.split('_')[2])
+        inventory = get_inventory(user_id)
+        await query.edit_message_text(
+            text="📋 *Список предметов:*",
+            reply_markup=get_inventory_keyboard(inventory, page),
+            parse_mode='Markdown'
+        )
+        return INVENTORY_MENU
+    
+    elif data.startswith('use_'):
+        item_key = data[4:]
+        await use_item_from_inventory(query, user_id, item_key)
+        return INVENTORY_MENU
+    
+    elif data in ['item_info', 'page_info']:
+        # Информационные кнопки, ничего не делаем
+        await query.answer("ℹ️ Выбери предмет для использования", show_alert=False)
+        return INVENTORY_MENU
 
 async def show_battle_menu(query, user_id):
     """Показ меню выбора локации по рангу"""
@@ -1408,14 +1641,14 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MAIN_MENU
     
+    elif data == 'inventory':
+        await show_inventory_menu(query, user_id)
+        return INVENTORY_MENU
+    
     elif data == 'balance_info':
         character = get_character(user_id)
         if character:
             await query.answer(f"💰 У тебя {character['gold']} золота", show_alert=True)
-        return SHOP_MENU
-    
-    elif data == 'show_inventory':
-        await show_inventory(query, user_id)
         return SHOP_MENU
     
     elif data.startswith('buy_'):
@@ -1457,8 +1690,10 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer(f"❌ Для этого предмета требуется {item['required_rank']}-ранг!", show_alert=True)
                 return SHOP_MENU
         
+        # Покупаем предмет
         success, message = buy_item(
             user_id=user_id,
+            item_key=item_key,
             item_type=item['type'],
             item_name=item['name'],
             price=item['price'],
@@ -1487,33 +1722,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer(f"❌ {message}", show_alert=True)
         
         return SHOP_MENU
-
-async def show_inventory(query, user_id):
-    """Показ инвентаря"""
-    inventory = get_inventory(user_id)
-    character = get_character(user_id)
-    
-    if not inventory:
-        await query.message.reply_text(
-            "🎒 *Твой инвентарь пуст!*\n_Загляни в лавку торговца..._",
-            reply_markup=get_shop_keyboard(character),
-            parse_mode='Markdown'
-        )
-    else:
-        inventory_text = "🎒 *ТВОЙ ИНВЕНТАРЬ*\n━━━━━━━━━━━━━━━━\n"
-        total_items = 0
-        
-        for item in inventory:
-            inventory_text += f"• {item['item_name']}: `{item['quantity']} шт.`\n"
-            total_items += item['quantity']
-        
-        inventory_text += f"\n📦 *Всего предметов:* `{total_items}`"
-        
-        await query.message.reply_text(
-            text=inventory_text,
-            reply_markup=get_shop_keyboard(character),
-            parse_mode='Markdown'
-        )
 
 async def show_stats(query, user_id):
     """Показ статистики с топом игроков"""
@@ -1711,6 +1919,7 @@ async def show_help(query):
 
 🏚 **Места:**
 • 👤 **Герой** - Твой статус и инвентарь
+• 🎒 **Инвентарь** - Твои предметы (можно использовать зелья!)
 • ⚔️ **Битва** - Охота на монстров в локациях по рангу
 • 🛍 **Торговец** - Покупка зелий и снаряжения
 • 🌟 **Прокачка** - Распределение характеристик
@@ -1723,6 +1932,11 @@ async def show_help(query):
   💪 *СИЛА* - Урон в ближнем бою
   🏹 *ЛОВКОСТЬ* - Защита и уворот
   🧠 *ИНТЕЛЛЕКТ* - Магический урон и мана
+
+🎒 **Инвентарь:**
+• Нажми на кнопку 🎒 в главном меню
+• Используй зелья для восстановления здоровья и маны
+• Все купленные предметы хранятся здесь
 
 💊 **Магазин:**
 • Малое зелье здоровья (30 HP) - 25💰
@@ -2131,7 +2345,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 def main():
     """Запуск бота"""
-    print("🚀 Запуск RPG бота с системой рангов и локаций...")
+    print("🚀 Запуск RPG бота с системой рангов, локаций и инвентарем...")
     
     if not TOKEN:
         print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения")
@@ -2173,6 +2387,9 @@ def main():
                 ],
                 LEVEL_UP: [
                     CallbackQueryHandler(level_up_handler, pattern='^(levelup_|back_to_main|info_only)')
+                ],
+                INVENTORY_MENU: [
+                    CallbackQueryHandler(inventory_menu_handler)
                 ]
             },
             fallbacks=[CommandHandler('cancel', cancel)],
