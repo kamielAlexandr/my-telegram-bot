@@ -28,7 +28,7 @@ from database import (
     get_inventory,
     add_stat_point,
     get_top_players,
-    use_item  # Новая функция для использования предметов
+    use_item
 )
 
 # Настройка логирования
@@ -77,7 +77,7 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
-    'inventory': 'https://i.pinimg.com/736x/98/5f/16/985f16837a7ed5587d05d2020b40c451.jpg'
+    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'  # Исправленная ссылка на изображение инвентаря
 }
 
 # Товары в магазине
@@ -1219,18 +1219,6 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'top_players':
         await show_top_players(query, user_id)
         return MAIN_MENU
-    
-    elif data.startswith('inv_page_'):
-        # Обработка пагинации инвентаря
-        page = int(data.split('_')[2])
-        await show_inventory_menu(query, user_id, page)
-        return INVENTORY_MENU
-    
-    elif data.startswith('use_'):
-        # Использование предмета из инвентаря
-        item_key = data[4:]  # Убираем 'use_'
-        await use_item_from_inventory(query, user_id, item_key)
-        return INVENTORY_MENU
 
 async def rank_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик информации о системе рангов"""
@@ -1399,13 +1387,21 @@ async def show_inventory_menu(query, user_id, page=0):
         )
         return
     
+    # Рассчитываем статистику инвентаря
+    total_items = sum(item['quantity'] for item in inventory) if inventory else 0
+    potions_count = sum(item['quantity'] for item in inventory if item['item_type'] == 'potion') if inventory else 0
+    equipment_count = sum(item['quantity'] for item in inventory if item['item_type'] in ['weapon', 'armor', 'artifact']) if inventory else 0
+    
     if not inventory:
-        await query.message.reply_photo(
-            photo=IMAGE_URLS['inventory'],
-            caption=f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
-                   f"📦 *Пусто!*\n\n"
-                   f"Твой рюкзак легок, как перышко...\n"
-                   f"Загляни в лавку торговца, чтобы заполнить его!",
+        inventory_text = (
+            f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
+            f"📦 *Пусто!*\n\n"
+            f"Твой рюкзак легок, как перышко...\n"
+            f"Загляни в лавку торговца, чтобы заполнить его!"
+        )
+        
+        await query.message.reply_text(
+            text=inventory_text,
             parse_mode='Markdown'
         )
         
@@ -1416,11 +1412,6 @@ async def show_inventory_menu(query, user_id, page=0):
         )
         return INVENTORY_MENU
     
-    # Рассчитываем статистику инвентаря
-    total_items = sum(item['quantity'] for item in inventory)
-    potions_count = sum(item['quantity'] for item in inventory if item['item_type'] == 'potion')
-    equipment_count = sum(item['quantity'] for item in inventory if item['item_type'] in ['weapon', 'armor', 'artifact'])
-    
     inventory_text = f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
     inventory_text += f"📊 *Статистика:*\n"
     inventory_text += f"📦 Всего предметов: `{total_items}`\n"
@@ -1428,9 +1419,9 @@ async def show_inventory_menu(query, user_id, page=0):
     inventory_text += f"⚔️ Снаряжения: `{equipment_count}`\n\n"
     inventory_text += f"👇 *Выбери предмет для использования:*"
     
-    await query.message.reply_photo(
-        photo=IMAGE_URLS['inventory'],
-        caption=inventory_text,
+    # Отправляем текстовое сообщение вместо фото, чтобы избежать ошибки
+    await query.message.reply_text(
+        text=inventory_text,
         parse_mode='Markdown'
     )
     
@@ -1481,19 +1472,24 @@ async def use_item_from_inventory(query, user_id, item_key):
             # Обновляем сообщение с инвентарем
             total_items = sum(item['quantity'] for item in inventory)
             
+            # Обновляем только текст, не фото
+            inventory_text = f"✅ *Предмет использован!*\n\n"
+            inventory_text += f"{message}\n\n"
+            inventory_text += f"📦 В инвентаре осталось `{total_items}` предметов"
+            
             await query.edit_message_text(
-                text=f"✅ *Предмет использован!*\n\n"
-                     f"{message}\n\n"
-                     f"📦 В инвентаре осталось `{total_items}` предметов",
+                text=inventory_text,
                 reply_markup=get_inventory_keyboard(inventory, 0),
                 parse_mode='Markdown'
             )
         else:
             # Инвентарь пуст
+            inventory_text = f"✅ *Предмет использован!*\n\n"
+            inventory_text += f"{message}\n\n"
+            inventory_text += f"🎒 Твой инвентарь теперь пуст"
+            
             await query.edit_message_text(
-                text=f"✅ *Предмет использован!*\n\n"
-                     f"{message}\n\n"
-                     f"🎒 Твой инвентарь теперь пуст",
+                text=inventory_text,
                 reply_markup=get_inventory_keyboard([], 0),
                 parse_mode='Markdown'
             )
