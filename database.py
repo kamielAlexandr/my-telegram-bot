@@ -141,16 +141,17 @@ def init_db():
             CREATE TABLE IF NOT EXISTS player_inventory (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
+                item_key VARCHAR(100) NOT NULL,  -- Ключ предмета для идентификации (small_health_potion и т.д.)
                 item_type VARCHAR(50) NOT NULL,
                 item_name VARCHAR(100) NOT NULL,
-                item_key VARCHAR(100) NOT NULL,  -- Ключ предмета для идентификации
                 quantity INTEGER DEFAULT 1,
                 effect_amount INTEGER DEFAULT 0,  -- Эффект предмета (например, сколько HP восстанавливает)
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, item_key)  -- Уникальный индекс по user_id и item_key
             )
         """)
         
-        # Проверяем наличие новых полей в инвентаре
+        # Проверяем наличие полей в инвентаре
         cursor.execute("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -169,23 +170,17 @@ def init_db():
             cursor.execute("ALTER TABLE player_inventory ADD COLUMN effect_amount INTEGER DEFAULT 0")
             print("✅ Столбец 'effect_amount' добавлен в таблицу 'player_inventory'")
         
-        # УДАЛЯЕМ UNIQUE КОНСТРЕЙНТ и создаем его правильно
-        try:
+        # Проверяем наличие уникального ограничения, если нет - добавляем
+        cursor.execute("""
+            SELECT conname FROM pg_constraint 
+            WHERE conname = 'player_inventory_user_id_item_key_key'
+        """)
+        if not cursor.fetchone():
             cursor.execute("""
                 ALTER TABLE player_inventory 
-                DROP CONSTRAINT IF EXISTS player_inventory_user_id_item_key_key
+                ADD CONSTRAINT player_inventory_user_id_item_key_key UNIQUE (user_id, item_key)
             """)
-        except:
-            pass
-        
-        # Создаем уникальный индекс для ON CONFLICT
-        try:
-            cursor.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_player_inventory_unique 
-                ON player_inventory (user_id, item_key)
-            """)
-        except:
-            pass
+            print("✅ Уникальный constraint добавлен на (user_id, item_key)")
         
         conn.commit()
         print("✅ База данных инициализирована")
@@ -199,7 +194,7 @@ def init_db():
             cursor.close()
         if conn:
             conn.close()
-            
+
 def create_character(user_id, username, character_name, race):
     """Создание нового персонажа"""
     conn = None
@@ -587,7 +582,7 @@ def add_gold(user_id, gold_amount):
             conn.close()
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ ON CONFLICT"""
+    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -644,15 +639,19 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             
             cursor.execute("""
                 UPDATE player_inventory 
-                SET quantity = %s
+                SET quantity = %s, created_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (new_quantity, item_id))
         else:
-            # Добавляем новый предмет
+            # Добавляем новый предмет с использованием ON CONFLICT
             cursor.execute("""
                 INSERT INTO player_inventory 
                 (user_id, item_key, item_type, item_name, quantity, effect_amount)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, item_key) 
+                DO UPDATE SET 
+                    quantity = player_inventory.quantity + 1,
+                    created_at = CURRENT_TIMESTAMP
             """, (user_id, item_key, item_type, item_name, 1, effect_amount))
         
         conn.commit()
@@ -707,7 +706,7 @@ def get_inventory(user_id):
             conn.close()
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """Использование предмета из инвентаря - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Использование предмета из инвентаря"""
     conn = None
     cursor = None
     try:
