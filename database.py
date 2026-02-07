@@ -2,6 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
+import json
 
 # Константы для database.py
 RACES = {
@@ -135,18 +136,39 @@ def init_db():
             )
         """)
         
-        # Создаем таблицу для инвентаря
+        # Создаем таблицу для инвентаря с дополнительными полями
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_inventory (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
                 item_type VARCHAR(50) NOT NULL,
                 item_name VARCHAR(100) NOT NULL,
+                item_key VARCHAR(100) NOT NULL,  -- Ключ предмета для идентификации
                 quantity INTEGER DEFAULT 1,
+                effect_amount INTEGER DEFAULT 0,  -- Эффект предмета (например, сколько HP восстанавливает)
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, item_type)
+                UNIQUE(user_id, item_key)
             )
         """)
+        
+        # Проверяем наличие новых полей в инвентаре
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_inventory' and column_name='item_key'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_inventory ADD COLUMN item_key VARCHAR(100) DEFAULT ''")
+            print("✅ Столбец 'item_key' добавлен в таблицу 'player_inventory'")
+        
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_inventory' and column_name='effect_amount'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_inventory ADD COLUMN effect_amount INTEGER DEFAULT 0")
+            print("✅ Столбец 'effect_amount' добавлен в таблицу 'player_inventory'")
         
         conn.commit()
         print("✅ База данных инициализирована")
@@ -547,7 +569,7 @@ def add_gold(user_id, gold_amount):
         if conn:
             conn.close()
 
-def buy_item(user_id, item_type, item_name, price, effect_amount=None):
+def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
     """Покупка предмета в магазине"""
     conn = None
     cursor = None
@@ -577,30 +599,13 @@ def buy_item(user_id, item_type, item_name, price, effect_amount=None):
             WHERE user_id = %s
         """, (price, user_id))
         
-        # Применяем эффект предмета, если это зелье
-        if item_type == 'potion':
-            if 'health' in item_name.lower():
-                # Лечебное зелье
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET health = LEAST(max_health, health + %s)
-                    WHERE user_id = %s
-                """, (effect_amount, user_id))
-            elif 'mana' in item_name.lower():
-                # Зелье маны
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET mana = LEAST(max_mana, mana + %s)
-                    WHERE user_id = %s
-                """, (effect_amount, user_id))
-        
         # Добавляем в инвентарь
         cursor.execute("""
-            INSERT INTO player_inventory (user_id, item_type, item_name, quantity)
-            VALUES (%s, %s, %s, 1)
-            ON CONFLICT (user_id, item_type) 
+            INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount)
+            VALUES (%s, %s, %s, %s, 1, %s)
+            ON CONFLICT (user_id, item_key) 
             DO UPDATE SET quantity = player_inventory.quantity + 1
-        """, (user_id, item_type, item_name))
+        """, (user_id, item_key, item_type, item_name, effect_amount or 0))
         
         conn.commit()
         return True, f"Предмет '{item_name}' куплен успешно!"
@@ -628,10 +633,18 @@ def get_inventory(user_id):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute("""
-            SELECT item_type, item_name, quantity 
+            SELECT item_key, item_type, item_name, quantity, effect_amount
             FROM player_inventory 
-            WHERE user_id = %s
-            ORDER BY item_type
+            WHERE user_id = %s AND quantity > 0
+            ORDER BY 
+                CASE item_type
+                    WHEN 'potion' THEN 1
+                    WHEN 'weapon' THEN 2
+                    WHEN 'armor' THEN 3
+                    WHEN 'artifact' THEN 4
+                    ELSE 5
+                END,
+                item_name
         """, (user_id,))
         
         return cursor.fetchall()
@@ -639,6 +652,98 @@ def get_inventory(user_id):
     except Exception as e:
         print(f"❌ Ошибка при получении инвентаря: {e}")
         return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def use_item(user_id, item_key, item_type, item_name, effect_amount):
+    """Использование предмета из инвентаря"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем наличие предмета
+        cursor.execute("""
+            SELECT quantity FROM player_inventory 
+            WHERE user_id = %s AND item_key = %s
+        """, (user_id, item_key))
+        
+        result = cursor.fetchone()
+        if not result:
+            return False, "Предмет не найден в инвентаре"
+        
+        quantity = result[0]
+        
+        if quantity <= 0:
+            return False, "Этот предмет закончился"
+        
+        # Уменьшаем количество на 1
+        new_quantity = quantity - 1
+        
+        if new_quantity <= 0:
+            # Удаляем запись, если предметы закончились
+            cursor.execute("""
+                DELETE FROM player_inventory 
+                WHERE user_id = %s AND item_key = %s
+            """, (user_id, item_key))
+        else:
+            # Обновляем количество
+            cursor.execute("""
+                UPDATE player_inventory 
+                SET quantity = %s
+                WHERE user_id = %s AND item_key = %s
+            """, (new_quantity, user_id, item_key))
+        
+        # Применяем эффект в зависимости от типа предмета
+        if item_type == 'potion':
+            character = get_character(user_id)
+            if not character:
+                conn.rollback()
+                return False, "Персонаж не найден"
+            
+            if 'health' in item_key:
+                # Зелье здоровья
+                new_health = min(character['max_health'], character['health'] + effect_amount)
+                health_gained = new_health - character['health']
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET health = %s
+                    WHERE user_id = %s
+                """, (new_health, user_id))
+                
+                conn.commit()
+                return True, f"Использовано {item_name}. Восстановлено {health_gained} HP!"
+                
+            elif 'mana' in item_key:
+                # Зелье маны
+                new_mana = min(character['max_mana'], character['mana'] + effect_amount)
+                mana_gained = new_mana - character['mana']
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET mana = %s
+                    WHERE user_id = %s
+                """, (new_mana, user_id))
+                
+                conn.commit()
+                return True, f"Использовано {item_name}. Восстановлено {mana_gained} MP!"
+        
+        conn.commit()
+        return True, f"Предмет '{item_name}' использован!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при использовании предмета: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка: {e}"
     finally:
         if cursor:
             cursor.close()
