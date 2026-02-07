@@ -77,7 +77,7 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
-    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'  # Исправленная ссылка на изображение инвентаря
+    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
 }
 
 # Товары в магазине
@@ -513,7 +513,7 @@ def get_mana_bar(current, maximum, length=10):
     return f"{bar} {current}/{maximum}"
 
 def get_xp_progress(level, experience):
-    """Рассчитывает прогресс опета для текущего уровня"""
+    """Рассчитывает прогресс опыта для текущего уровня"""
     xp_for_next_level = level * 100
     
     xp_spent = 0
@@ -644,7 +644,7 @@ def get_inventory_keyboard(inventory_items, page=0, items_per_page=5):
         item_text = f"{item['item_name']} ({item['quantity']} шт.)"
         
         # Проверяем, можно ли использовать предмет
-        if item['item_type'] == 'potion':
+        if 'potion' in item['item_key']:
             # Для зелий добавляем кнопку использования
             callback_data = f"use_{item['item_key']}"
             keyboard.append([InlineKeyboardButton(f"✨ Использовать: {item_text}", callback_data=callback_data)])
@@ -755,51 +755,83 @@ def get_shop_keyboard(character=None):
         
         keyboard.append([
             InlineKeyboardButton(
-                f"💊 Малое зелье здоровья (30 HP) - 25💰",
+                f"💊 Малое зелье здоровья (+30 HP) - 25💰",
                 callback_data='buy_small_health_potion'
             )
         ])
         
         keyboard.append([
             InlineKeyboardButton(
-                f"💊 Большое зелье здоровья (60 HP) - 50💰",
+                f"💊 Большое зелье здоровья (+60 HP) - 50💰",
                 callback_data='buy_large_health_potion'
             )
         ])
         
         keyboard.append([
             InlineKeyboardButton(
-                f"🔮 Малое зелье маны (20 MP) - 20💰",
+                f"🔮 Малое зелье маны (+20 MP) - 20💰",
                 callback_data='buy_small_mana_potion'
             )
         ])
         
         keyboard.append([
             InlineKeyboardButton(
-                f"🔮 Большое зелье маны (40 MP) - 40💰",
+                f"🔮 Большое зелье маны (+40 MP) - 40💰",
                 callback_data='buy_large_mana_potion'
             )
         ])
         
         # Предметы по рангам
-        shop_items_by_rank = {
-            'D': SHOP_ITEMS['rank_d_weapon'],
-            'C': SHOP_ITEMS['rank_c_armor'],
-            'B': SHOP_ITEMS['rank_b_artifact']
-        }
-        
         rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
         player_rank_index = rank_order.index(rank)
         
-        for rank_key, item in shop_items_by_rank.items():
-            rank_index = rank_order.index(rank_key)
-            if player_rank_index >= rank_index:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"{item['name']} - {item['price']}💰",
-                        callback_data=f'buy_{list(shop_items_by_rank.keys()).index(rank_key)}'
-                    )
-                ])
+        # Меч D-ранга
+        if player_rank_index >= rank_order.index('D'):
+            keyboard.append([
+                InlineKeyboardButton(
+                    "⚔️ Меч D-ранга (+5 силы) - 200💰",
+                    callback_data='buy_0'
+                )
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "⚔️ Меч D-ранга [Требуется D-ранг] - 200💰",
+                    callback_data='buy_info_rank_d'
+                )
+            ])
+        
+        # Броня C-ранга
+        if player_rank_index >= rank_order.index('C'):
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🛡️ Броня C-ранга (+10 здоровья) - 300💰",
+                    callback_data='buy_1'
+                )
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🛡️ Броня C-ранга [Требуется C-ранг] - 300💰",
+                    callback_data='buy_info_rank_c'
+                )
+            ])
+        
+        # Артефакт B-ранга
+        if player_rank_index >= rank_order.index('B'):
+            keyboard.append([
+                InlineKeyboardButton(
+                    "💎 Артефакт B-ранга (+15 интеллекта) - 500💰",
+                    callback_data='buy_2'
+                )
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "💎 Артефакт B-ранга [Требуется B-ранг] - 500💰",
+                    callback_data='buy_info_rank_b'
+                )
+            ])
         
         keyboard.append([
             InlineKeyboardButton(f"💰 Твой баланс: {gold}", callback_data='balance_info')
@@ -1389,7 +1421,7 @@ async def show_inventory_menu(query, user_id, page=0):
     
     # Рассчитываем статистику инвентаря
     total_items = sum(item['quantity'] for item in inventory) if inventory else 0
-    potions_count = sum(item['quantity'] for item in inventory if item['item_type'] == 'potion') if inventory else 0
+    potions_count = sum(item['quantity'] for item in inventory if 'potion' in item['item_key']) if inventory else 0
     equipment_count = sum(item['quantity'] for item in inventory if item['item_type'] in ['weapon', 'armor', 'artifact']) if inventory else 0
     
     if not inventory:
@@ -1449,21 +1481,36 @@ async def use_item_from_inventory(query, user_id, item_key):
         await query.answer("❌ Предмет не найден в инвентаре!", show_alert=True)
         return
     
+    # Получаем текущего персонажа до использования
+    character_before = get_character(user_id)
+    
     # Используем предмет
     success, message = use_item(
         user_id=user_id,
-        item_key=item_to_use['item_key'],
+        item_key=item_key,
         item_type=item_to_use['item_type'],
         item_name=item_to_use['item_name'],
-        effect_amount=item_to_use['effect_amount']
+        effect_amount=item_to_use.get('effect_amount', 0)
     )
     
     if success:
-        # Показываем сообщение об успешном использовании
-        await query.answer(message, show_alert=True)
+        # Получаем обновленного персонажа после использования
+        character_after = get_character(user_id)
         
-        # Получаем обновленного персонажа
-        character = get_character(user_id)
+        # Показываем сообщение об успешном использовании
+        response_text = f"✅ *Предмет использован!*\n\n"
+        
+        # Добавляем информацию о восстановлении
+        if 'health_potion' in item_key and character_before and character_after:
+            health_restored = character_after['health'] - character_before['health']
+            response_text += f"❤️ Восстановлено: *{health_restored}* здоровья\n"
+            response_text += f"❤️ Текущее здоровье: *{character_after['health']}/{character_after['max_health']}*\n"
+        elif 'mana_potion' in item_key and character_before and character_after:
+            mana_restored = character_after['mana'] - character_before['mana']
+            response_text += f"🔮 Восстановлено: *{mana_restored}* маны\n"
+            response_text += f"🔮 Текущая мана: *{character_after['mana']}/{character_after['max_mana']}*\n"
+        
+        await query.answer(f"✅ {message}", show_alert=True)
         
         # Показываем обновленный инвентарь
         inventory = get_inventory(user_id)
@@ -1472,9 +1519,8 @@ async def use_item_from_inventory(query, user_id, item_key):
             # Обновляем сообщение с инвентарем
             total_items = sum(item['quantity'] for item in inventory)
             
-            # Обновляем только текст, не фото
-            inventory_text = f"✅ *Предмет использован!*\n\n"
-            inventory_text += f"{message}\n\n"
+            inventory_text = f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
+            inventory_text += response_text + "\n"
             inventory_text += f"📦 В инвентаре осталось `{total_items}` предметов"
             
             await query.edit_message_text(
@@ -1484,9 +1530,9 @@ async def use_item_from_inventory(query, user_id, item_key):
             )
         else:
             # Инвентарь пуст
-            inventory_text = f"✅ *Предмет использован!*\n\n"
-            inventory_text += f"{message}\n\n"
-            inventory_text += f"🎒 Твой инвентарь теперь пуст"
+            inventory_text = f"🎒 *ТВОЙ ИНВЕНТАРЬ*\n\n"
+            inventory_text += response_text + "\n"
+            inventory_text += f"📦 Твой инвентарь теперь пуст"
             
             await query.edit_message_text(
                 text=inventory_text,
@@ -1649,23 +1695,21 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data.startswith('buy_'):
         # Определяем, что покупаем
-        if data == 'buy_small_health_potion':
-            item_key = 'small_health_potion'
-        elif data == 'buy_large_health_potion':
-            item_key = 'large_health_potion'
-        elif data == 'buy_small_mana_potion':
-            item_key = 'small_mana_potion'
-        elif data == 'buy_large_mana_potion':
-            item_key = 'large_mana_potion'
-        elif data == 'buy_0':
-            item_key = 'rank_d_weapon'
-        elif data == 'buy_1':
-            item_key = 'rank_c_armor'
-        elif data == 'buy_2':
-            item_key = 'rank_b_artifact'
-        else:
+        item_map = {
+            'buy_small_health_potion': 'small_health_potion',
+            'buy_large_health_potion': 'large_health_potion', 
+            'buy_small_mana_potion': 'small_mana_potion',
+            'buy_large_mana_potion': 'large_mana_potion',
+            'buy_0': 'rank_d_weapon',
+            'buy_1': 'rank_c_armor',
+            'buy_2': 'rank_b_artifact'
+        }
+        
+        if data not in item_map:
             await query.answer("❌ Неизвестный товар!", show_alert=True)
             return SHOP_MENU
+        
+        item_key = item_map[data]
         
         if item_key not in SHOP_ITEMS:
             await query.answer("❌ Такого товара нет в продаже!", show_alert=True)
@@ -1693,7 +1737,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             item_type=item['type'],
             item_name=item['name'],
             price=item['price'],
-            effect_amount=item.get('effect')
+            effect_amount=item.get('effect', 0)
         )
         
         if success:
@@ -1717,6 +1761,11 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.answer(f"❌ {message}", show_alert=True)
         
+        return SHOP_MENU
+    
+    elif data.startswith('buy_info_'):
+        # Информационные кнопки о требованиях ранга
+        await query.answer("❌ У тебя недостаточно высокий ранг для этого предмета!", show_alert=True)
         return SHOP_MENU
 
 async def show_stats(query, user_id):
@@ -1812,7 +1861,7 @@ async def show_stats(query, user_id):
 
 async def show_top_players(query, user_id):
     """Показ топа игроков"""
-    top_players = get_top_players(10)  # Берем топ-10 для полноценной таблицы
+    top_players = get_top_players(10)
     
     if not top_players:
         await query.edit_message_text(
@@ -1834,7 +1883,7 @@ async def show_top_players(query, user_id):
     
     # Если игрок не в топ-10, проверяем его позицию среди всех
     if not player_position and current_player:
-        all_players = get_top_players(100)  # Берем больше для поиска позиции
+        all_players = get_top_players(100)
         for i, player in enumerate(all_players, 1):
             if player['character_name'] == current_player['character_name']:
                 player_position = i
