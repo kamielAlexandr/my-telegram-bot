@@ -283,34 +283,41 @@ def apply_regeneration(character):
         if last_regeneration:
             # Преобразуем строку в datetime, если нужно
             if isinstance(last_regeneration, str):
-                last_regeneration = datetime.fromisoformat(last_regeneration.replace('Z', '+00:00'))
+                try:
+                    last_regeneration = datetime.fromisoformat(last_regeneration.replace('Z', '+00:00'))
+                except:
+                    try:
+                        last_regeneration = datetime.strptime(last_regeneration, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        last_regeneration = None
             
-            time_diff = current_time - last_regeneration
-            
-            # Регенерация каждые 5 минут (300 секунд)
-            if time_diff.total_seconds() >= 300:
-                # Рассчитываем регенерацию
-                health_regen = character['max_health'] * 0.05  # 5% от макс. здоровья
-                mana_regen = character['max_mana'] * 0.10  # 10% от макс. маны
+            if last_regeneration:
+                time_diff = current_time - last_regeneration
                 
-                new_health = min(character['max_health'], character['health'] + int(health_regen))
-                new_mana = min(character['max_mana'], character['mana'] + int(mana_regen))
-                
-                # Обновляем в базе данных
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET health = %s, mana = %s, last_regeneration = CURRENT_TIMESTAMP
-                    WHERE user_id = %s
-                    RETURNING health, mana
-                """, (new_health, new_mana, character['user_id']))
-                
-                result = cursor.fetchone()
-                conn.commit()
-                
-                if result:
-                    character['health'] = result[0]
-                    character['mana'] = result[1]
-                    character['last_regeneration'] = current_time
+                # Регенерация каждые 5 минут (300 секунд)
+                if time_diff.total_seconds() >= 300:
+                    # Рассчитываем регенерацию
+                    health_regen = character['max_health'] * 0.05  # 5% от макс. здоровья
+                    mana_regen = character['max_mana'] * 0.10  # 10% от макс. маны
+                    
+                    new_health = min(character['max_health'], character['health'] + int(health_regen))
+                    new_mana = min(character['max_mana'], character['mana'] + int(mana_regen))
+                    
+                    # Обновляем в базе данных
+                    cursor.execute("""
+                        UPDATE player_characters 
+                        SET health = %s, mana = %s, last_regeneration = CURRENT_TIMESTAMP
+                        WHERE user_id = %s
+                        RETURNING health, mana
+                    """, (new_health, new_mana, character['user_id']))
+                    
+                    result = cursor.fetchone()
+                    conn.commit()
+                    
+                    if result:
+                        character['health'] = result[0]
+                        character['mana'] = result[1]
+                        character['last_regeneration'] = current_time
         
         return character
         
@@ -698,6 +705,44 @@ def get_player_stats(user_id):
     except Exception as e:
         print(f"❌ Ошибка при получении статистики: {e}")
         return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_top_players(limit=10):
+    """Получение топ-N игроков по уровню и опыту"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT 
+                character_name,
+                race,
+                level,
+                rank,
+                experience,
+                battle_wins,
+                battle_losses,
+                gold,
+                created_at
+            FROM player_characters 
+            ORDER BY level DESC, experience DESC, battle_wins DESC
+            LIMIT %s
+        """, (limit,))
+        
+        return cursor.fetchall()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении топа игроков: {e}")
+        return []
     finally:
         if cursor:
             cursor.close()
