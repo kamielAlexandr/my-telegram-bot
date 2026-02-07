@@ -2447,10 +2447,12 @@ def main():
         print("🤖 RPG бот запущен!")
         print("📱 Перейдите в Telegram и напишите /start")
         
+        # Устанавливаем настройки для предотвращения конфликтов
         application.run_polling(
             drop_pending_updates=True,
             close_loop=False,
-            allowed_updates=Update.ALL_TYPES
+            allowed_updates=Update.ALL_TYPES,
+            poll_interval=1.0  # Увеличиваем интервал опроса
         )
         
     except Exception as e:
@@ -2459,6 +2461,7 @@ def main():
         print("1. Проверьте токен бота в Railway Variables")
         print("2. Убедитесь, что запущен только один экземпляр бота")
         print("3. Проверьте подключение к интернету")
+        print("4. Остановите все предыдущие экземпляры бота в Railway Dashboard")
 
 if __name__ == '__main__':
     main()
