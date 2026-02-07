@@ -26,7 +26,8 @@ from database import (
     log_battle,
     buy_item,
     get_inventory,
-    add_stat_point
+    add_stat_point,
+    get_top_players
 )
 
 # Настройка логирования
@@ -572,7 +573,7 @@ def get_main_menu_keyboard(user_id=None):
             keyboard.append([InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ХАР-КИ ({character['stat_points']} очков)", callback_data='level_up_menu')])
     
     keyboard.append([InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')])
-    keyboard.append([InlineKeyboardButton("📜 Свиток помощи", callback_data='help')])
+    keyboard.append([InlineKeyboardButton("👑 Топ игроков", callback_data='top_players'), InlineKeyboardButton("📜 Помощь", callback_data='help')])
     keyboard.append([InlineKeyboardButton("🔄 Реинкарнация (Сброс)", callback_data='restart')])
     
     return InlineKeyboardMarkup(keyboard)
@@ -830,6 +831,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • A-ранг: 🌋 Врата в преисподнюю
 • S-ранг: ⚡ Трон божества
 
+💪 **Способности рас и мана:**
+• 👨 *Человек*: Адаптивность (10 маны) - временный буст всех характеристик
+• 🧝 *Эльф*: Магический дар (20 маны) - мощный магический удар
+• ⚒️ *Дварф*: Каменная кожа (15 маны) - лечение и защита
+• 👹 *Орк*: Ярость (5 маны) - двойной удор с риском самоповреждения
+
 👤 **Создание героя:**
 1. Выбери расу (влияет на стиль боя)
 2. Назови героя (это имя войдет в историю)
@@ -859,8 +866,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🗡 **Тактика боя:**
 • ⚔️ *Атака* - Базовый удар оружием (зависит от силы)
 • 🛡️ *Защита* - Снижает урон на 50%
-• ✨ *Способность* - Уникальный навык твоей расы
+• ✨ *Способность* - Уникальный навык твоей расы (тратит ману)
 • 🏃 *Сбежать* - Шанс 50% покинуть бой
+
+🏆 **Соревнование:**
+• Заходи в "👑 Топ игроков" чтобы увидеть лучших охотников
+• Повышай свой рейтинг, чтобы попасть в топ
 
 _Удачи, герой! Пусть боги хранят тебя._ 🏹
 """
@@ -997,6 +1008,7 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
         return ConversationHandler.END
+
 # --- ОБРАБОТЧИКИ ПРОКАЧКИ ХАРАКТЕРИСТИК ---
 
 async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1141,6 +1153,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == 'rank_info':
         await rank_info_handler(update, context)
         return MAIN_MENU
+    
+    elif data == 'top_players':
+        await show_top_players(query, user_id)
+        return MAIN_MENU
 
 async def rank_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик информации о системе рангов"""
@@ -1231,15 +1247,19 @@ async def show_profile(query, user_id):
     regen_info = ""
     if last_regen:
         if isinstance(last_regen, str):
-            last_regen = datetime.fromisoformat(last_regen.replace('Z', '+00:00'))
+            try:
+                last_regen = datetime.fromisoformat(last_regen.replace('Z', '+00:00'))
+            except:
+                last_regen = None
         
-        time_diff = datetime.now() - last_regen
-        if time_diff.total_seconds() >= 300:
-            regen_info = "\n🔄 *Готов к регенерации!*"
-        else:
-            minutes_left = int((300 - time_diff.total_seconds()) / 60)
-            seconds_left = int(300 - time_diff.total_seconds()) % 60
-            regen_info = f"\n⏳ *Регенерация через:* {minutes_left}:{seconds_left:02d}"
+        if last_regen:
+            time_diff = datetime.now() - last_regen
+            if time_diff.total_seconds() >= 300:
+                regen_info = "\n🔄 *Готов к регенерации!*"
+            else:
+                minutes_left = int((300 - time_diff.total_seconds()) / 60)
+                seconds_left = int(300 - time_diff.total_seconds()) % 60
+                regen_info = f"\n⏳ *Регенерация через:* {minutes_left}:{seconds_left:02d}"
     
     # Статистика характеристик
     stat_points = character.get('stat_points', 0)
@@ -1496,7 +1516,7 @@ async def show_inventory(query, user_id):
         )
 
 async def show_stats(query, user_id):
-    """Показ статистики"""
+    """Показ статистики с топом игроков"""
     character = get_character(user_id)
     
     if not character:
@@ -1542,8 +1562,132 @@ async def show_stats(query, user_id):
         f"Замечен: {character['last_active'].strftime('%d.%m.%Y %H:%M')}"
     )
     
+    # Получаем топ-5 игроков
+    top_players = get_top_players(5)
+    
+    if top_players:
+        stats_text += "\n\n🏆 *ТОП-5 ЛЕГЕНД СЕРВЕРА* 🏆\n"
+        stats_text += "━━━━━━━━━━━━━━━━━━━━━━\n"
+        
+        for i, player in enumerate(top_players, 1):
+            player_rank = player.get('rank', 'E')
+            rank_icon = get_rank_icon(player_rank)
+            win_rate_player = 0
+            total_player_battles = player.get('battle_wins', 0) + player.get('battle_losses', 0)
+            if total_player_battles > 0:
+                win_rate_player = (player.get('battle_wins', 0) / total_player_battles * 100)
+            
+            medal = ""
+            if i == 1:
+                medal = "🥇"
+            elif i == 2:
+                medal = "🥈"  
+            elif i == 3:
+                medal = "🥉"
+            else:
+                medal = "🏅"
+            
+            # Экранируем имя игрока для Markdown
+            safe_name = html.escape(player['character_name'])
+            
+            stats_text += (
+                f"{medal} *{i}. {safe_name}*\n"
+                f"   {rank_icon} {player_rank}-ранг | ⭐ Ур. {player['level']}\n"
+                f"   ⚔️ {player.get('battle_wins', 0)} побед ({win_rate_player:.1f}%)\n"
+                f"   💰 {player.get('gold', 0)} золота\n"
+            )
+            
+            if i < len(top_players):
+                stats_text += "   ─────────────────\n"
+    
     await query.edit_message_text(
         text=stats_text,
+        parse_mode='Markdown',
+        reply_markup=get_main_menu_keyboard(user_id)
+    )
+
+async def show_top_players(query, user_id):
+    """Показ топа игроков"""
+    top_players = get_top_players(10)  # Берем топ-10 для полноценной таблицы
+    
+    if not top_players:
+        await query.edit_message_text(
+            text="🏆 *ТОП ИГРОКОВ*\n\nНа сервере еще нет легенд... Стань первым!",
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
+        return
+    
+    # Получаем информацию о текущем игроке
+    current_player = get_character(user_id)
+    player_position = None
+    
+    # Находим позицию текущего игрока в топе
+    for i, player in enumerate(top_players, 1):
+        if player['character_name'] == current_player['character_name']:
+            player_position = i
+            break
+    
+    # Если игрок не в топ-10, проверяем его позицию среди всех
+    if not player_position and current_player:
+        all_players = get_top_players(100)  # Берем больше для поиска позиции
+        for i, player in enumerate(all_players, 1):
+            if player['character_name'] == current_player['character_name']:
+                player_position = i
+                break
+    
+    top_text = "🏆 *ТОП ЛЕГЕНД СЕРВЕРА* 🏆\n"
+    top_text += "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for i, player in enumerate(top_players, 1):
+        player_rank = player.get('rank', 'E')
+        rank_icon = get_rank_icon(player_rank)
+        
+        # Экранируем имя игрока
+        safe_name = html.escape(player['character_name'])
+        
+        # Определяем медаль для первых трех мест
+        medal = ""
+        if i == 1:
+            medal = "👑"
+            top_text += f"{medal} *{i}. {safe_name}*\n"
+        elif i == 2:
+            medal = "🥈"
+            top_text += f"{medal} *{i}. {safe_name}*\n"
+        elif i == 3:
+            medal = "🥉"
+            top_text += f"{medal} *{i}. {safe_name}*\n"
+        else:
+            top_text += f"   *{i}. {safe_name}*\n"
+        
+        total_battles = player.get('battle_wins', 0) + player.get('battle_losses', 0)
+        win_rate = 0
+        if total_battles > 0:
+            win_rate = (player.get('battle_wins', 0) / total_battles * 100)
+        
+        top_text += (
+            f"   {rank_icon} {player_rank}-ранг | ⭐ Ур. {player['level']}\n"
+            f"   ⚔️ {player.get('battle_wins', 0)}/{total_battles} побед ({win_rate:.1f}%)\n"
+            f"   💰 {player.get('gold', 0)} золота\n"
+        )
+        
+        if i < len(top_players):
+            top_text += "   ─────────────────\n"
+    
+    # Добавляем информацию о позиции текущего игрока
+    if player_position:
+        top_text += f"\n📊 *Твоя позиция:* `#{player_position}`\n"
+        
+        if player_position > 10:
+            top_text += f"_Ты не в топ-10, но у тебя есть потенциал!_ 💪\n"
+        else:
+            top_text += f"_Ты в числе лучших! Так держать!_ 🏆\n"
+    
+    top_text += "\n💡 *Как попасть в топ?*\n"
+    top_text += "• Повышай уровень и ранг\n• Побеждай в боях\n• Накопай золота\n• Стань легендой!"
+    
+    await query.edit_message_text(
+        text=top_text,
         parse_mode='Markdown',
         reply_markup=get_main_menu_keyboard(user_id)
     )
@@ -1559,11 +1703,19 @@ async def show_help(query):
 🏆 **Система рангов:**
 Нажми на кнопку ранга в главном меню для подробной информации!
 
+💪 **Способности рас и мана:**
+• 👨 *Человек*: Адаптивность (10 маны) - временный буст всех характеристик
+• 🧝 *Эльф*: Магический дар (20 маны) - мощный магический удар
+• ⚒️ *Дварф*: Каменная кожа (15 маны) - лечение и защита
+• 👹 *Орк*: Ярость (5 маны) - двойной удор с риском самоповреждения
+
 🏚 **Места:**
 • 👤 **Герой** - Твой статус и инвентарь
 • ⚔️ **Битва** - Охота на монстров в локациях по рангу
 • 🛍 **Торговец** - Покупка зелий и снаряжения
 • 🌟 **Прокачка** - Распределение характеристик
+• 🏆 **Зал славы** - Твоя статистика и топ игроков
+• 👑 **Топ игроков** - Рейтинг лучших охотников
 
 📈 **Система прокачки:**
 • За каждый уровень: *+3 очка характеристик*
@@ -1742,7 +1894,7 @@ async def start_battle(query, user_id, enemy_type):
     )
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик действий в бою"""
+    """Обработчик действий в бою с учетом маны"""
     query = update.callback_query
     await query.answer()
     
@@ -1793,37 +1945,57 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на {50 + agility_bonus}%")
         
     elif data == 'ability':
-        if character['race'] == 'human':
-            # Адаптивность: увеличение всех характеристик на основе интеллекта
-            int_bonus = character['intelligence'] // 10
-            battle_log.append(f"✨ *Адаптивность!* Все характеристики временно увеличены на *+{int_bonus}*!")
+        # Определяем стоимость маны для каждой расы
+        mana_costs = {
+            'human': 10,
+            'elf': 20,
+            'dwarf': 15,
+            'orc': 5
+        }
+        
+        mana_cost = mana_costs.get(character['race'], 10)
+        
+        # Проверяем, достаточно ли маны
+        if character['mana'] < mana_cost:
+            battle_log.append(f"❌ *НЕДОСТАТОЧНО МАНЫ!* Нужно {mana_cost} маны, а у тебя {character['mana']}.")
+        else:
+            # Отнимаем ману
+            character['mana'] -= mana_cost
             
-        elif character['race'] == 'elf':
-            # Магический дар: урон зависит от интеллекта
-            base_magic = character['intelligence']
-            if random.random() < 0.3:  # 30% шанс
-                damage = base_magic * 2
-                battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Магия нанесла *{damage}* урона!")
+            if character['race'] == 'human':
+                # Адаптивность: увеличение всех характеристик на основе интеллекта
+                int_bonus = character['intelligence'] // 10
+                battle_data['player_defending'] = True
+                battle_log.append(f"✨ *Адаптивность!* Затрачено {mana_cost} маны. Все характеристики временно увеличены на *+{int_bonus}* и поднят щит!")
+                
+            elif character['race'] == 'elf':
+                # Магический дар: урон зависит от интеллекта
+                base_magic = character['intelligence']
+                if random.random() < 0.3:  # 30% шанс
+                    damage = base_magic * 2
+                    battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Затрачено {mana_cost} маны. Магия нанесла *{damage}* урона!")
+                    enemy['health'] -= damage
+                else:
+                    damage = base_magic
+                    battle_log.append(f"🏹 *Точный выстрел!* Затрачено {mana_cost} маны. Нанесено *{damage}* урона!")
+                    enemy['health'] -= damage
+                
+            elif character['race'] == 'dwarf':
+                # Каменная кожа: лечение зависит от здоровья
+                heal_amount = character['max_health'] // 10 + random.randint(5, 15)
+                character['health'] = min(character['max_health'], character['health'] + heal_amount)
+                battle_data['player_defending'] = True
+                battle_log.append(f"🏔 *Каменная кожа!* Затрачено {mana_cost} маны. Восстановлено *{heal_amount}* HP и поднят щит!")
+                
+            elif character['race'] == 'orc':
+                # Ярость: урон зависит от силы
+                damage = character['strength'] * 2 + random.randint(0, 5)
+                self_damage = random.randint(1, 5)
                 enemy['health'] -= damage
-            else:
-                damage = base_magic
-                battle_log.append(f"🏹 Точный выстрел на *{damage}* урона!")
-                enemy['health'] -= damage
+                character['health'] -= self_damage
+                battle_log.append(f"🩸 *ЯРОСТЬ!* Затрачено {mana_cost} маны. Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
             
-        elif character['race'] == 'dwarf':
-            # Каменная кожа: лечение зависит от здоровья
-            heal_amount = character['max_health'] // 10 + random.randint(5, 15)
-            character['health'] = min(character['max_health'], character['health'] + heal_amount)
-            battle_data['player_defending'] = True
-            battle_log.append(f"🏔 *Каменная кожа!* Восстановлено *{heal_amount}* HP и поднят щит!")
-            
-        elif character['race'] == 'orc':
-            # Ярость: урон зависит от силы
-            damage = character['strength'] * 2 + random.randint(0, 5)
-            self_damage = random.randint(1, 5)
-            enemy['health'] -= damage
-            character['health'] -= self_damage
-            battle_log.append(f"🩸 *ЯРОСТЬ!* Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
+            battle_log.append(f"🔮 Осталось маны: {character['mana']}/{character['max_mana']}")
             
     elif data == 'flee':
         # Шанс сбежать зависит от ловкости
@@ -1869,6 +2041,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         update_character_stats(
             user_id, 
             health=character['health'],
+            mana=character['mana'],
             battle_wins=character.get('battle_wins', 0) + 1,
             gold=character['gold'] + gold_gained
         )
@@ -1917,6 +2090,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         
         update_character_stats(user_id, 
             health=0,
+            mana=character['mana'],
             battle_losses=character.get('battle_losses', 0) + 1
         )
         log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
@@ -1933,11 +2107,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     # Продолжение боя (оба живы)
     player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
     enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
+    player_mana_bar = get_mana_bar(max(0, character['mana']), character['max_mana'], length=8)
     
     status_text = (
         f"⚔️ *Ход №{battle_data['turn']}*\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"👤 *ТЫ:* {player_health_bar}\n"
+        f"🔮 *МАНА:* {player_mana_bar}\n"
         f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
         f"{chr(10).join(battle_log)}\n"
         f"━━━━━━━━━━━━━━━━\n"
