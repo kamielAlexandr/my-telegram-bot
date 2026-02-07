@@ -71,7 +71,7 @@ def get_connection():
             return None
 
 def init_db():
-    """Инициализация таблиц в базе данных - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Инициализация таблиц в базе данных - ПЕРЕДЕЛАННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -136,9 +136,13 @@ def init_db():
             )
         """)
         
-        # Создаем таблицу для инвентаря - УПРОЩЕННАЯ ВЕРСИЯ БЕЗ UNIQUE КОНСТРЕЙНТОВ
+        # УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ ИНВЕНТАРЯ, ЕСЛИ ОНА СУЩЕСТВУЕТ
+        cursor.execute("DROP TABLE IF EXISTS player_inventory CASCADE")
+        print("🗑️ Старая таблица инвентаря удалена")
+        
+        # СОЗДАЕМ НОВУЮ ТАБЛИЦУ ИНВЕНТАРЯ БЕЗ UNIQUE КОНСТРЕЙНТОВ
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS player_inventory (
+            CREATE TABLE player_inventory (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
                 item_key VARCHAR(100) NOT NULL,
@@ -150,33 +154,20 @@ def init_db():
             )
         """)
         
-        # Создаем индекс для быстрого поиска, но НЕ уникальный
+        # Создаем индексы для быстрого поиска, но НЕ уникальные
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_player_inventory_user_item 
+            CREATE INDEX idx_player_inventory_user_item 
             ON player_inventory (user_id, item_key)
         """)
         
-        # Проверяем наличие полей в инвентаре
         cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='player_inventory' and column_name='item_key'
+            CREATE INDEX idx_player_inventory_user 
+            ON player_inventory (user_id)
         """)
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_inventory ADD COLUMN item_key VARCHAR(100) DEFAULT ''")
-            print("✅ Столбец 'item_key' добавлен в таблицу 'player_inventory'")
-        
-        cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='player_inventory' and column_name='effect_amount'
-        """)
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_inventory ADD COLUMN effect_amount INTEGER DEFAULT 0")
-            print("✅ Столбец 'effect_amount' добавлен в таблицу 'player_inventory'")
         
         conn.commit()
-        print("✅ База данных инициализирована")
+        print("✅ База данных полностью пересоздана и инициализирована")
+        print("✅ Таблица 'player_inventory' создана без уникальных ограничений")
         
     except Exception as e:
         print(f"❌ Ошибка при создании таблиц: {e}")
@@ -575,7 +566,7 @@ def add_gold(user_id, gold_amount):
             conn.close()
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине - ПРОСТАЯ И РАБОЧАЯ ВЕРСИЯ"""
+    """Покупка предмета в магазине - ПРОСТАЯ РАБОЧАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -617,7 +608,7 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             else:
                 effect_amount = 0
         
-        # Просто вставляем новую запись - без проверки на уникальность
+        # ПРОСТО ВСТАВЛЯЕМ НОВУЮ ЗАПИСЬ
         cursor.execute("""
             INSERT INTO player_inventory 
             (user_id, item_key, item_type, item_name, quantity, effect_amount)
@@ -683,7 +674,7 @@ def get_inventory(user_id):
             conn.close()
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """Использование предмета из инвентаря - УПРОЩЕННАЯ ВЕРСИЯ"""
+    """Использование предмета из инвентаря"""
     conn = None
     cursor = None
     try:
@@ -706,9 +697,6 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
             return False, "Предмет не найден в инвентаре"
         
         item_id, quantity, db_effect_amount = result
-        
-        if quantity <= 0:
-            return False, "Этот предмет закончился"
         
         # Используем effect_amount из базы, если он не передан
         if effect_amount is None or effect_amount == 0:
