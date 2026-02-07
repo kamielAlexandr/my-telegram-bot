@@ -71,7 +71,7 @@ def get_connection():
             return None
 
 def init_db():
-    """Инициализация таблиц в базе данных"""
+    """Инициализация таблиц в базе данных - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -136,19 +136,24 @@ def init_db():
             )
         """)
         
-        # Создаем таблицу для инвентаря с дополнительными полями
+        # Создаем таблицу для инвентаря - УПРОЩЕННАЯ ВЕРСИЯ БЕЗ UNIQUE КОНСТРЕЙНТОВ
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS player_inventory (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
-                item_key VARCHAR(100) NOT NULL,  -- Ключ предмета для идентификации (small_health_potion и т.д.)
+                item_key VARCHAR(100) NOT NULL,
                 item_type VARCHAR(50) NOT NULL,
                 item_name VARCHAR(100) NOT NULL,
                 quantity INTEGER DEFAULT 1,
-                effect_amount INTEGER DEFAULT 0,  -- Эффект предмета (например, сколько HP восстанавливает)
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, item_key)  -- Уникальный индекс по user_id и item_key
+                effect_amount INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """)
+        
+        # Создаем индекс для быстрого поиска, но НЕ уникальный
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player_inventory_user_item 
+            ON player_inventory (user_id, item_key)
         """)
         
         # Проверяем наличие полей в инвентаре
@@ -169,18 +174,6 @@ def init_db():
         if not cursor.fetchone():
             cursor.execute("ALTER TABLE player_inventory ADD COLUMN effect_amount INTEGER DEFAULT 0")
             print("✅ Столбец 'effect_amount' добавлен в таблицу 'player_inventory'")
-        
-        # Проверяем наличие уникального ограничения, если нет - добавляем
-        cursor.execute("""
-            SELECT conname FROM pg_constraint 
-            WHERE conname = 'player_inventory_user_id_item_key_key'
-        """)
-        if not cursor.fetchone():
-            cursor.execute("""
-                ALTER TABLE player_inventory 
-                ADD CONSTRAINT player_inventory_user_id_item_key_key UNIQUE (user_id, item_key)
-            """)
-            print("✅ Уникальный constraint добавлен на (user_id, item_key)")
         
         conn.commit()
         print("✅ База данных инициализирована")
@@ -582,7 +575,7 @@ def add_gold(user_id, gold_amount):
             conn.close()
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Покупка предмета в магазине - ПРОСТАЯ И РАБОЧАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -624,35 +617,12 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             else:
                 effect_amount = 0
         
-        # Проверяем, есть ли уже такой предмет у игрока
+        # Просто вставляем новую запись - без проверки на уникальность
         cursor.execute("""
-            SELECT id, quantity FROM player_inventory 
-            WHERE user_id = %s AND item_key = %s
-        """, (user_id, item_key))
-        
-        existing_item = cursor.fetchone()
-        
-        if existing_item:
-            # Увеличиваем количество существующего предмета
-            item_id, current_quantity = existing_item
-            new_quantity = current_quantity + 1
-            
-            cursor.execute("""
-                UPDATE player_inventory 
-                SET quantity = %s, created_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """, (new_quantity, item_id))
-        else:
-            # Добавляем новый предмет с использованием ON CONFLICT
-            cursor.execute("""
-                INSERT INTO player_inventory 
-                (user_id, item_key, item_type, item_name, quantity, effect_amount)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (user_id, item_key) 
-                DO UPDATE SET 
-                    quantity = player_inventory.quantity + 1,
-                    created_at = CURRENT_TIMESTAMP
-            """, (user_id, item_key, item_type, item_name, 1, effect_amount))
+            INSERT INTO player_inventory 
+            (user_id, item_key, item_type, item_name, quantity, effect_amount)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, item_key, item_type, item_name, 1, effect_amount))
         
         conn.commit()
         return True, f"Предмет '{item_name}' куплен успешно!"
@@ -669,7 +639,7 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             conn.close()
 
 def get_inventory(user_id):
-    """Получение инвентаря игрока"""
+    """Получение инвентаря игрока - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -679,10 +649,17 @@ def get_inventory(user_id):
         
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
+        # Группируем предметы по item_key и суммируем количество
         cursor.execute("""
-            SELECT id, item_key, item_type, item_name, quantity, effect_amount
+            SELECT 
+                item_key,
+                item_type,
+                item_name,
+                SUM(quantity) as quantity,
+                MAX(effect_amount) as effect_amount
             FROM player_inventory 
             WHERE user_id = %s AND quantity > 0
+            GROUP BY item_key, item_type, item_name
             ORDER BY 
                 CASE item_type
                     WHEN 'potion' THEN 1
@@ -706,7 +683,7 @@ def get_inventory(user_id):
             conn.close()
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """Использование предмета из инвентаря"""
+    """Использование предмета из инвентаря - УПРОЩЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -716,10 +693,12 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         
         cursor = conn.cursor()
         
-        # Проверяем наличие предмета и получаем его данные
+        # Находим первую запись с этим предметом
         cursor.execute("""
             SELECT id, quantity, effect_amount FROM player_inventory 
-            WHERE user_id = %s AND item_key = %s
+            WHERE user_id = %s AND item_key = %s AND quantity > 0
+            ORDER BY id
+            LIMIT 1
         """, (user_id, item_key))
         
         result = cursor.fetchone()
