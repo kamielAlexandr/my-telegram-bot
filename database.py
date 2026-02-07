@@ -146,8 +146,7 @@ def init_db():
                 item_key VARCHAR(100) NOT NULL,  -- Ключ предмета для идентификации
                 quantity INTEGER DEFAULT 1,
                 effect_amount INTEGER DEFAULT 0,  -- Эффект предмета (например, сколько HP восстанавливает)
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, item_key)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
@@ -169,6 +168,24 @@ def init_db():
         if not cursor.fetchone():
             cursor.execute("ALTER TABLE player_inventory ADD COLUMN effect_amount INTEGER DEFAULT 0")
             print("✅ Столбец 'effect_amount' добавлен в таблицу 'player_inventory'")
+        
+        # УДАЛЯЕМ UNIQUE КОНСТРЕЙНТ и создаем его правильно
+        try:
+            cursor.execute("""
+                ALTER TABLE player_inventory 
+                DROP CONSTRAINT IF EXISTS player_inventory_user_id_item_key_key
+            """)
+        except:
+            pass
+        
+        # Создаем уникальный индекс для ON CONFLICT
+        try:
+            cursor.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_player_inventory_unique 
+                ON player_inventory (user_id, item_key)
+            """)
+        except:
+            pass
         
         conn.commit()
         print("✅ База данных инициализирована")
@@ -570,7 +587,7 @@ def add_gold(user_id, gold_amount):
             conn.close()
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ ON CONFLICT"""
     conn = None
     cursor = None
     try:
@@ -612,13 +629,31 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             else:
                 effect_amount = 0
         
-        # Добавляем в инвентарь с effect_amount
+        # Проверяем, есть ли уже такой предмет у игрока
         cursor.execute("""
-            INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount)
-            VALUES (%s, %s, %s, %s, 1, %s)
-            ON CONFLICT (user_id, item_key) 
-            DO UPDATE SET quantity = player_inventory.quantity + 1
-        """, (user_id, item_key, item_type, item_name, effect_amount))
+            SELECT id, quantity FROM player_inventory 
+            WHERE user_id = %s AND item_key = %s
+        """, (user_id, item_key))
+        
+        existing_item = cursor.fetchone()
+        
+        if existing_item:
+            # Увеличиваем количество существующего предмета
+            item_id, current_quantity = existing_item
+            new_quantity = current_quantity + 1
+            
+            cursor.execute("""
+                UPDATE player_inventory 
+                SET quantity = %s
+                WHERE id = %s
+            """, (new_quantity, item_id))
+        else:
+            # Добавляем новый предмет
+            cursor.execute("""
+                INSERT INTO player_inventory 
+                (user_id, item_key, item_type, item_name, quantity, effect_amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, item_key, item_type, item_name, 1, effect_amount))
         
         conn.commit()
         return True, f"Предмет '{item_name}' куплен успешно!"
@@ -646,7 +681,7 @@ def get_inventory(user_id):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute("""
-            SELECT item_key, item_type, item_name, quantity, effect_amount
+            SELECT id, item_key, item_type, item_name, quantity, effect_amount
             FROM player_inventory 
             WHERE user_id = %s AND quantity > 0
             ORDER BY 
@@ -684,7 +719,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         
         # Проверяем наличие предмета и получаем его данные
         cursor.execute("""
-            SELECT quantity, effect_amount FROM player_inventory 
+            SELECT id, quantity, effect_amount FROM player_inventory 
             WHERE user_id = %s AND item_key = %s
         """, (user_id, item_key))
         
@@ -692,7 +727,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         if not result:
             return False, "Предмет не найден в инвентаре"
         
-        quantity, db_effect_amount = result
+        item_id, quantity, db_effect_amount = result
         
         if quantity <= 0:
             return False, "Этот предмет закончился"
@@ -708,15 +743,15 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
             # Удаляем запись, если предметы закончились
             cursor.execute("""
                 DELETE FROM player_inventory 
-                WHERE user_id = %s AND item_key = %s
-            """, (user_id, item_key))
+                WHERE id = %s
+            """, (item_id,))
         else:
             # Обновляем количество
             cursor.execute("""
                 UPDATE player_inventory 
                 SET quantity = %s
-                WHERE user_id = %s AND item_key = %s
-            """, (new_quantity, user_id, item_key))
+                WHERE id = %s
+            """, (new_quantity, item_id))
         
         # ВОССТАНАВЛИВАЕМ ЗДОРОВЬЕ ИЛИ МАНУ
         message = ""
