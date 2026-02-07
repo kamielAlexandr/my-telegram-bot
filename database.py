@@ -570,7 +570,7 @@ def add_gold(user_id, gold_amount):
             conn.close()
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине"""
+    """Покупка предмета в магазине - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -599,13 +599,26 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             WHERE user_id = %s
         """, (price, user_id))
         
-        # Добавляем в инвентарь
+        # Устанавливаем effect_amount по умолчанию, если не передан
+        if effect_amount is None:
+            if 'small_health_potion' in item_key:
+                effect_amount = 30
+            elif 'large_health_potion' in item_key:
+                effect_amount = 60
+            elif 'small_mana_potion' in item_key:
+                effect_amount = 20
+            elif 'large_mana_potion' in item_key:
+                effect_amount = 40
+            else:
+                effect_amount = 0
+        
+        # Добавляем в инвентарь с effect_amount
         cursor.execute("""
             INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount)
             VALUES (%s, %s, %s, %s, 1, %s)
             ON CONFLICT (user_id, item_key) 
             DO UPDATE SET quantity = player_inventory.quantity + 1
-        """, (user_id, item_key, item_type, item_name, effect_amount or 0))
+        """, (user_id, item_key, item_type, item_name, effect_amount))
         
         conn.commit()
         return True, f"Предмет '{item_name}' куплен успешно!"
@@ -659,7 +672,7 @@ def get_inventory(user_id):
             conn.close()
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """Использование предмета из инвентаря"""
+    """Использование предмета из инвентаря - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -669,9 +682,9 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         
         cursor = conn.cursor()
         
-        # Проверяем наличие предмета
+        # Проверяем наличие предмета и получаем его данные
         cursor.execute("""
-            SELECT quantity FROM player_inventory 
+            SELECT quantity, effect_amount FROM player_inventory 
             WHERE user_id = %s AND item_key = %s
         """, (user_id, item_key))
         
@@ -679,10 +692,14 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         if not result:
             return False, "Предмет не найден в инвентаре"
         
-        quantity = result[0]
+        quantity, db_effect_amount = result
         
         if quantity <= 0:
             return False, "Этот предмет закончился"
+        
+        # Используем effect_amount из базы, если он не передан
+        if effect_amount is None or effect_amount == 0:
+            effect_amount = db_effect_amount or 0
         
         # Уменьшаем количество на 1
         new_quantity = quantity - 1
@@ -701,43 +718,64 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
                 WHERE user_id = %s AND item_key = %s
             """, (new_quantity, user_id, item_key))
         
-        # Применяем эффект в зависимости от типа предмета
-        if item_type == 'potion':
-            character = get_character(user_id)
-            if not character:
+        # ВОССТАНАВЛИВАЕМ ЗДОРОВЬЕ ИЛИ МАНУ
+        message = ""
+        
+        if 'health_potion' in item_key:
+            # Зелье здоровья - получаем текущее состояние персонажа
+            cursor.execute("""
+                SELECT health, max_health FROM player_characters 
+                WHERE user_id = %s
+            """, (user_id,))
+            char_result = cursor.fetchone()
+            
+            if not char_result:
                 conn.rollback()
                 return False, "Персонаж не найден"
             
-            if 'health' in item_key:
-                # Зелье здоровья
-                new_health = min(character['max_health'], character['health'] + effect_amount)
-                health_gained = new_health - character['health']
-                
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET health = %s
-                    WHERE user_id = %s
-                """, (new_health, user_id))
-                
-                conn.commit()
-                return True, f"Использовано {item_name}. Восстановлено {health_gained} HP!"
-                
-            elif 'mana' in item_key:
-                # Зелье маны
-                new_mana = min(character['max_mana'], character['mana'] + effect_amount)
-                mana_gained = new_mana - character['mana']
-                
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET mana = %s
-                    WHERE user_id = %s
-                """, (new_mana, user_id))
-                
-                conn.commit()
-                return True, f"Использовано {item_name}. Восстановлено {mana_gained} MP!"
+            current_health, max_health = char_result
+            new_health = min(max_health, current_health + effect_amount)
+            health_restored = new_health - current_health
+            
+            # Обновляем здоровье
+            cursor.execute("""
+                UPDATE player_characters 
+                SET health = %s
+                WHERE user_id = %s
+            """, (new_health, user_id))
+            
+            message = f"Использовано {item_name}. Восстановлено {health_restored} HP!"
+            
+        elif 'mana_potion' in item_key:
+            # Зелье маны - получаем текущее состояние персонажа
+            cursor.execute("""
+                SELECT mana, max_mana FROM player_characters 
+                WHERE user_id = %s
+            """, (user_id,))
+            char_result = cursor.fetchone()
+            
+            if not char_result:
+                conn.rollback()
+                return False, "Персонаж не найден"
+            
+            current_mana, max_mana = char_result
+            new_mana = min(max_mana, current_mana + effect_amount)
+            mana_restored = new_mana - current_mana
+            
+            # Обновляем ману
+            cursor.execute("""
+                UPDATE player_characters 
+                SET mana = %s
+                WHERE user_id = %s
+            """, (new_mana, user_id))
+            
+            message = f"Использовано {item_name}. Восстановлено {mana_restored} MP!"
+        else:
+            # Для других типов предметов
+            message = f"Предмет '{item_name}' использован!"
         
         conn.commit()
-        return True, f"Предмет '{item_name}' использован!"
+        return True, message
         
     except Exception as e:
         print(f"❌ Ошибка при использовании предмета: {e}")
