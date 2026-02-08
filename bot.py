@@ -1,8 +1,6 @@
 import os
 import logging
 import random
-import asyncio
-import time
 import html
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -15,21 +13,8 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-from database import (
-    init_db, 
-    create_character, 
-    get_character, 
-    get_all_races,
-    update_character_stats,
-    add_experience,
-    add_gold,
-    log_battle,
-    buy_item,
-    get_inventory,
-    add_stat_point,
-    get_top_players,
-    use_item
-)
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 # Настройка логирования
 logging.basicConfig(
@@ -46,6 +31,46 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
 # Глобальная переменная для хранения данных о боях
 battle_sessions = {}
+
+# Константы для database.py
+RACES = {
+    "human": {
+        "name": "Человек",
+        "strength": 10,
+        "agility": 10,
+        "intelligence": 10,
+        "health": 100,
+        "mana": 50,
+        "racial_ability": "Адаптивность: +1 ко всем характеристикам"
+    },
+    "elf": {
+        "name": "Эльф",
+        "strength": 8,
+        "agility": 14,
+        "intelligence": 12,
+        "health": 80,
+        "mana": 100,
+        "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
+    },
+    "dwarf": {
+        "name": "Дварф",
+        "strength": 14,
+        "agility": 8,
+        "intelligence": 9,
+        "health": 120,
+        "mana": 30,
+        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
+    },
+    "orc": {
+        "name": "Орк",
+        "strength": 16,
+        "agility": 9,
+        "intelligence": 6,
+        "health": 110,
+        "mana": 20,
+        "racial_ability": "Ярость: двойной урон при низком здоровье"
+    }
+}
 
 # Ссылки на изображения
 IMAGE_URLS = {
@@ -379,7 +404,282 @@ ENEMIES = {
     }
 }
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+# --- ФУНКЦИИ ДЛЯ РАБОТЫ С БАЗОЙ ДАННЫХ ---
+
+def get_connection():
+    """Создание подключения к PostgreSQL"""
+    database_url = os.getenv('DATABASE_URL')
+    
+    if not database_url:
+        # Для локальной разработки
+        db_host = os.getenv('PGHOST', 'localhost')
+        db_port = os.getenv('PGPORT', '5432')
+        db_name = os.getenv('PGDATABASE', 'railway')
+        db_user = os.getenv('PGUSER', 'postgres')
+        db_password = os.getenv('PGPASSWORD', '')
+        database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    
+    try:
+        conn = psycopg2.connect(database_url, sslmode='require')
+        return conn
+    except Exception as e:
+        print(f"❌ Ошибка подключения с sslmode=require: {e}")
+        # Пробуем подключиться без sslmode
+        try:
+            conn = psycopg2.connect(database_url)
+            return conn
+        except Exception as e2:
+            print(f"❌ Не удалось подключиться к БД: {e2}")
+            return None
+
+def init_db():
+    """Инициализация таблиц в базе данных"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для инициализации")
+            return
+        
+        cursor = conn.cursor()
+        
+        # Создаем таблицу, если она не существует
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS player_characters (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL UNIQUE,
+                character_name VARCHAR(100) NOT NULL,
+                race VARCHAR(50) NOT NULL,
+                level INTEGER DEFAULT 1,
+                experience INTEGER DEFAULT 0,
+                rank VARCHAR(10) DEFAULT 'E',
+                strength INTEGER DEFAULT 10,
+                agility INTEGER DEFAULT 10,
+                intelligence INTEGER DEFAULT 10,
+                health INTEGER DEFAULT 100,
+                max_health INTEGER DEFAULT 100,
+                mana INTEGER DEFAULT 50,
+                max_mana INTEGER DEFAULT 50,
+                gold INTEGER DEFAULT 100,
+                stat_points INTEGER DEFAULT 3,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                battle_wins INTEGER DEFAULT 0,
+                battle_losses INTEGER DEFAULT 0
+            )
+        """)
+        
+        # Проверяем, есть ли столбец rank, если нет - добавляем
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_characters' and column_name='rank'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN rank VARCHAR(10) DEFAULT 'E'")
+            print("✅ Столбец 'rank' добавлен в таблицу 'player_characters'")
+        
+        print("✅ Таблица 'player_characters' создана/обновлена")
+        
+        # Создаем таблицу для логов боев
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS battle_logs (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                enemy_type VARCHAR(100),
+                result VARCHAR(50),
+                damage_dealt INTEGER DEFAULT 0,
+                damage_taken INTEGER DEFAULT 0,
+                gold_earned INTEGER DEFAULT 0,
+                experience_earned INTEGER DEFAULT 0,
+                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # УДАЛЯЕМ СТАРУЮ ТАБЛИЦУ ИНВЕНТАРЯ, ЕСЛИ ОНА СУЩЕСТВУЕТ
+        cursor.execute("DROP TABLE IF EXISTS player_inventory CASCADE")
+        print("🗑️ Старая таблица инвентаря удалена")
+        
+        # СОЗДАЕМ НОВУЮ ТАБЛИЦУ ИНВЕНТАРЯ БЕЗ UNIQUE КОНСТРЕЙНТОВ
+        cursor.execute("""
+            CREATE TABLE player_inventory (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                item_key VARCHAR(100) NOT NULL,
+                item_type VARCHAR(50) NOT NULL,
+                item_name VARCHAR(100) NOT NULL,
+                quantity INTEGER DEFAULT 1,
+                effect_amount INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Создаем индексы для быстрого поиска, но НЕ уникальные
+        cursor.execute("""
+            CREATE INDEX idx_player_inventory_user_item 
+            ON player_inventory (user_id, item_key)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX idx_player_inventory_user 
+            ON player_inventory (user_id)
+        """)
+        
+        conn.commit()
+        print("✅ База данных полностью пересоздана и инициализирована")
+        print("✅ Таблица 'player_inventory' создана без уникальных ограничений")
+        
+    except Exception as e:
+        print(f"❌ Ошибка при создании таблиц: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def create_character(user_id, username, character_name, race):
+    """Создание нового персонажа"""
+    conn = None
+    cursor = None
+    try:
+        # Проверяем, что раса существует
+        if race not in RACES:
+            return False, "Неизвестная раса"
+        
+        race_data = RACES[race]
+        
+        conn = get_connection()
+        if not conn:
+            return False, "Не удалось подключиться к базе данных"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли уже персонаж у пользователя
+        cursor.execute("SELECT id FROM player_characters WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            return False, "У вас уже есть персонаж!"
+        
+        # Создаем персонажа с характеристиками расы
+        cursor.execute("""
+            INSERT INTO player_characters 
+            (user_id, character_name, race, level, experience, rank,
+             strength, agility, intelligence, health, max_health, 
+             mana, max_mana, gold, stat_points)
+            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, 100, 3)
+        """, (
+            user_id, character_name, race,
+            race_data['strength'], race_data['agility'], race_data['intelligence'],
+            race_data['health'], race_data['health'],
+            race_data['mana'], race_data['mana']
+        ))
+        
+        conn.commit()
+        print(f"✅ Персонаж создан для user_id: {user_id}")
+        return True, "Персонаж успешно создан!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при создании персонажа: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка при создании персонажа: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_character(user_id):
+    """Получение информации о персонаже"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            print("❌ Не удалось подключиться к БД для получения персонажа")
+            return None
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT * FROM player_characters 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        character = cursor.fetchone()
+        
+        if character:
+            # Обновляем время последней активности
+            cursor.execute("""
+                UPDATE player_characters 
+                SET last_active = CURRENT_TIMESTAMP 
+                WHERE user_id = %s
+            """, (user_id,))
+            
+            # Если ранг не установлен, рассчитываем его
+            if not character.get('rank'):
+                rank = calculate_rank(character['level'], character['experience'])
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET rank = %s
+                    WHERE user_id = %s
+                """, (rank, user_id))
+                character['rank'] = rank
+            
+            conn.commit()
+        
+        return character
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении персонажа: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_all_races():
+    """Получение списка всех рас"""
+    return RACES
+
+def update_character_stats(user_id, **kwargs):
+    """Обновление характеристик персонажа"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        set_clauses = []
+        values = []
+        for key, value in kwargs.items():
+            set_clauses.append(f"{key} = %s")
+            values.append(value)
+        
+        values.append(user_id)
+        query = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id = %s"
+        
+        cursor.execute(query, values)
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении персонажа: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def calculate_rank(level, experience):
     """Определение ранга на основе уровня и опыта"""
@@ -395,6 +695,508 @@ def calculate_rank(level, experience):
         return 'D'
     else:
         return 'E'
+
+def add_experience(user_id, exp_amount):
+    """Добавление опыта персонажу - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, False, 0, 0
+        
+        cursor = conn.cursor()
+        
+        # Получаем текущие данные персонажа
+        cursor.execute("""
+            SELECT experience, level, stat_points, rank 
+            FROM player_characters WHERE user_id = %s
+        """, (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, False, 0, 0
+        
+        current_exp, current_level, current_stat_points, current_rank = result
+        
+        # Добавляем опыт
+        new_exp = current_exp + exp_amount
+        new_level = current_level
+        level_up = False
+        stat_points_gained = 0
+        
+        # Проверяем, достаточно ли опыта для повышения уровня
+        # Формула: для перехода с уровня N на N+1 нужно N * 100 опыта
+        
+        while True:
+            # Опыт необходимый для следующего уровня (от текущего)
+            # Общий опыт для уровня L: сумма от 1 до L (i * 100)
+            total_exp_for_next_level = ((new_level) * (new_level + 1) * 100) // 2
+            
+            if new_exp >= total_exp_for_next_level:
+                new_level += 1
+                level_up = True
+                stat_points_gained += 3
+            else:
+                break
+        
+        if level_up:
+            # Рассчитываем новый ранг
+            new_rank = calculate_rank(new_level, new_exp)
+            
+            # Увеличиваем характеристики при повышении уровня
+            cursor.execute("""
+                UPDATE player_characters 
+                SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
+                    max_health = max_health + 10,
+                    max_mana = max_mana + 5,
+                    health = max_health,  -- Полное восстановление здоровья
+                    mana = max_mana       -- Полное восстановление маны
+                WHERE user_id = %s
+            """, (new_exp, new_level, stat_points_gained, new_rank, user_id))
+        else:
+            # Обновляем только опыт
+            cursor.execute("""
+                UPDATE player_characters 
+                SET experience = %s
+                WHERE user_id = %s
+            """, (new_exp, user_id))
+        
+        conn.commit()
+        return True, level_up, new_level, stat_points_gained
+        
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении опыта: {e}")
+        if conn:
+            conn.rollback()
+        return False, False, 0, 0
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def add_stat_point(user_id, stat_type):
+    """Распределение очка характеристики"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем, есть ли очки характеристик
+        cursor.execute("SELECT stat_points FROM player_characters WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Персонаж не найден"
+        
+        stat_points = result[0]
+        
+        if stat_points <= 0:
+            return False, "У тебя нет очков характеристик для распределения!"
+        
+        # Определяем, какую характеристику улучшаем
+        if stat_type == 'strength':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET strength = strength + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        elif stat_type == 'agility':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET agility = agility + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        elif stat_type == 'intelligence':
+            cursor.execute("""
+                UPDATE player_characters 
+                SET intelligence = intelligence + 1, stat_points = stat_points - 1
+                WHERE user_id = %s
+            """, (user_id,))
+            
+        else:
+            return False, "Неизвестная характеристика"
+        
+        conn.commit()
+        return True, f"Характеристика '{stat_type}' увеличена на 1!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при распределении характеристики: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def add_gold(user_id, gold_amount):
+    """Добавление золота персонажу"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE player_characters 
+            SET gold = gold + %s 
+            WHERE user_id = %s
+        """, (gold_amount, user_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при добавлении золота: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
+    """Покупка предмета в магазине"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Проверяем баланс игрока
+        cursor.execute("SELECT gold FROM player_characters WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Персонаж не найден"
+        
+        current_gold = result[0]
+        
+        if current_gold < price:
+            return False, f"Недостаточно золота! Нужно {price}, есть {current_gold}"
+        
+        # Списываем золото
+        cursor.execute("""
+            UPDATE player_characters 
+            SET gold = gold - %s 
+            WHERE user_id = %s
+        """, (price, user_id))
+        
+        # Устанавливаем effect_amount по умолчанию, если не передан
+        if effect_amount is None:
+            if 'small_health_potion' in item_key:
+                effect_amount = 30
+            elif 'large_health_potion' in item_key:
+                effect_amount = 60
+            elif 'small_mana_potion' in item_key:
+                effect_amount = 20
+            elif 'large_mana_potion' in item_key:
+                effect_amount = 40
+            else:
+                effect_amount = 0
+        
+        # Вставляем новую запись
+        cursor.execute("""
+            INSERT INTO player_inventory 
+            (user_id, item_key, item_type, item_name, quantity, effect_amount)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, item_key, item_type, item_name, 1, effect_amount))
+        
+        conn.commit()
+        return True, f"Предмет '{item_name}' куплен успешно!"
+        
+    except Exception as e:
+        print(f"❌ Ошибка при покупке предмета: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка при покупке: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_inventory(user_id):
+    """Получение инвентаря игрока"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Группируем предметы по item_key и суммируем количество
+        cursor.execute("""
+            SELECT 
+                item_key,
+                item_type,
+                item_name,
+                SUM(quantity) as quantity,
+                MAX(effect_amount) as effect_amount
+            FROM player_inventory 
+            WHERE user_id = %s AND quantity > 0
+            GROUP BY item_key, item_type, item_name
+            ORDER BY 
+                CASE item_type
+                    WHEN 'potion' THEN 1
+                    WHEN 'weapon' THEN 2
+                    WHEN 'armor' THEN 3
+                    WHEN 'artifact' THEN 4
+                    ELSE 5
+                END,
+                item_name
+        """, (user_id,))
+        
+        return cursor.fetchall()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении инвентаря: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def use_item(user_id, item_key, item_type, item_name, effect_amount):
+    """Использование предмета из инвентаря"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False, "Ошибка подключения к БД"
+        
+        cursor = conn.cursor()
+        
+        # Находим первую запись с этим предметом
+        cursor.execute("""
+            SELECT id, quantity, effect_amount FROM player_inventory 
+            WHERE user_id = %s AND item_key = %s AND quantity > 0
+            ORDER BY id
+            LIMIT 1
+        """, (user_id, item_key))
+        
+        result = cursor.fetchone()
+        if not result:
+            return False, "Предмет не найден в инвентаре"
+        
+        item_id, quantity, db_effect_amount = result
+        
+        # Используем effect_amount из базы, если он не передан
+        if effect_amount is None or effect_amount == 0:
+            effect_amount = db_effect_amount or 0
+        
+        # Уменьшаем количество на 1
+        new_quantity = quantity - 1
+        
+        if new_quantity <= 0:
+            # Удаляем запись, если предметы закончились
+            cursor.execute("""
+                DELETE FROM player_inventory 
+                WHERE id = %s
+            """, (item_id,))
+        else:
+            # Обновляем количество
+            cursor.execute("""
+                UPDATE player_inventory 
+                SET quantity = %s
+                WHERE id = %s
+            """, (new_quantity, item_id))
+        
+        # Восстанавливаем здоровье или ману
+        message = ""
+        
+        if 'health_potion' in item_key:
+            # Зелье здоровья - получаем текущее состояние персонажа
+            cursor.execute("""
+                SELECT health, max_health FROM player_characters 
+                WHERE user_id = %s
+            """, (user_id,))
+            char_result = cursor.fetchone()
+            
+            if not char_result:
+                conn.rollback()
+                return False, "Персонаж не найден"
+            
+            current_health, max_health = char_result
+            new_health = min(max_health, current_health + effect_amount)
+            health_restored = new_health - current_health
+            
+            # Обновляем здоровье
+            cursor.execute("""
+                UPDATE player_characters 
+                SET health = %s
+                WHERE user_id = %s
+            """, (new_health, user_id))
+            
+            message = f"Использовано {item_name}. Восстановлено {health_restored} HP!"
+            
+        elif 'mana_potion' in item_key:
+            # Зелье маны - получаем текущее состояние персонажа
+            cursor.execute("""
+                SELECT mana, max_mana FROM player_characters 
+                WHERE user_id = %s
+            """, (user_id,))
+            char_result = cursor.fetchone()
+            
+            if not char_result:
+                conn.rollback()
+                return False, "Персонаж не найден"
+            
+            current_mana, max_mana = char_result
+            new_mana = min(max_mana, current_mana + effect_amount)
+            mana_restored = new_mana - current_mana
+            
+            # Обновляем ману
+            cursor.execute("""
+                UPDATE player_characters 
+                SET mana = %s
+                WHERE user_id = %s
+            """, (new_mana, user_id))
+            
+            message = f"Использовано {item_name}. Восстановлено {mana_restored} MP!"
+        else:
+            # Для других типов предметов
+            message = f"Предмет '{item_name}' использован!"
+        
+        conn.commit()
+        return True, message
+        
+    except Exception as e:
+        print(f"❌ Ошибка при использовании предмета: {e}")
+        if conn:
+            conn.rollback()
+        return False, f"Ошибка: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0):
+    """Логирование боя"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO battle_logs 
+            (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка при логировании боя: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_player_stats(user_id):
+    """Получение статистики игрока"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT 
+                character_name,
+                race,
+                level,
+                rank,
+                experience,
+                stat_points,
+                battle_wins,
+                battle_losses,
+                gold,
+                created_at
+            FROM player_characters 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        return cursor.fetchone()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении статистики: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_top_players(limit=10):
+    """Получение топ-N игроков по уровню и опыту"""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT 
+                character_name,
+                race,
+                level,
+                rank,
+                experience,
+                battle_wins,
+                battle_losses,
+                gold,
+                created_at
+            FROM player_characters 
+            ORDER BY level DESC, experience DESC, battle_wins DESC
+            LIMIT %s
+        """, (limit,))
+        
+        return cursor.fetchall()
+        
+    except Exception as e:
+        print(f"❌ Ошибка при получении топа игроков: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def get_rank_icon(rank):
     """Получение иконки для ранга"""
@@ -460,6 +1262,51 @@ def get_next_rank_info(current_rank, current_level):
     else:
         return f"{get_rank_icon(next_rank)} {next_rank}-ранг (требуется {required_level} уровень)"
 
+def get_xp_progress(level, experience):
+    """Рассчитывает прогресс опыта для текущего уровня - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    # Рассчитываем опыт, необходимый для достижения текущего уровня
+    if level > 1:
+        # Опыт, который был нужен для достижения текущего уровня
+        xp_for_previous_levels = ((level - 1) * level * 100) // 2
+    else:
+        xp_for_previous_levels = 0
+    
+    # Опыт, который уже есть у игрока сверх необходимого для текущего уровня
+    current_xp_on_level = experience - xp_for_previous_levels
+    
+    # Опыт нужный для перехода на следующий уровень (для текущего уровня)
+    xp_for_next_level = level * 100
+    
+    # Не даем превысить максимум
+    if current_xp_on_level > xp_for_next_level:
+        current_xp_on_level = xp_for_next_level
+    
+    percent = current_xp_on_level / xp_for_next_level if xp_for_next_level > 0 else 0
+    
+    return current_xp_on_level, xp_for_next_level, percent
+
+def get_xp_bar(level, experience, length=10):
+    """Создает индикатор опыта - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    current_xp, max_xp, percent = get_xp_progress(level, experience)
+    
+    if max_xp <= 0:
+        return "▯" * length
+    
+    filled = int(length * percent)
+    empty = length - filled
+    
+    # Разные символы для заполненной части в зависимости от прогресса
+    if percent >= 1.0:
+        bar = "█" * length
+    elif percent >= 0.7:
+        bar = "▓" * filled + "░" * empty
+    elif percent >= 0.4:
+        bar = "▒" * filled + "░" * empty
+    else:
+        bar = "░" * filled + "░" * empty
+    
+    return f"{bar} {int(current_xp)}/{max_xp} XP"
+
 def create_progress_bar(current, maximum, length=10):
     """Создает текстовый индикатор прогресса"""
     if maximum <= 0:
@@ -511,38 +1358,6 @@ def get_mana_bar(current, maximum, length=10):
     
     bar = "🟦" * filled + "⬜" * empty
     return f"{bar} {current}/{maximum}"
-
-def get_xp_progress(level, experience):
-    """Рассчитывает прогресс опыта для текущего уровня"""
-    xp_for_next_level = level * 100
-    
-    xp_spent = 0
-    if level > 1:
-        xp_spent = ((level - 1) * level * 100) // 2
-    
-    current_xp_on_level = experience - xp_spent
-    max_xp_on_level = level * 100
-    
-    percent = min(current_xp_on_level / max_xp_on_level, 1.0) if max_xp_on_level > 0 else 0
-    
-    return current_xp_on_level, max_xp_on_level, percent
-
-def get_xp_bar(level, experience, length=10):
-    """Создает индикатор опыта"""
-    current_xp, max_xp, percent = get_xp_progress(level, experience)
-    
-    if max_xp <= 0:
-        return "▯" * length
-    
-    filled = int(length * percent)
-    empty = length - filled
-    
-    if percent >= 1.0:
-        bar = "⭐" * length
-    else:
-        bar = "✨" * filled + "⚫" * empty
-    
-    return f"{bar} {current_xp}/{max_xp} XP"
 
 # --- КЛАВИАТУРЫ ---
 
@@ -1156,7 +1971,8 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
                 
-                # Если еще есть очки, показываем обновленную клавиатуру
+                # Если еще есть очки, показываем обновленную клавиатур
+                # Если еще есть очки, показываем обновленную клавиатурку
                 if stat_points_left > 0:
                     # Обновляем сообщение с клавиатурой
                     await query.edit_message_text(
@@ -1305,7 +2121,7 @@ _Сила приходит с опытом, охотник. Стремись в�
     )
 
 async def show_profile(query, user_id):
-    """Показ профиля персонажа с ранговой системой"""
+    """Показ профиля персонажа с ПРАВИЛЬНОЙ системой опыта"""
     character = get_character(user_id)
     
     if not character:
@@ -1331,46 +2147,52 @@ async def show_profile(query, user_id):
     # Создаем индикаторы
     health_bar = get_health_bar(character['health'], character['max_health'])
     mana_bar = get_mana_bar(character['mana'], character['max_mana'])
-    xp_bar = get_xp_bar(character['level'], character['experience'])
+    
+    # Получаем информацию об опыте с ИСПРАВЛЕННОЙ функцией
+    current_xp, max_xp, percent = get_xp_progress(character['level'], character['experience'])
+    
+    # Информация о прогрессе
+    progress_info = ""
+    if current_xp >= max_xp:
+        progress_info = f"\n⚡ *ГОТОВ К ПОВЫШЕНИЮ УРОВНЯ!*"
+    else:
+        xp_needed_for_next_level = max_xp - current_xp
+        progress_info = f"\n⏫ До следующего уровня: *{xp_needed_for_next_level}* XP"
     
     # Получаем следующий ранг
     next_rank_info = get_next_rank_info(rank, character['level'])
     
-    # Проверяем регенерацию
-    last_regen = character.get('last_regeneration')
-    regen_info = ""
-    if last_regen:
-        if isinstance(last_regen, str):
-            try:
-                last_regen = datetime.fromisoformat(last_regen.replace('Z', '+00:00'))
-            except:
-                last_regen = None
-        
-        if last_regen:
-            time_diff = datetime.now() - last_regen
-            if time_diff.total_seconds() >= 300:
-                regen_info = "\n🔄 *Готов к регенерации!*"
-            else:
-                minutes_left = int((300 - time_diff.total_seconds()) / 60)
-                seconds_left = int(300 - time_diff.total_seconds()) % 60
-                regen_info = f"\n⏳ *Регенерация через:* {minutes_left}:{seconds_left:02d}"
-    
-    # Статистика характеристик
-    stat_points = character.get('stat_points', 0)
-    stats_info = ""
-    if stat_points > 0:
-        stats_info = f"\n\n🎯 *Нераспределенные очки:* `{stat_points}`"
-    
     await query.message.reply_photo(
         photo=image_url,
         caption=f"👤 *ПАСПОРТ ОХОТНИКА: {character['character_name']}*\n"
-               f"{rank_icon} *{rank}-ранг* • ⭐ Уровень {character['level']}\n\n"
+               f"{rank_icon} *{rank}-ранг* • ⭐ Уровень {character['level']}\n"
+               f"✨ *Накопленный опыт:* `{character['experience']}` XP\n\n"
                f"❤️ ЗДОРОВЬЕ\n{health_bar}\n\n"
                f"🔮 МАНА\n{mana_bar}\n\n"
-               f"✨ ОПЫТ\n{xp_bar}{regen_info}{stats_info}\n\n"
+               f"✨ *ПРОГРЕСС УРОВНЯ*\n"
+               f"📊 {get_xp_bar(character['level'], character['experience'])}"
+               f"{progress_info}\n\n"
                f"🎯 *Следующий ранг:* {next_rank_info}",
         parse_mode='Markdown'
     )
+    
+    # Добавляем подробную информацию о прокачке
+    if character['level'] < 30:  # Максимальный уровень
+        next_level_xp_needed = max_xp - current_xp
+        
+        if next_level_xp_needed > 0:
+            levelup_info = (
+                f"\n📈 *Детали прокачки:*\n"
+                f"• Уровень {character['level']} → {character['level'] + 1}\n"
+                f"• Опыт на уровне: {int(current_xp)}/{max_xp} XP\n"
+                f"• Прогресс: {percent:.1%}\n"
+                f"• Осталось: {next_level_xp_needed} XP\n"
+                f"• За уровень: +3 очка характеристик"
+            )
+        else:
+            levelup_info = "\n⚡ *ГОТОВ К ПОВЫШЕНИЮ УРОВНЯ!*\nЗагляни в главное меню для распределения характеристик!"
+    else:
+        levelup_info = "\n🏆 *ДОСТИГНУТ МАКСИМАЛЬНЫЙ УРОВЕНЬ!*"
     
     # Получаем инвентарь
     inventory = get_inventory(user_id)
@@ -1383,6 +2205,13 @@ async def show_profile(query, user_id):
             total_items += item['quantity']
         inventory_text += f"\n📦 Всего предметов: {total_items}"
     
+    # Статистика характеристик
+    stat_points = character.get('stat_points', 0)
+    stats_info = ""
+    if stat_points > 0:
+        stats_info = f"\n\n🎯 *Нераспределенные очки характеристик:* `{stat_points}`\n"
+        stats_info += f"_Нажми на кнопку '🌟 ПРОКАЧАТЬ ХАР-КИ' в главном меню!_"
+    
     profile_text = (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"⚔️ *БОЕВЫЕ ПАРАМЕТРЫ*\n"
@@ -1394,6 +2223,8 @@ async def show_profile(query, user_id):
         f"Золото: `{character['gold']}` монет\n\n"
         f"📜 *Достижения:*\n"
         f"⚔️ Побед: {character.get('battle_wins', 0)} | 💀 Поражений: {character.get('battle_losses', 0)}\n\n"
+        f"{levelup_info}\n"
+        f"{stats_info}\n\n"
         f"{inventory_text}\n\n"
         f"✨ *Расовый навык:*\n_{race_data.get('racial_ability', 'Нет')}_"
     )
@@ -1451,7 +2282,7 @@ async def show_inventory_menu(query, user_id, page=0):
     inventory_text += f"⚔️ Снаряжения: `{equipment_count}`\n\n"
     inventory_text += f"👇 *Выбери предмет для использования:*"
     
-    # Отправляем текстовое сообщение вместо фото, чтобы избежать ошибки
+    # Отправляем текстовое сообщение
     await query.message.reply_text(
         text=inventory_text,
         parse_mode='Markdown'
@@ -1582,6 +2413,8 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("ℹ️ Выбери предмет для использования", show_alert=False)
         return INVENTORY_MENU
 
+# --- ОБРАБОТЧИКИ БОЯ И ЛОКАЦИЙ ---
+
 async def show_battle_menu(query, user_id):
     """Показ меню выбора локации по рангу"""
     character = get_character(user_id)
@@ -1611,6 +2444,383 @@ async def show_battle_menu(query, user_id):
         parse_mode='Markdown',
         reply_markup=get_battle_menu_keyboard(character)
     )
+
+async def show_enemies_in_location(query, user_id, location_rank):
+    """Показ врагов в выбранной локации"""
+    character = get_character(user_id)
+    location = LOCATIONS.get(location_rank)
+    
+    if not character or not location:
+        await query.edit_message_text(
+            text="❌ Ошибка загрузки локации!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    rank_icon = get_rank_icon(location_rank)
+    
+    # Показываем информацию о локации
+    await query.message.reply_photo(
+        photo=location['image'],
+        caption=f"📍 *{location['name']}*\n{rank_icon} {location_rank}-ранг локация\n\n"
+               f"📜 {location['description']}\n\n"
+               f"⚔️ *Доступные враги:*",
+        parse_mode='Markdown'
+    )
+    
+    await query.message.reply_text(
+        text="Выбери противника для боя:",
+        reply_markup=get_location_enemies_keyboard(location_rank),
+        parse_mode='Markdown'
+    )
+
+async def start_battle(query, user_id, enemy_type):
+    """Начало боя с врагом"""
+    character = get_character(user_id)
+    
+    if not character:
+        await query.edit_message_text(
+            text="❌ Герой потерян во времени!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    enemy = ENEMIES.get(enemy_type)
+    
+    if not enemy:
+        await query.edit_message_text(
+            text="❌ Враг не найден!",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Проверяем, доступен ли враг для ранга игрока
+    player_rank = character.get('rank', 'E')
+    enemy_rank = enemy.get('rank', 'E')
+    
+    rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    player_rank_index = rank_order.index(player_rank)
+    enemy_rank_index = rank_order.index(enemy_rank)
+    
+    # Игрок может сражаться с врагами своего ранга и на 1 ранг выше
+    if enemy_rank_index > player_rank_index + 1:
+        await query.answer(
+            f"❌ Этот враг слишком силен для твоего {player_rank}-ранга!",
+            show_alert=True
+        )
+        return
+    
+    # Создаем сессию боя
+    battle_sessions[user_id] = {
+        'enemy': enemy.copy(),
+        'character': character.copy(),
+        'turn': 0,
+        'player_defending': False,
+        'enemy_defending': False,
+        'log': [],
+        'enemy_type': enemy_type
+    }
+    
+    enemy_rank_icon = get_rank_icon(enemy_rank)
+    
+    await query.message.reply_photo(
+        photo=enemy['image'],
+        caption=f"🔥 *БОЙ НАЧАЛСЯ!* 🔥\n━━━━━━━━━━━━━━━━\n"
+               f"👿 Противник: *{enemy['name']}*\n"
+               f"{enemy_rank_icon} *Ранг врага:* {enemy_rank}\n"
+               f"📜 _{enemy['description']}_",
+        parse_mode='Markdown'
+    )
+    
+    battle_log = battle_sessions[user_id]['log']
+    battle_log.append(f"🆚 *Статус:*")
+    
+    player_health_bar = get_health_bar(character['health'], character['max_health'], length=10)
+    battle_log.append(f"👤 ГЕРОЙ: {player_health_bar}")
+    
+    enemy_health_bar = get_health_bar(enemy['health'], enemy['max_health'], length=10)
+    battle_log.append(f"👿 ВРАГ: {enemy_health_bar}")
+    
+    battle_log.append("━━━━━━━━━━━━━━━━")
+    battle_log.append("⚡️ *Твой ход! Действуй!*")
+    
+    await query.message.reply_text(
+        text="\n".join(battle_log),
+        reply_markup=get_battle_action_keyboard(),
+        parse_mode='Markdown'
+    )
+
+async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик действий в бою с учетом маны"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    
+    if user_id not in battle_sessions:
+        await query.edit_message_text(
+            text="❌ Бой уже завершен. Следы врага остыли.",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return MAIN_MENU
+    
+    battle_data = battle_sessions[user_id]
+    character = battle_data['character']
+    enemy = battle_data['enemy']
+    
+    battle_data['log'] = []
+    battle_data['turn'] += 1
+    
+    battle_log = battle_data['log']
+    
+    # Действие игрока
+    if data == 'attack':
+        # Урон зависит от силы
+        base_damage = character['strength']
+        player_damage = random.randint(base_damage // 2, base_damage)
+        
+        # Эффект ловкости: шанс на двойной удар
+        agility_bonus = character['agility'] // 10
+        if random.randint(1, 100) <= (5 + agility_bonus):
+            player_damage *= 2
+            battle_log.append(f"⚡️ *КРИТИЧЕСКИЙ УДАР!* Ловкость помогла! Нанесено *{player_damage}* урона!")
+        elif battle_data['enemy_defending']:
+            player_damage = max(1, player_damage // 2)
+            battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
+        else:
+            battle_log.append(f"⚔️ Ты нанес *{player_damage}* урона!")
+        
+        enemy['health'] -= player_damage
+        enemy['health'] = max(0, enemy['health'])
+        
+    elif data == 'defend':
+        # Защита зависит от ловкости
+        agility_bonus = min(character['agility'] // 5, 50)
+        battle_data['player_defending'] = True
+        battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на {50 + agility_bonus}%")
+        
+    elif data == 'ability':
+        # Определяем стоимость маны для каждой расы
+        mana_costs = {
+            'human': 10,
+            'elf': 20,
+            'dwarf': 15,
+            'orc': 5
+        }
+        
+        mana_cost = mana_costs.get(character['race'], 10)
+        
+        # Проверяем, достаточно ли маны
+        if character['mana'] < mana_cost:
+            battle_log.append(f"❌ *НЕДОСТАТОЧНО МАНЫ!* Нужно {mana_cost} маны, а у тебя {character['mana']}.")
+        else:
+            # Отнимаем ману
+            character['mana'] -= mana_cost
+            
+            if character['race'] == 'human':
+                # Адаптивность: увеличение всех характеристик
+                int_bonus = character['intelligence'] // 10
+                battle_data['player_defending'] = True
+                battle_log.append(f"✨ *Адаптивность!* Затрачено {mana_cost} маны. Все характеристики временно увеличены на *+{int_bonus}* и поднят щит!")
+                
+            elif character['race'] == 'elf':
+                # Магический дар: урон зависит от интеллекта
+                base_magic = character['intelligence']
+                if random.random() < 0.3:
+                    damage = base_magic * 2
+                    battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Затрачено {mana_cost} маны. Магия нанесла *{damage}* урона!")
+                    enemy['health'] -= damage
+                else:
+                    damage = base_magic
+                    battle_log.append(f"🏹 *Точный выстрел!* Затрачено {mana_cost} маны. Нанесено *{damage}* урона!")
+                    enemy['health'] -= damage
+                
+            elif character['race'] == 'dwarf':
+                # Каменная кожа: лечение
+                heal_amount = character['max_health'] // 10 + random.randint(5, 15)
+                character['health'] = min(character['max_health'], character['health'] + heal_amount)
+                battle_data['player_defending'] = True
+                battle_log.append(f"🏔 *Каменная кожа!* Затрачено {mana_cost} маны. Восстановлено *{heal_amount}* HP и поднят щит!")
+                
+            elif character['race'] == 'orc':
+                # Ярость: урон зависит от силы
+                damage = character['strength'] * 2 + random.randint(0, 5)
+                self_damage = random.randint(1, 5)
+                enemy['health'] -= damage
+                character['health'] -= self_damage
+                battle_log.append(f"🩸 *ЯРОСТЬ!* Затрачено {mana_cost} маны. Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
+            
+            battle_log.append(f"🔮 Осталось маны: {character['mana']}/{character['max_mana']}")
+            
+    elif data == 'flee':
+        # Шанс сбежать зависит от ловкости
+        agility_bonus = character['agility'] // 5
+        flee_chance = 50 + agility_bonus
+        
+        if random.randint(1, 100) <= flee_chance:
+            battle_log.append("🏃💨 *ПОБЕГ УДАЛСЯ!* Ты растворился в тени...")
+            del battle_sessions[user_id]
+            await query.edit_message_text(
+                text="\n".join(battle_log),
+                parse_mode='Markdown',
+                reply_markup=get_main_menu_keyboard(user_id)
+            )
+            return MAIN_MENU
+        else:
+            battle_log.append("🚫 *НЕУДАЧА!* Враг перекрыл путь к отступлению!")
+    
+    # Проверяем, не убит ли враг ДО его хода
+    if enemy['health'] <= 0:
+        battle_log.append("━━━━━━━━━━━━━━━━")
+        battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
+        battle_log.append(f"Монстр {enemy['name']} повержен!")
+        
+        exp_gained = enemy['exp']
+        gold_gained = enemy['gold']
+        
+        battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
+        battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
+        
+        # Добавляем опыт и проверяем повышение уровня
+        success, level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
+        
+        if success and level_up:
+            # Рассчитываем новый ранг
+            new_rank = calculate_rank(new_level, character['experience'] + exp_gained)
+            battle_log.append(f"🎯 *НОВЫЙ УРОВЕНЬ!* Ты достиг {new_level} уровня!")
+            battle_log.append(f"✨ Получено *{stat_points_gained}* очков характеристик!")
+            
+            if new_rank != character.get('rank', 'E'):
+                battle_log.append(f"🏆 *НОВЫЙ РАНГ!* Теперь ты {get_rank_icon(new_rank)} {new_rank}-ранг охотник!")
+        
+        update_character_stats(
+            user_id, 
+            health=character['health'],
+            mana=character['mana'],
+            battle_wins=character.get('battle_wins', 0) + 1,
+            gold=character['gold'] + gold_gained
+        )
+        add_gold(user_id, gold_gained)
+        log_battle(user_id, enemy['name'], 'победа', 0, 0, gold_gained, exp_gained)
+        
+        del battle_sessions[user_id]
+        
+        await query.edit_message_text(
+            text="\n".join(battle_log),
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
+        return MAIN_MENU
+    
+    # Если враг еще жив, он делает ход
+    if enemy['health'] > 0:
+        enemy_action = random.choice(['attack', 'attack', 'defend'])
+        
+        if enemy_action == 'attack':
+            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+            
+            # Защита игрока снижает урон
+            if battle_data['player_defending']:
+                agility_bonus = min(character['agility'] // 5, 50)
+                reduction = 50 + agility_bonus
+                enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
+                battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
+            else:
+                battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
+            
+            character['health'] -= enemy_damage
+            character['health'] = max(0, character['health'])
+            battle_data['player_defending'] = False
+        else:
+            battle_data['enemy_defending'] = True
+            battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
+    
+    battle_data['enemy_defending'] = False
+    
+    # Проверка окончания боя (игрок погиб)
+    if character['health'] <= 0:
+        battle_log.append("━━━━━━━━━━━━━━━━")
+        battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
+        battle_log.append("Твоя история прервалась на этом месте.")
+        
+        update_character_stats(user_id, 
+            health=0,
+            mana=character['mana'],
+            battle_losses=character.get('battle_losses', 0) + 1
+        )
+        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
+        
+        del battle_sessions[user_id]
+        
+        await query.edit_message_text(
+            text="\n".join(battle_log),
+            parse_mode='Markdown',
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
+        return MAIN_MENU
+    
+    # Продолжение боя (оба живы)
+    player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
+    enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
+    player_mana_bar = get_mana_bar(max(0, character['mana']), character['max_mana'], length=8)
+    
+    status_text = (
+        f"⚔️ *Ход №{battle_data['turn']}*\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👤 *ТЫ:* {player_health_bar}\n"
+        f"🔮 *МАНА:* {player_mana_bar}\n"
+        f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
+        f"{chr(10).join(battle_log)}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"⚡️ *Твои действия:*"
+    )
+    
+    await query.edit_message_text(
+        text=status_text,
+        parse_mode='Markdown',
+        reply_markup=get_battle_action_keyboard()
+    )
+    return IN_BATTLE
+
+async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик меню боя"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data == 'back_to_main':
+        if user_id in battle_sessions:
+            del battle_sessions[user_id]
+        
+        await query.edit_message_text(
+            text="🔙 Ты возвращаешься в безопасность деревни...",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+        return MAIN_MENU
+    
+    elif data.startswith('location_'):
+        location_rank = data[9:]
+        await show_enemies_in_location(query, user_id, location_rank)
+        return BATTLE_MENU
+    
+    elif data.startswith('battle_'):
+        enemy_type = data[7:]
+        await start_battle(query, user_id, enemy_type)
+        return IN_BATTLE
+    
+    elif data == 'back_to_battle_menu':
+        await show_battle_menu(query, user_id)
+        return BATTLE_MENU
+
+# --- ОБРАБОТЧИКИ МАГАЗИНА ---
 
 async def show_shop(query, user_id):
     """Показ магазина"""
@@ -1768,6 +2978,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ У тебя недостаточно высокий ранг для этого предмета!", show_alert=True)
         return SHOP_MENU
 
+# --- ОБРАБОТЧИКИ СТАТИСТИКИ И ТОПА ---
+
 async def show_stats(query, user_id):
     """Показ статистики с топом игроков"""
     character = get_character(user_id)
@@ -1783,6 +2995,7 @@ async def show_stats(query, user_id):
     total_battles = character.get('battle_wins', 0) + character.get('battle_losses', 0)
     win_rate = (character.get('battle_wins', 0) / total_battles * 100) if total_battles > 0 else 0
     
+    # Получаем прогресс опыта
     current_xp, max_xp, percent = get_xp_progress(character['level'], character['experience'])
     
     rank = character.get('rank', 'E')
@@ -1794,7 +3007,7 @@ async def show_stats(query, user_id):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"⭐ *Уровень:* `{character['level']}`\n"
         f"✨ *Опыт:* `{character['experience']}` XP\n"
-        f"📊 *Прогресс:* `{current_xp}/{max_xp}` ({percent:.1%})\n"
+        f"📊 *Прогресс на уровне:* `{int(current_xp)}/{max_xp}` ({percent:.1%})\n"
         f"{get_xp_bar(character['level'], character['experience'], length=15)}\n\n"
         f"💪 *Характеристики:*\n"
         f"Сила: `{character['strength']}` | "
@@ -2009,388 +3222,11 @@ _Создай свою легенду!_ 🏹
         reply_markup=get_main_menu_keyboard(query.from_user.id)
     )
 
-# --- ОБРАБОТЧИКИ БОЯ ---
-
-async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик меню боя"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    data = query.data
-    
-    if data == 'back_to_main':
-        if user_id in battle_sessions:
-            del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="🔙 Ты возвращаешься в безопасность деревни...",
-            reply_markup=get_main_menu_keyboard(user_id),
-            parse_mode='Markdown'
-        )
-        return MAIN_MENU
-    
-    elif data.startswith('location_'):
-        location_rank = data[9:]
-        await show_enemies_in_location(query, user_id, location_rank)
-        return BATTLE_MENU
-    
-    elif data.startswith('battle_'):
-        enemy_type = data[7:]
-        await start_battle(query, user_id, enemy_type)
-        return IN_BATTLE
-    
-    elif data == 'back_to_battle_menu':
-        await show_battle_menu(query, user_id)
-        return BATTLE_MENU
-
-async def show_enemies_in_location(query, user_id, location_rank):
-    """Показ врагов в выбранной локации"""
-    character = get_character(user_id)
-    location = LOCATIONS.get(location_rank)
-    
-    if not character or not location:
-        await query.edit_message_text(
-            text="❌ Ошибка загрузки локации!",
-            reply_markup=get_main_menu_keyboard(user_id),
-            parse_mode='Markdown'
-        )
-        return
-    
-    rank_icon = get_rank_icon(location_rank)
-    
-    # Показываем информацию о локации
-    await query.message.reply_photo(
-        photo=location['image'],
-        caption=f"📍 *{location['name']}*\n{rank_icon} {location_rank}-ранг локация\n\n"
-               f"📜 {location['description']}\n\n"
-               f"⚔️ *Доступные враги:*",
-        parse_mode='Markdown'
-    )
-    
-    await query.message.reply_text(
-        text="Выбери противника для боя:",
-        reply_markup=get_location_enemies_keyboard(location_rank),
-        parse_mode='Markdown'
-    )
-
-async def start_battle(query, user_id, enemy_type):
-    """Начало боя с врагом"""
-    character = get_character(user_id)
-    
-    if not character:
-        await query.edit_message_text(
-            text="❌ Герой потерян во времени!",
-            reply_markup=get_main_menu_keyboard(user_id),
-            parse_mode='Markdown'
-        )
-        return
-    
-    enemy = ENEMIES.get(enemy_type)
-    
-    if not enemy:
-        await query.edit_message_text(
-            text="❌ Враг не найден!",
-            reply_markup=get_main_menu_keyboard(user_id),
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Проверяем, доступен ли враг для ранга игрока
-    player_rank = character.get('rank', 'E')
-    enemy_rank = enemy.get('rank', 'E')
-    
-    rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
-    player_rank_index = rank_order.index(player_rank)
-    enemy_rank_index = rank_order.index(enemy_rank)
-    
-    # Игрок может сражаться с врагами своего ранга и на 1 ранг выше
-    if enemy_rank_index > player_rank_index + 1:
-        await query.answer(
-            f"❌ Этот враг слишком силен для твоего {player_rank}-ранга!",
-            show_alert=True
-        )
-        return
-    
-    # Создаем сессию боя
-    battle_sessions[user_id] = {
-        'enemy': enemy.copy(),
-        'character': character.copy(),
-        'turn': 0,
-        'player_defending': False,
-        'enemy_defending': False,
-        'log': [],
-        'enemy_type': enemy_type
-    }
-    
-    enemy_rank_icon = get_rank_icon(enemy_rank)
-    
-    await query.message.reply_photo(
-        photo=enemy['image'],
-        caption=f"🔥 *БОЙ НАЧАЛСЯ!* 🔥\n━━━━━━━━━━━━━━━━\n"
-               f"👿 Противник: *{enemy['name']}*\n"
-               f"{enemy_rank_icon} *Ранг врага:* {enemy_rank}\n"
-               f"📜 _{enemy['description']}_",
-        parse_mode='Markdown'
-    )
-    
-    battle_log = battle_sessions[user_id]['log']
-    battle_log.append(f"🆚 *Статус:*")
-    
-    player_health_bar = get_health_bar(character['health'], character['max_health'], length=10)
-    battle_log.append(f"👤 ГЕРОЙ: {player_health_bar}")
-    
-    enemy_health_bar = get_health_bar(enemy['health'], enemy['max_health'], length=10)
-    battle_log.append(f"👿 ВРАГ: {enemy_health_bar}")
-    
-    battle_log.append("━━━━━━━━━━━━━━━━")
-    battle_log.append("⚡️ *Твой ход! Действуй!*")
-    
-    await query.message.reply_text(
-        text="\n".join(battle_log),
-        reply_markup=get_battle_action_keyboard(),
-        parse_mode='Markdown'
-    )
-
-async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик действий в бою с учетом маны"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = query.from_user.id
-    data = query.data
-    
-    if user_id not in battle_sessions:
-        await query.edit_message_text(
-            text="❌ Бой уже завершен. Следы врага остыли.",
-            reply_markup=get_main_menu_keyboard(user_id),
-            parse_mode='Markdown'
-        )
-        return MAIN_MENU
-    
-    battle_data = battle_sessions[user_id]
-    character = battle_data['character']
-    enemy = battle_data['enemy']
-    
-    battle_data['log'] = []
-    battle_data['turn'] += 1
-    
-    battle_log = battle_data['log']
-    
-    # Действие игрока - теперь с учетом характеристик
-    if data == 'attack':
-        # Урон зависит от силы
-        base_damage = character['strength']
-        player_damage = random.randint(base_damage // 2, base_damage)
-        
-        # Эффект ловкости: шанс на двойной удар
-        agility_bonus = character['agility'] // 10  # Каждые 10 ловкости дают +1% шанс
-        if random.randint(1, 100) <= (5 + agility_bonus):  # Базовый шанс 5% + бонус ловкости
-            player_damage *= 2
-            battle_log.append(f"⚡️ *КРИТИЧЕСКИЙ УДАР!* Ловкость помогла! Нанесено *{player_damage}* урона!")
-        elif battle_data['enemy_defending']:
-            player_damage = max(1, player_damage // 2)
-            battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
-        else:
-            battle_log.append(f"⚔️ Ты нанес *{player_damage}* урона!")
-        
-        enemy['health'] -= player_damage
-        enemy['health'] = max(0, enemy['health'])  # Не даем здоровью уйти в минус
-        
-    elif data == 'defend':
-        # Защита зависит от ловкости
-        agility_bonus = min(character['agility'] // 5, 50)  # Максимум 50% бонуса
-        battle_data['player_defending'] = True
-        battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на {50 + agility_bonus}%")
-        
-    elif data == 'ability':
-        # Определяем стоимость маны для каждой расы
-        mana_costs = {
-            'human': 10,
-            'elf': 20,
-            'dwarf': 15,
-            'orc': 5
-        }
-        
-        mana_cost = mana_costs.get(character['race'], 10)
-        
-        # Проверяем, достаточно ли маны
-        if character['mana'] < mana_cost:
-            battle_log.append(f"❌ *НЕДОСТАТОЧНО МАНЫ!* Нужно {mana_cost} маны, а у тебя {character['mana']}.")
-        else:
-            # Отнимаем ману
-            character['mana'] -= mana_cost
-            
-            if character['race'] == 'human':
-                # Адаптивность: увеличение всех характеристик на основе интеллекта
-                int_bonus = character['intelligence'] // 10
-                battle_data['player_defending'] = True
-                battle_log.append(f"✨ *Адаптивность!* Затрачено {mana_cost} маны. Все характеристики временно увеличены на *+{int_bonus}* и поднят щит!")
-                
-            elif character['race'] == 'elf':
-                # Магический дар: урон зависит от интеллекта
-                base_magic = character['intelligence']
-                if random.random() < 0.3:  # 30% шанс
-                    damage = base_magic * 2
-                    battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Затрачено {mana_cost} маны. Магия нанесла *{damage}* урона!")
-                    enemy['health'] -= damage
-                else:
-                    damage = base_magic
-                    battle_log.append(f"🏹 *Точный выстрел!* Затрачено {mana_cost} маны. Нанесено *{damage}* урона!")
-                    enemy['health'] -= damage
-                
-            elif character['race'] == 'dwarf':
-                # Каменная кожа: лечение зависит от здоровья
-                heal_amount = character['max_health'] // 10 + random.randint(5, 15)
-                character['health'] = min(character['max_health'], character['health'] + heal_amount)
-                battle_data['player_defending'] = True
-                battle_log.append(f"🏔 *Каменная кожа!* Затрачено {mana_cost} маны. Восстановлено *{heal_amount}* HP и поднят щит!")
-                
-            elif character['race'] == 'orc':
-                # Ярость: урон зависит от силы
-                damage = character['strength'] * 2 + random.randint(0, 5)
-                self_damage = random.randint(1, 5)
-                enemy['health'] -= damage
-                character['health'] -= self_damage
-                battle_log.append(f"🩸 *ЯРОСТЬ!* Затрачено {mana_cost} маны. Сокрушительный удар на *{damage}*, но ты ранил себя на *{self_damage}*.")
-            
-            battle_log.append(f"🔮 Осталось маны: {character['mana']}/{character['max_mana']}")
-            
-    elif data == 'flee':
-        # Шанс сбежать зависит от ловкости
-        agility_bonus = character['agility'] // 5  # Каждые 5 ловкости дают +1% шанс
-        flee_chance = 50 + agility_bonus
-        
-        if random.randint(1, 100) <= flee_chance:
-            battle_log.append("🏃💨 *ПОБЕГ УДАЛСЯ!* Ты растворился в тени...")
-            del battle_sessions[user_id]
-            await query.edit_message_text(
-                text="\n".join(battle_log),
-                parse_mode='Markdown',
-                reply_markup=get_main_menu_keyboard(user_id)
-            )
-            return MAIN_MENU
-        else:
-            battle_log.append("🚫 *НЕУДАЧА!* Враг перекрыл путь к отступлению!")
-    
-    # Проверяем, не убит ли враг ДО его хода
-    if enemy['health'] <= 0:
-        battle_log.append("━━━━━━━━━━━━━━━━")
-        battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
-        battle_log.append(f"Монстр {enemy['name']} повержен!")
-        
-        exp_gained = enemy['exp']
-        gold_gained = enemy['gold']
-        
-        battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
-        battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
-        
-        # Добавляем опыт и проверяем повышение уровня
-        success, level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
-        
-        if success and level_up:
-            # Рассчитываем новый ранг
-            new_rank = calculate_rank(new_level, character['experience'] + exp_gained)
-            battle_log.append(f"🎯 *НОВЫЙ УРОВЕНЬ!* Ты достиг {new_level} уровня!")
-            battle_log.append(f"✨ Получено *{stat_points_gained}* очков характеристик!")
-            
-            if new_rank != character.get('rank', 'E'):
-                battle_log.append(f"🏆 *НОВЫЙ РАНГ!* Теперь ты {get_rank_icon(new_rank)} {new_rank}-ранг охотник!")
-        
-        update_character_stats(
-            user_id, 
-            health=character['health'],
-            mana=character['mana'],
-            battle_wins=character.get('battle_wins', 0) + 1,
-            gold=character['gold'] + gold_gained
-        )
-        add_gold(user_id, gold_gained)
-        log_battle(user_id, enemy['name'], 'победа', 0, 0, gold_gained, exp_gained)
-        
-        del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="\n".join(battle_log),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard(user_id)
-        )
-        return MAIN_MENU
-    
-    # Если враг еще жив, он делает ход
-    if enemy['health'] > 0:
-        enemy_action = random.choice(['attack', 'attack', 'defend'])
-        
-        if enemy_action == 'attack':
-            enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
-            
-            # Защита игрока снижает урон
-            if battle_data['player_defending']:
-                agility_bonus = min(character['agility'] // 5, 50)
-                reduction = 50 + agility_bonus
-                enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
-                battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
-            else:
-                battle_log.append(f"💔 Враг атаковал тебя на *{enemy_damage}* урона!")
-            
-            character['health'] -= enemy_damage
-            character['health'] = max(0, character['health'])  # Не даем здоровью уйти в минус
-            battle_data['player_defending'] = False
-        else:
-            battle_data['enemy_defending'] = True
-            battle_log.append(f"🛡️ Враг ушел в глухую оборону!")
-    
-    battle_data['enemy_defending'] = False
-    
-    # Проверка окончания боя (игрок погиб)
-    if character['health'] <= 0:
-        battle_log.append("━━━━━━━━━━━━━━━━")
-        battle_log.append("💀 *ТЫ ПАЛ В БОЮ...*")
-        battle_log.append("Твоя история прервалась на этом месте.")
-        
-        update_character_stats(user_id, 
-            health=0,
-            mana=character['mana'],
-            battle_losses=character.get('battle_losses', 0) + 1
-        )
-        log_battle(user_id, enemy['name'], 'поражение', 0, 0, 0, 0)
-        
-        del battle_sessions[user_id]
-        
-        await query.edit_message_text(
-            text="\n".join(battle_log),
-            parse_mode='Markdown',
-            reply_markup=get_main_menu_keyboard(user_id)
-        )
-        return MAIN_MENU
-    
-    # Продолжение боя (оба живы)
-    player_health_bar = get_health_bar(max(0, character['health']), character['max_health'], length=10)
-    enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
-    player_mana_bar = get_mana_bar(max(0, character['mana']), character['max_mana'], length=8)
-    
-    status_text = (
-        f"⚔️ *Ход №{battle_data['turn']}*\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"👤 *ТЫ:* {player_health_bar}\n"
-        f"🔮 *МАНА:* {player_mana_bar}\n"
-        f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
-        f"{chr(10).join(battle_log)}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"⚡️ *Твои действия:*"
-    )
-    
-    await query.edit_message_text(
-        text=status_text,
-        parse_mode='Markdown',
-        reply_markup=get_battle_action_keyboard()
-    )
-    return IN_BATTLE
-
 # --- ОСНОВНАЯ ФУНКЦИЯ ---
 
 def main():
     """Запуск бота"""
-    print("🚀 Запуск RPG бота с системой рангов, локаций и инвентарем...")
+    print("🚀 Запуск RPG бота с ИСПРАВЛЕННОЙ системой опыта...")
     
     if not TOKEN:
         print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в переменных окружения")
@@ -2452,7 +3288,7 @@ def main():
             drop_pending_updates=True,
             close_loop=False,
             allowed_updates=Update.ALL_TYPES,
-            poll_interval=1.0  # Увеличиваем интервал опроса
+            poll_interval=1.0
         )
         
     except Exception as e:
@@ -2465,3 +3301,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
