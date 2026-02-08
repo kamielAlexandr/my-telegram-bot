@@ -39,8 +39,9 @@ RACES = {
         "strength": 10,
         "agility": 10,
         "intelligence": 10,
-        "health": 100,
-        "mana": 50,
+        "vitality": 10,
+        "health_multiplier": 10,
+        "mana_multiplier": 5,
         "racial_ability": "Адаптивность: +1 ко всем характеристикам"
     },
     "elf": {
@@ -48,8 +49,9 @@ RACES = {
         "strength": 8,
         "agility": 14,
         "intelligence": 12,
-        "health": 80,
-        "mana": 100,
+        "vitality": 8,
+        "health_multiplier": 8,
+        "mana_multiplier": 10,
         "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
     },
     "dwarf": {
@@ -57,8 +59,9 @@ RACES = {
         "strength": 14,
         "agility": 8,
         "intelligence": 9,
-        "health": 120,
-        "mana": 30,
+        "vitality": 15,
+        "health_multiplier": 12,
+        "mana_multiplier": 3,
         "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
     },
     "orc": {
@@ -66,8 +69,9 @@ RACES = {
         "strength": 16,
         "agility": 9,
         "intelligence": 6,
-        "health": 110,
-        "mana": 20,
+        "vitality": 13,
+        "health_multiplier": 11,
+        "mana_multiplier": 2,
         "racial_ability": "Ярость: двойной урон при низком здоровье"
     }
 }
@@ -79,8 +83,8 @@ IMAGE_URLS = {
     'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
-    'goblin': 'https://dnd.su/gallery/articles/166_1_1630101300_s.png',
-    'slime': 'https://i.pinimg.com/736x/04/83/e5/0483e5f76f6b53e83f42d32242d37359.jpg',
+    'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
+    'slime': 'https://img.freepik.com/free-photo/green-slime-monster_23-2150911234.jpg',
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
     'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
@@ -94,15 +98,15 @@ IMAGE_URLS = {
     'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
     'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
     'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
-    'forest': 'https://i.pinimg.com/736x/6c/e6/4a/6ce64aa09233baac80c7a047b0e46251.jpg',
+    'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
     'training_camp': 'https://img.freepik.com/free-photo/medieval-camp-with-tents-night_107791-16981.jpg',
     'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
-    'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
+    'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
-    'inventory': 'https://i.pinimg.com/originals/c8/53/f8/c853f8df9894948af44cbf738e5ca57b.jpg'
+    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
 }
 
 # Товары в магазине
@@ -150,7 +154,7 @@ SHOP_ITEMS = {
     },
     'rank_c_armor': {
         'name': '🛡️ Броня C-ранга',
-        'description': '+10 к здоровью (требуется C-ранг)',
+        'description': '+10 к живучести (требуется C-ранг)',
         'price': 300,
         'type': 'armor',
         'effect': 10,
@@ -165,6 +169,15 @@ SHOP_ITEMS = {
         'effect': 15,
         'available': True,
         'required_rank': 'B'
+    },
+    'ring_of_agility': {
+        'name': '💍 Кольцо ловкости',
+        'description': '+8 к ловкости',
+        'price': 350,
+        'type': 'artifact',
+        'effect': 8,
+        'available': True,
+        'required_rank': 'C'
     }
 }
 
@@ -173,7 +186,8 @@ LOCATIONS = {
     'E': {
         'name': '🎪 Тренировочный лагерь',
         'description': 'Начинай свой путь здесь. Враги слабые, но хороши для тренировки.',
-        'enemies': ['wolf', 'goblin', 'slime', 'training_master'],
+        'enemies': ['wolf', 'goblin', 'slime', 'goblin_elite', 'training_master'],
+        'mini_boss': 'goblin_elite',
         'boss': 'training_master',
         'image': IMAGE_URLS['training_camp'],
         'min_level': 1,
@@ -183,7 +197,8 @@ LOCATIONS = {
     'D': {
         'name': '🌲 Лес призраков',
         'description': 'Лес наполнен низкоуровневыми монстрами. Подходит для охотников D-ранга.',
-        'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_guardian'],
+        'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_troll', 'forest_guardian'],
+        'mini_boss': 'forest_troll',
         'boss': 'forest_guardian',
         'image': IMAGE_URLS['forest'],
         'min_level': 5,
@@ -193,7 +208,8 @@ LOCATIONS = {
     'C': {
         'name': '🪦 Заброшенные катакомбы',
         'description': 'Катакомбы наполнены опасными существами. Требует навыков C-ранга.',
-        'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'catacomb_lord'],
+        'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord'],
+        'mini_boss': 'crypt_keeper',
         'boss': 'catacomb_lord',
         'image': IMAGE_URLS['dungeon'],
         'min_level': 10,
@@ -203,7 +219,8 @@ LOCATIONS = {
     'B': {
         'name': '🏰 Руины древнего замка',
         'description': 'Замок охраняют могущественные существа. Только для охотников B-ранга.',
-        'enemies': ['knight', 'vampire', 'warlock', 'castle_overlord'],
+        'enemies': ['knight', 'vampire', 'warlock', 'death_knight', 'castle_overlord'],
+        'mini_boss': 'death_knight',
         'boss': 'castle_overlord',
         'image': IMAGE_URLS['castle'],
         'min_level': 15,
@@ -213,7 +230,8 @@ LOCATIONS = {
     'A': {
         'name': '🌋 Врата в преисподнюю',
         'description': 'Портал в мир демонов. Только сильнейшие A-ранга могут здесь выжить.',
-        'enemies': ['demon', 'hellhound', 'infernal_mage', 'demon_general'],
+        'enemies': ['demon', 'hellhound', 'infernal_mage', 'pit_fiend', 'demon_general'],
+        'mini_boss': 'pit_fiend',
         'boss': 'demon_general',
         'image': IMAGE_URLS['hell_gate'],
         'min_level': 20,
@@ -223,7 +241,8 @@ LOCATIONS = {
     'S': {
         'name': '⚡ Трон божества',
         'description': 'Последнее испытание. Только S-ранг может бросить вызов богу.',
-        'enemies': ['dragon_ancient', 'titan', 'fallen_angel', 'final_god'],
+        'enemies': ['dragon_ancient', 'titan', 'fallen_angel', 'archangel', 'final_god'],
+        'mini_boss': 'archangel',
         'boss': 'final_god',
         'image': IMAGE_URLS['throne_god'],
         'min_level': 25,
@@ -238,8 +257,10 @@ BASE_ENEMIES = {
     'wolf': {
         'name': '🐺 Бешеный Волк',
         'base_health': 25,
-        'base_min_damage': 3,
-        'base_max_damage': 8,
+        'base_min_physical_damage': 3,
+        'base_max_physical_damage': 8,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 15,
         'base_gold': 10,
         'rank': 'E',
@@ -247,13 +268,20 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['wolf'],
         'difficulty': 'easy',
         'abilities': ['basic_attack'],
-        'special_chance': 0.1  # 10% шанс на двойной укус
+        'damage_type': 'physical',
+        'dodge_chance': 0.05,
+        'physical_resistance': 0.1,
+        'magic_resistance': 0.0,
+        'special_chance': 0.1,
+        'attack_range': 'melee'
     },
     'goblin': {
         'name': '👹 Гоблин-разведчик',
         'base_health': 30,
-        'base_min_damage': 4,
-        'base_max_damage': 10,
+        'base_min_physical_damage': 4,
+        'base_max_physical_damage': 10,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 20,
         'base_gold': 15,
         'rank': 'E',
@@ -261,13 +289,20 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['goblin'],
         'difficulty': 'easy',
         'abilities': ['basic_attack', 'dirty_trick'],
-        'special_chance': 0.15
+        'damage_type': 'physical',
+        'dodge_chance': 0.08,
+        'physical_resistance': 0.0,
+        'magic_resistance': 0.0,
+        'special_chance': 0.15,
+        'attack_range': 'melee'
     },
     'slime': {
         'name': '🟢 Ядовитая Слизь',
         'base_health': 40,
-        'base_min_damage': 2,
-        'base_max_damage': 6,
+        'base_min_physical_damage': 2,
+        'base_max_physical_damage': 6,
+        'base_min_magic_damage': 1,
+        'base_max_magic_damage': 3,
         'base_exp': 12,
         'base_gold': 8,
         'rank': 'E',
@@ -275,14 +310,43 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['slime'],
         'difficulty': 'easy',
         'abilities': ['basic_attack', 'poison_spit'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.02,
+        'physical_resistance': 0.3,
+        'magic_resistance': 0.1,
         'special_chance': 0.2,
-        'poison_chance': 0.3
+        'poison_chance': 0.3,
+        'attack_range': 'ranged'
+    },
+    'goblin_elite': {
+        'name': '👹 Элитный гоблин',
+        'base_health': 60,
+        'base_min_physical_damage': 8,
+        'base_max_physical_damage': 14,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
+        'base_exp': 35,
+        'base_gold': 25,
+        'rank': 'E',
+        'description': 'Опытный воин гоблинов, вооруженный стальным оружием.',
+        'image': IMAGE_URLS['goblin'],
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'power_strike', 'goblin_shout'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.1,
+        'physical_resistance': 0.15,
+        'magic_resistance': 0.05,
+        'special_chance': 0.25,
+        'mini_boss_bonus': 1.5,
+        'attack_range': 'melee'
     },
     'training_master': {
         'name': '⚔️ Мастер-тренер',
         'base_health': 80,
-        'base_min_damage': 8,
-        'base_max_damage': 15,
+        'base_min_physical_damage': 8,
+        'base_max_physical_damage': 15,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 50,
         'base_gold': 40,
         'rank': 'E',
@@ -290,16 +354,23 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['knight'],
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'training_strike', 'defensive_stance', 'encouraging_shout'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.15,
+        'physical_resistance': 0.2,
+        'magic_resistance': 0.1,
         'special_chance': 0.3,
-        'boss_bonus': 2.0
+        'boss_bonus': 2.0,
+        'attack_range': 'melee'
     },
     
     # D-ранг враги
     'forest_spider': {
         'name': '🕷️ Лесной Паук',
         'base_health': 50,
-        'base_min_damage': 6,
-        'base_max_damage': 12,
+        'base_min_physical_damage': 6,
+        'base_max_physical_damage': 12,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 30,
         'base_gold': 20,
         'rank': 'D',
@@ -307,14 +378,21 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/giant-spider_23-2150911307.jpg',
         'difficulty': 'medium',
         'abilities': ['basic_attack', 'web_shot', 'poison_bite'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.12,
+        'physical_resistance': 0.1,
+        'magic_resistance': 0.0,
         'special_chance': 0.2,
-        'web_chance': 0.25
+        'web_chance': 0.25,
+        'attack_range': 'melee'
     },
     'ghost': {
         'name': '👻 Призрак',
         'base_health': 45,
-        'base_min_damage': 5,
-        'base_max_damage': 11,
+        'base_min_physical_damage': 5,
+        'base_max_physical_damage': 11,
+        'base_min_magic_damage': 3,
+        'base_max_magic_damage': 7,
         'base_exp': 35,
         'base_gold': 25,
         'rank': 'D',
@@ -322,14 +400,20 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/ghost_23-2150762306.jpg',
         'difficulty': 'medium',
         'abilities': ['basic_attack', 'fear', 'phase_through'],
+        'damage_type': 'magic',
+        'dodge_chance': 0.2,
+        'physical_resistance': 0.5,
+        'magic_resistance': 0.2,
         'special_chance': 0.25,
-        'dodge_chance': 0.2
+        'attack_range': 'ranged'
     },
     'wild_boar': {
         'name': '🐗 Дикий Кабан',
         'base_health': 70,
-        'base_min_damage': 8,
-        'base_max_damage': 16,
+        'base_min_physical_damage': 8,
+        'base_max_physical_damage': 16,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 40,
         'base_gold': 30,
         'rank': 'D',
@@ -337,14 +421,43 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/wild-boar_23-2150911295.jpg',
         'difficulty': 'medium',
         'abilities': ['basic_attack', 'charge', 'tusks'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.05,
+        'physical_resistance': 0.25,
+        'magic_resistance': 0.0,
         'special_chance': 0.2,
-        'charge_chance': 0.3
+        'charge_chance': 0.3,
+        'attack_range': 'melee'
+    },
+    'forest_troll': {
+        'name': '🌳 Лесной тролль',
+        'base_health': 90,
+        'base_min_physical_damage': 12,
+        'base_max_physical_damage': 18,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
+        'base_exp': 60,
+        'base_gold': 45,
+        'rank': 'D',
+        'description': 'Мощное лесное существо с регенерацией.',
+        'image': 'https://img.freepik.com/free-photo/troll_23-2150911292.jpg',
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'regeneration', 'club_smash'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.08,
+        'physical_resistance': 0.3,
+        'magic_resistance': 0.1,
+        'special_chance': 0.3,
+        'mini_boss_bonus': 1.6,
+        'attack_range': 'melee'
     },
     'forest_guardian': {
         'name': '🌳 Хранитель Леса',
         'base_health': 120,
-        'base_min_damage': 10,
-        'base_max_damage': 20,
+        'base_min_physical_damage': 10,
+        'base_max_physical_damage': 20,
+        'base_min_magic_damage': 5,
+        'base_max_magic_damage': 10,
         'base_exp': 100,
         'base_gold': 80,
         'rank': 'D',
@@ -352,17 +465,24 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/treant_23-2150911290.jpg',
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'root_grab', 'healing_leaves', 'forest_rage'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.05,
+        'physical_resistance': 0.4,
+        'magic_resistance': 0.3,
         'special_chance': 0.35,
         'boss_bonus': 2.2,
-        'heal_chance': 0.2
+        'heal_chance': 0.2,
+        'attack_range': 'mixed'
     },
     
     # C-ранг враги
     'skeleton_warrior': {
         'name': '💀 Скелет-воин',
         'base_health': 80,
-        'base_min_damage': 10,
-        'base_max_damage': 18,
+        'base_min_physical_damage': 10,
+        'base_max_physical_damage': 18,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 60,
         'base_gold': 40,
         'rank': 'C',
@@ -370,14 +490,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['skeleton'],
         'difficulty': 'hard',
         'abilities': ['basic_attack', 'shield_bash', 'bone_armor'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.08,
+        'physical_resistance': 0.3,
+        'magic_resistance': 0.1,
         'special_chance': 0.25,
-        'block_chance': 0.3
+        'block_chance': 0.3,
+        'attack_range': 'melee'
     },
     'ghoul': {
         'name': '🧟 Гуль',
         'base_health': 90,
-        'base_min_damage': 9,
-        'base_max_damage': 17,
+        'base_min_physical_damage': 9,
+        'base_max_physical_damage': 17,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 65,
         'base_gold': 45,
         'rank': 'C',
@@ -385,14 +512,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['zombie'],
         'difficulty': 'hard',
         'abilities': ['basic_attack', 'life_drain', 'frenzy'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.06,
+        'physical_resistance': 0.2,
+        'magic_resistance': 0.0,
         'special_chance': 0.3,
-        'drain_chance': 0.25
+        'drain_chance': 0.25,
+        'attack_range': 'melee'
     },
     'dark_priest': {
         'name': '🕯️ Темный Жрец',
         'base_health': 70,
-        'base_min_damage': 12,
-        'base_max_damage': 22,
+        'base_min_physical_damage': 5,
+        'base_max_physical_damage': 10,
+        'base_min_magic_damage': 12,
+        'base_max_magic_damage': 22,
         'base_exp': 75,
         'base_gold': 55,
         'rank': 'C',
@@ -400,14 +534,43 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['mage'],
         'difficulty': 'hard',
         'abilities': ['basic_attack', 'dark_bolt', 'curse', 'sacrifice'],
+        'damage_type': 'magic',
+        'dodge_chance': 0.1,
+        'physical_resistance': 0.1,
+        'magic_resistance': 0.25,
         'special_chance': 0.35,
-        'spell_chance': 0.4
+        'spell_chance': 0.4,
+        'attack_range': 'ranged'
+    },
+    'crypt_keeper': {
+        'name': '💀 Хранитель склепа',
+        'base_health': 110,
+        'base_min_physical_damage': 12,
+        'base_max_physical_damage': 20,
+        'base_min_magic_damage': 8,
+        'base_max_magic_damage': 15,
+        'base_exp': 90,
+        'base_gold': 70,
+        'rank': 'C',
+        'description': 'Древний некромант, охраняющий катакомбы.',
+        'image': 'https://img.freepik.com/free-photo/necromancer_23-2150911284.jpg',
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'raise_dead', 'death_bolt', 'bone_shield'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.12,
+        'physical_resistance': 0.2,
+        'magic_resistance': 0.35,
+        'special_chance': 0.35,
+        'mini_boss_bonus': 1.7,
+        'attack_range': 'ranged'
     },
     'catacomb_lord': {
         'name': '👑 Повелитель Катакомб',
         'base_health': 180,
-        'base_min_damage': 15,
-        'base_max_damage': 25,
+        'base_min_physical_damage': 15,
+        'base_max_physical_damage': 25,
+        'base_min_magic_damage': 10,
+        'base_max_magic_damage': 18,
         'base_exp': 200,
         'base_gold': 150,
         'rank': 'C',
@@ -415,17 +578,24 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/skeleton-king_23-2150911291.jpg',
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'royal_decree', 'summon_skeletons', 'kings_wrath'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.1,
+        'physical_resistance': 0.35,
+        'magic_resistance': 0.25,
         'special_chance': 0.4,
         'boss_bonus': 2.5,
-        'summon_chance': 0.3
+        'summon_chance': 0.3,
+        'attack_range': 'mixed'
     },
     
     # B-ранг враги
     'knight': {
         'name': '⚔️ Проклятый рыцарь',
         'base_health': 120,
-        'base_min_damage': 15,
-        'base_max_damage': 25,
+        'base_min_physical_damage': 15,
+        'base_max_physical_damage': 25,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 100,
         'base_gold': 80,
         'rank': 'B',
@@ -433,14 +603,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['knight'],
         'difficulty': 'very_hard',
         'abilities': ['basic_attack', 'shield_wall', 'vengeful_strike', 'dark_aura'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.15,
+        'physical_resistance': 0.4,
+        'magic_resistance': 0.2,
         'special_chance': 0.3,
-        'defense_bonus': 0.4
+        'defense_bonus': 0.4,
+        'attack_range': 'melee'
     },
     'vampire': {
         'name': '🦇 Молодой вампир',
         'base_health': 100,
-        'base_min_damage': 18,
-        'base_max_damage': 28,
+        'base_min_physical_damage': 18,
+        'base_max_physical_damage': 28,
+        'base_min_magic_damage': 0,
+        'base_max_magic_damage': 0,
         'base_exp': 120,
         'base_gold': 100,
         'rank': 'B',
@@ -448,14 +625,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['vampire'],
         'difficulty': 'very_hard',
         'abilities': ['basic_attack', 'blood_drain', 'bat_swarm', 'hypnosis'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.2,
+        'physical_resistance': 0.25,
+        'magic_resistance': 0.15,
         'special_chance': 0.35,
-        'heal_from_damage': 0.3
+        'heal_from_damage': 0.3,
+        'attack_range': 'melee'
     },
     'warlock': {
         'name': '🔮 Чернокнижник',
         'base_health': 90,
-        'base_min_damage': 20,
-        'base_max_damage': 32,
+        'base_min_physical_damage': 5,
+        'base_max_physical_damage': 10,
+        'base_min_magic_damage': 20,
+        'base_max_magic_damage': 32,
         'base_exp': 130,
         'base_gold': 110,
         'rank': 'B',
@@ -463,14 +647,43 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['mage'],
         'difficulty': 'very_hard',
         'abilities': ['basic_attack', 'shadow_bolt', 'demon_summon', 'soul_burn'],
+        'damage_type': 'magic',
+        'dodge_chance': 0.12,
+        'physical_resistance': 0.1,
+        'magic_resistance': 0.4,
         'special_chance': 0.4,
-        'summon_chance': 0.25
+        'summon_chance': 0.25,
+        'attack_range': 'ranged'
+    },
+    'death_knight': {
+        'name': '💀 Рыцарь смерти',
+        'base_health': 150,
+        'base_min_physical_damage': 20,
+        'base_max_physical_damage': 30,
+        'base_min_magic_damage': 10,
+        'base_max_magic_damage': 18,
+        'base_exp': 180,
+        'base_gold': 140,
+        'rank': 'B',
+        'description': 'Бывший паладин, павший во тьму и получивший нежить.',
+        'image': 'https://img.freepik.com/free-photo/death-knight_23-2150911264.jpg',
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'death_coil', 'anti_magic_shell', 'army_of_the_dead'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.18,
+        'physical_resistance': 0.45,
+        'magic_resistance': 0.35,
+        'special_chance': 0.4,
+        'mini_boss_bonus': 1.8,
+        'attack_range': 'melee'
     },
     'castle_overlord': {
         'name': '🏰 Владыка Замка',
         'base_health': 250,
-        'base_min_damage': 20,
-        'base_max_damage': 35,
+        'base_min_physical_damage': 20,
+        'base_max_physical_damage': 35,
+        'base_min_magic_damage': 15,
+        'base_max_magic_damage': 25,
         'base_exp': 350,
         'base_gold': 250,
         'rank': 'B',
@@ -478,17 +691,24 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/dark-king_23-2150911261.jpg',
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'royal_command', 'castle_defense', 'tyrants_wrath'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.15,
+        'physical_resistance': 0.5,
+        'magic_resistance': 0.3,
         'special_chance': 0.45,
         'boss_bonus': 2.8,
-        'defense_bonus': 0.5
+        'defense_bonus': 0.5,
+        'attack_range': 'mixed'
     },
     
     # A-ранг враги
     'demon': {
         'name': '😈 Младший демон',
         'base_health': 150,
-        'base_min_damage': 25,
-        'base_max_damage': 40,
+        'base_min_physical_damage': 25,
+        'base_max_physical_damage': 40,
+        'base_min_magic_damage': 10,
+        'base_max_magic_damage': 20,
         'base_exp': 200,
         'base_gold': 150,
         'rank': 'A',
@@ -496,14 +716,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['demon'],
         'difficulty': 'extreme',
         'abilities': ['basic_attack', 'hellfire', 'demonic_claws', 'fear_aura'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.2,
+        'physical_resistance': 0.3,
+        'magic_resistance': 0.4,
         'special_chance': 0.35,
-        'fire_chance': 0.3
+        'fire_chance': 0.3,
+        'attack_range': 'mixed'
     },
     'hellhound': {
         'name': '🔥 Адская Гончая',
         'base_health': 180,
-        'base_min_damage': 22,
-        'base_max_damage': 38,
+        'base_min_physical_damage': 22,
+        'base_max_physical_damage': 38,
+        'base_min_magic_damage': 5,
+        'base_max_magic_damage': 10,
         'base_exp': 180,
         'base_gold': 140,
         'rank': 'A',
@@ -511,14 +738,21 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/hellhound_23-2150911276.jpg',
         'difficulty': 'extreme',
         'abilities': ['basic_attack', 'fire_breath', 'pack_hunt', 'hellish_howl'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.25,
+        'physical_resistance': 0.25,
+        'magic_resistance': 0.35,
         'special_chance': 0.3,
-        'burn_chance': 0.25
+        'burn_chance': 0.25,
+        'attack_range': 'melee'
     },
     'infernal_mage': {
         'name': '🔥 Инфернальный Маг',
         'base_health': 130,
-        'base_min_damage': 28,
-        'base_max_damage': 45,
+        'base_min_physical_damage': 10,
+        'base_max_physical_damage': 18,
+        'base_min_magic_damage': 28,
+        'base_max_magic_damage': 45,
         'base_exp': 220,
         'base_gold': 170,
         'rank': 'A',
@@ -526,14 +760,43 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/fire-mage_23-2150911269.jpg',
         'difficulty': 'extreme',
         'abilities': ['basic_attack', 'meteor_shower', 'demonic_gate', 'inferno'],
+        'damage_type': 'magic',
+        'dodge_chance': 0.15,
+        'physical_resistance': 0.15,
+        'magic_resistance': 0.5,
         'special_chance': 0.4,
-        'aoe_chance': 0.35
+        'aoe_chance': 0.35,
+        'attack_range': 'ranged'
+    },
+    'pit_fiend': {
+        'name': '😈 Повелитель бездны',
+        'base_health': 220,
+        'base_min_physical_damage': 28,
+        'base_max_physical_damage': 42,
+        'base_min_magic_damage': 20,
+        'base_max_magic_damage': 32,
+        'base_exp': 300,
+        'base_gold': 220,
+        'rank': 'A',
+        'description': 'Высший демон, командующий легионами преисподней.',
+        'image': 'https://img.freepik.com/free-photo/pit-fiend_23-2150911286.jpg',
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'summon_demons', 'infernal_rage', 'dimensional_rip'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.22,
+        'physical_resistance': 0.4,
+        'magic_resistance': 0.45,
+        'special_chance': 0.45,
+        'mini_boss_bonus': 1.9,
+        'attack_range': 'mixed'
     },
     'demon_general': {
         'name': '😈 Генерал Преисподней',
         'base_health': 350,
-        'base_min_damage': 30,
-        'base_max_damage': 50,
+        'base_min_physical_damage': 30,
+        'base_max_physical_damage': 50,
+        'base_min_magic_damage': 25,
+        'base_max_magic_damage': 40,
         'base_exp': 500,
         'base_gold': 350,
         'rank': 'A',
@@ -541,17 +804,24 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/demon-general_23-2150911263.jpg',
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'army_command', 'apocalypse', 'final_judgment'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.2,
+        'physical_resistance': 0.45,
+        'magic_resistance': 0.4,
         'special_chance': 0.5,
         'boss_bonus': 3.0,
-        'army_bonus': 1.5
+        'army_bonus': 1.5,
+        'attack_range': 'mixed'
     },
     
     # S-ранг враги
     'dragon_ancient': {
         'name': '🐉 Древний Дракон',
         'base_health': 400,
-        'base_min_damage': 35,
-        'base_max_damage': 55,
+        'base_min_physical_damage': 35,
+        'base_max_physical_damage': 55,
+        'base_min_magic_damage': 25,
+        'base_max_magic_damage': 40,
         'base_exp': 600,
         'base_gold': 400,
         'rank': 'S',
@@ -559,14 +829,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['dragon_ancient'],
         'difficulty': 'legendary',
         'abilities': ['basic_attack', 'dragon_breath', 'wing_gust', 'ancient_roar'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.25,
+        'physical_resistance': 0.5,
+        'magic_resistance': 0.5,
         'special_chance': 0.4,
-        'breath_chance': 0.35
+        'breath_chance': 0.35,
+        'attack_range': 'mixed'
     },
     'titan': {
         'name': '🏔️ Титан',
         'base_health': 500,
-        'base_min_damage': 40,
-        'base_max_damage': 60,
+        'base_min_physical_damage': 40,
+        'base_max_physical_damage': 60,
+        'base_min_magic_damage': 15,
+        'base_max_magic_damage': 25,
         'base_exp': 700,
         'base_gold': 450,
         'rank': 'S',
@@ -574,14 +851,21 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['titan'],
         'difficulty': 'legendary',
         'abilities': ['basic_attack', 'earthquake', 'mountain_slam', 'titanic_rage'],
+        'damage_type': 'physical',
+        'dodge_chance': 0.1,
+        'physical_resistance': 0.6,
+        'magic_resistance': 0.3,
         'special_chance': 0.35,
-        'stun_chance': 0.3
+        'stun_chance': 0.3,
+        'attack_range': 'melee'
     },
     'fallen_angel': {
         'name': '😇 Падший Ангел',
         'base_health': 450,
-        'base_min_damage': 38,
-        'base_max_damage': 58,
+        'base_min_physical_damage': 38,
+        'base_max_physical_damage': 58,
+        'base_min_magic_damage': 30,
+        'base_max_magic_damage': 45,
         'base_exp': 650,
         'base_gold': 420,
         'rank': 'S',
@@ -589,14 +873,43 @@ BASE_ENEMIES = {
         'image': 'https://img.freepik.com/free-photo/fallen-angel_23-2150911260.jpg',
         'difficulty': 'legendary',
         'abilities': ['basic_attack', 'heavenly_light', 'fallen_wings', 'judgment_sword'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.3,
+        'physical_resistance': 0.4,
+        'magic_resistance': 0.6,
         'special_chance': 0.45,
-        'heal_chance': 0.25
+        'heal_chance': 0.25,
+        'attack_range': 'mixed'
+    },
+    'archangel': {
+        'name': '😇 Архангел',
+        'base_health': 380,
+        'base_min_physical_damage': 32,
+        'base_max_physical_damage': 48,
+        'base_min_magic_damage': 35,
+        'base_max_magic_damage': 52,
+        'base_exp': 550,
+        'base_gold': 380,
+        'rank': 'S',
+        'description': 'Верховный ангел, защитник небесного трона.',
+        'image': 'https://img.freepik.com/free-photo/archangel_23-2150911259.jpg',
+        'difficulty': 'mini_boss',
+        'abilities': ['basic_attack', 'divine_smite', 'angelic_shield', 'holy_aura'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.35,
+        'physical_resistance': 0.35,
+        'magic_resistance': 0.55,
+        'special_chance': 0.5,
+        'mini_boss_bonus': 2.0,
+        'attack_range': 'mixed'
     },
     'final_god': {
         'name': '⚡ Верховный Бог',
         'base_health': 1000,
-        'base_min_damage': 50,
-        'base_max_damage': 80,
+        'base_min_physical_damage': 50,
+        'base_max_physical_damage': 80,
+        'base_min_magic_damage': 40,
+        'base_max_magic_damage': 70,
         'base_exp': 1500,
         'base_gold': 1000,
         'rank': 'S',
@@ -604,9 +917,14 @@ BASE_ENEMIES = {
         'image': IMAGE_URLS['fallen_god'],
         'difficulty': 'boss',
         'abilities': ['basic_attack', 'divine_judgment', 'creation', 'annihilation', 'omnipotence'],
+        'damage_type': 'mixed',
+        'dodge_chance': 0.4,
+        'physical_resistance': 0.6,
+        'magic_resistance': 0.6,
         'special_chance': 0.6,
         'boss_bonus': 4.0,
-        'god_powers': True
+        'god_powers': True,
+        'attack_range': 'mixed'
     }
 }
 
@@ -621,11 +939,16 @@ def create_enemy(enemy_key, player_level):
     # Множитель уровня (враги становятся сильнее с уровнем игрока)
     level_multiplier = 1.0 + (player_level - 1) * 0.1  # +10% за каждый уровень игрока сверх 1
     
-    # Дополнительный бонус для боссов
-    boss_bonus = base_enemy.get('boss_bonus', 1.0)
+    # Бонус для мини-боссов и боссов
+    if base_enemy.get('difficulty') == 'mini_boss':
+        bonus = base_enemy.get('mini_boss_bonus', 1.5)
+    elif base_enemy.get('difficulty') == 'boss':
+        bonus = base_enemy.get('boss_bonus', 2.0)
+    else:
+        bonus = 1.0
     
     # Итоговый множитель
-    final_multiplier = level_multiplier * boss_bonus
+    final_multiplier = level_multiplier * bonus
     
     # Усиление характеристик
     enemy = {
@@ -633,8 +956,10 @@ def create_enemy(enemy_key, player_level):
         'name': base_enemy['name'],
         'health': int(base_enemy['base_health'] * final_multiplier),
         'max_health': int(base_enemy['base_health'] * final_multiplier),
-        'min_damage': int(base_enemy['base_min_damage'] * level_multiplier),
-        'max_damage': int(base_enemy['base_max_damage'] * level_multiplier),
+        'min_physical_damage': int(base_enemy['base_min_physical_damage'] * level_multiplier),
+        'max_physical_damage': int(base_enemy['base_max_physical_damage'] * level_multiplier),
+        'min_magic_damage': int(base_enemy['base_min_magic_damage'] * level_multiplier),
+        'max_magic_damage': int(base_enemy['base_max_magic_damage'] * level_multiplier),
         'exp': int(base_enemy['base_exp'] * final_multiplier),
         'gold': int(base_enemy['base_gold'] * final_multiplier),
         'rank': base_enemy['rank'],
@@ -642,23 +967,29 @@ def create_enemy(enemy_key, player_level):
         'image': base_enemy['image'],
         'difficulty': base_enemy['difficulty'],
         'abilities': base_enemy['abilities'],
+        'damage_type': base_enemy['damage_type'],
+        'dodge_chance': base_enemy['dodge_chance'],
+        'physical_resistance': base_enemy['physical_resistance'],
+        'magic_resistance': base_enemy['magic_resistance'],
         'special_chance': base_enemy['special_chance'],
+        'attack_range': base_enemy['attack_range'],
         'player_level': player_level,
         'level_multiplier': round(level_multiplier, 2)
     }
     
     # Добавляем специфические параметры
-    for key in ['poison_chance', 'dodge_chance', 'charge_chance', 'heal_chance', 
+    for key in ['poison_chance', 'web_chance', 'charge_chance', 'heal_chance', 
                 'summon_chance', 'defense_bonus', 'heal_from_damage', 'fire_chance',
-                'burn_chance', 'aoe_chance', 'stun_chance', 'army_bonus', 'web_chance',
-                'spell_chance', 'block_chance', 'drain_chance']:
+                'burn_chance', 'aoe_chance', 'stun_chance', 'army_bonus', 'spell_chance',
+                'block_chance', 'drain_chance', 'breath_chance']:
         if key in base_enemy:
             enemy[key] = base_enemy[key]
     
-    # Для боссов добавляем особые отметки
+    # Для боссов и мини-боссов добавляем особые отметки
     if enemy['difficulty'] == 'boss':
         enemy['is_boss'] = True
-        enemy['boss_bonus'] = boss_bonus
+    elif enemy['difficulty'] == 'mini_boss':
+        enemy['is_mini_boss'] = True
     
     return enemy
 
@@ -715,6 +1046,7 @@ def init_db():
                 strength INTEGER DEFAULT 10,
                 agility INTEGER DEFAULT 10,
                 intelligence INTEGER DEFAULT 10,
+                vitality INTEGER DEFAULT 10,
                 health INTEGER DEFAULT 100,
                 max_health INTEGER DEFAULT 100,
                 mana INTEGER DEFAULT 50,
@@ -726,19 +1058,43 @@ def init_db():
                 last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 battle_wins INTEGER DEFAULT 0,
                 battle_losses INTEGER DEFAULT 0,
-                boss_kills INTEGER DEFAULT 0
+                boss_kills INTEGER DEFAULT 0,
+                mini_boss_kills INTEGER DEFAULT 0,
+                physical_resistance DECIMAL DEFAULT 0.0,
+                magic_resistance DECIMAL DEFAULT 0.0
             )
         """)
         
-        # Проверяем, есть ли столбец boss_kills, если нет - добавляем
+        # Проверяем, есть ли столбец vitality, если нет - добавляем
         cursor.execute("""
             SELECT column_name 
             FROM information_schema.columns 
-            WHERE table_name='player_characters' and column_name='boss_kills'
+            WHERE table_name='player_characters' and column_name='vitality'
         """)
         if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_characters ADD COLUMN boss_kills INTEGER DEFAULT 0")
-            print("✅ Столбец 'boss_kills' добавлен в таблицу 'player_characters'")
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN vitality INTEGER DEFAULT 10")
+            print("✅ Столбец 'vitality' добавлен в таблицу 'player_characters'")
+        
+        # Проверяем, есть ли столбец mini_boss_kills, если нет - добавляем
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_characters' and column_name='mini_boss_kills'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN mini_boss_kills INTEGER DEFAULT 0")
+            print("✅ Столбец 'mini_boss_kills' добавлен в таблицу 'player_characters'")
+        
+        # Проверяем, есть ли столбцы сопротивлений, если нет - добавляем
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_characters' and column_name='physical_resistance'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN physical_resistance DECIMAL DEFAULT 0.0")
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN magic_resistance DECIMAL DEFAULT 0.0")
+            print("✅ Столбцы сопротивлений добавлены в таблицу 'player_characters'")
         
         print("✅ Таблица 'player_characters' создана/обновлена")
         
@@ -755,6 +1111,7 @@ def init_db():
                 gold_earned INTEGER DEFAULT 0,
                 experience_earned INTEGER DEFAULT 0,
                 is_boss BOOLEAN DEFAULT FALSE,
+                is_mini_boss BOOLEAN DEFAULT FALSE,
                 battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -808,6 +1165,25 @@ def create_character(user_id, username, character_name, race):
         
         race_data = RACES[race]
         
+        # Рассчитываем начальные характеристики на основе расы
+        strength = race_data['strength']
+        agility = race_data['agility']
+        intelligence = race_data['intelligence']
+        vitality = race_data['vitality']
+        
+        # Рассчитываем здоровье и ману
+        health = vitality * race_data['health_multiplier']
+        mana = intelligence * race_data['mana_multiplier']
+        
+        # Рассчитываем начальные сопротивления на основе расы
+        physical_resistance = 0.0
+        magic_resistance = 0.0
+        
+        if race == 'dwarf':
+            magic_resistance = 0.2
+        elif race == 'elf':
+            physical_resistance = 0.1
+        
         conn = get_connection()
         if not conn:
             return False, "Не удалось подключиться к базе данных"
@@ -823,14 +1199,14 @@ def create_character(user_id, username, character_name, race):
         cursor.execute("""
             INSERT INTO player_characters 
             (user_id, character_name, race, level, experience, rank,
-             strength, agility, intelligence, health, max_health, 
-             mana, max_mana, gold, stat_points)
-            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, 100, 3)
+             strength, agility, intelligence, vitality, health, max_health, 
+             mana, max_mana, gold, stat_points, physical_resistance, magic_resistance)
+            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, %s, 100, 3, %s, %s)
         """, (
             user_id, character_name, race,
-            race_data['strength'], race_data['agility'], race_data['intelligence'],
-            race_data['health'], race_data['health'],
-            race_data['mana'], race_data['mana']
+            strength, agility, intelligence, vitality,
+            health, health, mana, mana,
+            physical_resistance, magic_resistance
         ))
         
         conn.commit()
@@ -965,7 +1341,7 @@ def add_experience(user_id, exp_amount):
         
         # Получаем текущие данные персонажа
         cursor.execute("""
-            SELECT experience, level, stat_points, rank 
+            SELECT experience, level, stat_points, rank, vitality, intelligence, race
             FROM player_characters WHERE user_id = %s
         """, (user_id,))
         result = cursor.fetchone()
@@ -973,7 +1349,7 @@ def add_experience(user_id, exp_amount):
         if not result:
             return False, False, 0, 0
         
-        current_exp, current_level, current_stat_points, current_rank = result
+        current_exp, current_level, current_stat_points, current_rank, vitality, intelligence, race = result
         
         # Добавляем опыт
         new_exp = current_exp + exp_amount
@@ -1000,16 +1376,28 @@ def add_experience(user_id, exp_amount):
             # Рассчитываем новый ранг
             new_rank = calculate_rank(new_level, new_exp)
             
-            # Увеличиваем характеристики при повышении уровня
+            # Рассчитываем увеличение здоровья и маны
+            race_info = RACES.get(race, RACES['human'])
+            new_max_health = vitality * race_info['health_multiplier']
+            new_max_mana = intelligence * race_info['mana_multiplier']
+            
+            # Обновляем персонажа
             cursor.execute("""
                 UPDATE player_characters 
                 SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
-                    max_health = max_health + 10,
-                    max_mana = max_mana + 5,
-                    health = max_health,  -- Полное восстановление здоровья
-                    mana = max_mana       -- Полное восстановление маны
+                    max_health = %s,
+                    max_mana = %s,
+                    health = %s,
+                    mana = %s
                 WHERE user_id = %s
-            """, (new_exp, new_level, stat_points_gained, new_rank, user_id))
+            """, (
+                new_exp, new_level, stat_points_gained, new_rank,
+                new_max_health,
+                new_max_mana,
+                new_max_health,
+                new_max_mana,
+                user_id
+            ))
         else:
             # Обновляем только опыт
             cursor.execute("""
@@ -1077,6 +1465,27 @@ def add_stat_point(user_id, stat_type):
                 WHERE user_id = %s
             """, (user_id,))
             
+        elif stat_type == 'vitality':
+            # При повышении живучести также увеличиваем максимальное здоровье
+            cursor.execute("""
+                SELECT vitality, race FROM player_characters WHERE user_id = %s
+            """, (user_id,))
+            char_result = cursor.fetchone()
+            
+            if char_result:
+                vitality, race = char_result
+                race_info = RACES.get(race, RACES['human'])
+                health_per_vitality = race_info['health_multiplier']
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET vitality = vitality + 1, 
+                        stat_points = stat_points - 1,
+                        max_health = max_health + %s,
+                        health = health + %s
+                    WHERE user_id = %s
+                """, (health_per_vitality, health_per_vitality, user_id))
+            
         else:
             return False, "Неизвестная характеристика"
         
@@ -1124,7 +1533,7 @@ def add_gold(user_id, gold_amount):
         if conn:
             conn.close()
 
-def increment_boss_kills(user_id):
+def increment_boss_kills(user_id, is_mini_boss=False):
     """Увеличение счетчика убитых боссов"""
     conn = None
     cursor = None
@@ -1135,11 +1544,18 @@ def increment_boss_kills(user_id):
         
         cursor = conn.cursor()
         
-        cursor.execute("""
-            UPDATE player_characters 
-            SET boss_kills = boss_kills + 1
-            WHERE user_id = %s
-        """, (user_id,))
+        if is_mini_boss:
+            cursor.execute("""
+                UPDATE player_characters 
+                SET mini_boss_kills = mini_boss_kills + 1
+                WHERE user_id = %s
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                UPDATE player_characters 
+                SET boss_kills = boss_kills + 1
+                WHERE user_id = %s
+            """, (user_id,))
         
         conn.commit()
         return True
@@ -1197,12 +1613,29 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
             else:
                 effect_amount = 0
         
-        # Вставляем новую запись
+        # Проверяем, есть ли уже такой предмет в инвентаре
         cursor.execute("""
-            INSERT INTO player_inventory 
-            (user_id, item_key, item_type, item_name, quantity, effect_amount)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (user_id, item_key, item_type, item_name, 1, effect_amount))
+            SELECT id, quantity FROM player_inventory 
+            WHERE user_id = %s AND item_key = %s
+        """, (user_id, item_key))
+        
+        existing_item = cursor.fetchone()
+        
+        if existing_item:
+            # Увеличиваем количество
+            item_id, quantity = existing_item
+            cursor.execute("""
+                UPDATE player_inventory 
+                SET quantity = quantity + 1
+                WHERE id = %s
+            """, (item_id,))
+        else:
+            # Вставляем новую запись
+            cursor.execute("""
+                INSERT INTO player_inventory 
+                (user_id, item_key, item_type, item_name, quantity, effect_amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, item_key, item_type, item_name, 1, effect_amount))
         
         conn.commit()
         return True, f"Предмет '{item_name}' куплен успешно!"
@@ -1361,7 +1794,8 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
             
             message = f"Использовано {item_name}. Восстановлено {mana_restored} MP!"
         else:
-            # Для других типов предметов
+            # Для других типов предметов (оружие, броня, артефакты)
+            # Здесь можно добавить логику для применения эффектов предметов
             message = f"Предмет '{item_name}' использован!"
         
         conn.commit()
@@ -1378,7 +1812,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         if conn:
             conn.close()
 
-def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0, is_boss=False):
+def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0, is_boss=False, is_mini_boss=False):
     """Логирование боя"""
     conn = None
     cursor = None
@@ -1391,9 +1825,9 @@ def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_t
         
         cursor.execute("""
             INSERT INTO battle_logs 
-            (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss))
+            (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss, is_mini_boss)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss, is_mini_boss))
         
         conn.commit()
         return True
@@ -1428,8 +1862,11 @@ def get_player_stats(user_id):
                 battle_wins,
                 battle_losses,
                 boss_kills,
+                mini_boss_kills,
                 gold,
-                created_at
+                created_at,
+                physical_resistance,
+                magic_resistance
             FROM player_characters 
             WHERE user_id = %s
         """, (user_id,))
@@ -1466,6 +1903,7 @@ def get_top_players(limit=10):
                 battle_wins,
                 battle_losses,
                 boss_kills,
+                mini_boss_kills,
                 gold,
                 created_at
             FROM player_characters 
@@ -1519,7 +1957,8 @@ def get_difficulty_icon(difficulty):
         'very_hard': '🔴',
         'extreme': '💀',
         'legendary': '👑',
-        'boss': '👑'
+        'boss': '👑',
+        'mini_boss': '⭐'
     }
     return icons.get(difficulty, '⚪')
 
@@ -1660,11 +2099,87 @@ def get_mana_bar(current, maximum, length=10):
     bar = "🟦" * filled + "⬜" * empty
     return f"{bar} {current}/{maximum}"
 
+def calculate_player_dodge_chance(agility):
+    """Рассчитывает шанс уклонения игрока на основе ловкости"""
+    base_chance = 0.05  # Базовый шанс 5%
+    agility_bonus = min(agility * 0.005, 0.25)  # 0.5% за 1 ловкости, максимум 25%
+    return min(base_chance + agility_bonus, 0.5)  # Максимум 50%
+
+def calculate_crit_chance(agility):
+    """Рассчитывает шанс критического удара на основе ловкости"""
+    base_chance = 0.05  # Базовый шанс 5%
+    agility_bonus = min(agility * 0.003, 0.15)  # 0.3% за 1 ловкости, максимум 15%
+    return min(base_chance + agility_bonus, 0.25)  # Максимум 25%
+
+def calculate_damage(character, enemy, damage_type='physical'):
+    """Расчет урона с учетом сопротивлений"""
+    # Базовый урон
+    if damage_type == 'physical':
+        base_damage = character['strength']
+        enemy_resistance = enemy.get('physical_resistance', 0.0)
+        # Учитываем сопротивление игрока к физическому урону
+        character_resistance = character.get('physical_resistance', 0.0)
+    else:  # magical
+        base_damage = character['intelligence']
+        enemy_resistance = enemy.get('magic_resistance', 0.0)
+        # Учитываем сопротивление игрока к магическому урону
+        character_resistance = character.get('magic_resistance', 0.0)
+    
+    # Случайный разброс урона
+    min_damage = int(base_damage * 0.7)
+    max_damage = int(base_damage * 1.3)
+    damage = random.randint(min_damage, max_damage)
+    
+    # Применяем сопротивление врага
+    damage = int(damage * (1 - enemy_resistance))
+    
+    # Учитываем шанс критического удара
+    crit_chance = calculate_crit_chance(character.get('agility', 10))
+    is_crit = random.random() < crit_chance
+    
+    if is_crit:
+        damage = int(damage * 2.0)
+    
+    return damage, is_crit
+
+def calculate_enemy_damage(enemy, character):
+    """Расчет урона врага с учетом сопротивлений персонажа"""
+    if enemy['damage_type'] == 'physical':
+        min_damage = enemy['min_physical_damage']
+        max_damage = enemy['max_physical_damage']
+        character_resistance = character.get('physical_resistance', 0.0)
+    elif enemy['damage_type'] == 'magic':
+        min_damage = enemy['min_magic_damage']
+        max_damage = enemy['max_magic_damage']
+        character_resistance = character.get('magic_resistance', 0.0)
+    else:  # mixed
+        # Случайно выбираем тип урона для смешанных врагов
+        if random.random() < 0.5:
+            min_damage = enemy['min_physical_damage']
+            max_damage = enemy['max_physical_damage']
+            character_resistance = character.get('physical_resistance', 0.0)
+        else:
+            min_damage = enemy['min_magic_damage']
+            max_damage = enemy['max_magic_damage']
+            character_resistance = character.get('magic_resistance', 0.0)
+    
+    damage = random.randint(min_damage, max_damage)
+    
+    # Применяем сопротивление персонажа
+    damage = int(damage * (1 - character_resistance))
+    
+    # Учитываем шанс уклонения игрока
+    dodge_chance = calculate_player_dodge_chance(character.get('agility', 10))
+    is_dodged = random.random() < dodge_chance
+    
+    return damage, is_dodged
+
 # Функция для обработки специальных атак врагов
 def process_enemy_special_attack(enemy, character, battle_log):
     """Обработка специальных атак врага"""
     damage = 0
     additional_effect = ""
+    status_effect = None
     
     # Определяем, будет ли специальная атака
     if random.random() < enemy.get('special_chance', 0.1):
@@ -1674,29 +2189,31 @@ def process_enemy_special_attack(enemy, character, battle_log):
             ability = random.choice(available_abilities)
             
             if ability == 'poison_spit':
-                damage = random.randint(enemy['min_damage'] // 2, enemy['max_damage'] // 2)
+                damage = random.randint(enemy['min_physical_damage'] // 2, enemy['max_physical_damage'] // 2)
                 additional_effect = f" Яд наносит дополнительно {damage} урона в следующий ход!"
                 battle_log.append(f"☠️ {enemy['name']} плюется ядом! Ты получаешь {damage} урона и отравлен!")
+                status_effect = 'poisoned'
                 
             elif ability == 'web_shot':
                 damage = 0
                 additional_effect = " Ты опутан паутиной и пропускаешь следующий ход!"
                 battle_log.append(f"🕸️ {enemy['name']} опутывает тебя паутиной! Ты не можешь атаковать в следующем ходу!")
+                status_effect = 'webbed'
                 
             elif ability == 'blood_drain':
-                damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+                damage = random.randint(enemy['min_physical_damage'], enemy['max_physical_damage'])
                 heal_amount = damage // 2
                 enemy['health'] = min(enemy['max_health'], enemy['health'] + heal_amount)
                 additional_effect = f" Враг восстанавливает {heal_amount} здоровья!"
                 battle_log.append(f"🩸 {enemy['name']} пьет твою кровь! Ты теряешь {damage} HP, враг восстанавливает {heal_amount} HP!")
                 
             elif ability == 'hellfire':
-                damage = random.randint(int(enemy['min_damage'] * 1.5), int(enemy['max_damage'] * 1.5))
+                damage = random.randint(int(enemy['min_magic_damage'] * 1.5), int(enemy['max_magic_damage'] * 1.5))
                 additional_effect = f" Адское пламя наносит {damage} урона!"
                 battle_log.append(f"🔥 {enemy['name']} испускает адское пламя! Ты получаешь {damage} урона!")
                 
             elif ability == 'dragon_breath':
-                damage = random.randint(enemy['min_damage'] * 2, enemy['max_damage'] * 2)
+                damage = random.randint(enemy['min_magic_damage'] * 2, enemy['max_magic_damage'] * 2)
                 additional_effect = f" Дыхание дракона наносит {damage} урона!"
                 battle_log.append(f"🐉 {enemy['name']} использует дыхание дракона! Ты получаешь {damage} урона!")
                 
@@ -1713,21 +2230,30 @@ def process_enemy_special_attack(enemy, character, battle_log):
                 battle_log.append(f"🌿 {enemy['name']} использует исцеляющие листья! Враг восстанавливает {heal_amount} HP!")
                 
             elif ability == 'apocalypse':
-                damage = random.randint(enemy['min_damage'] * 3, enemy['max_damage'] * 3)
+                damage = random.randint(enemy['min_physical_damage'] * 3, enemy['max_physical_damage'] * 3)
                 additional_effect = f" Апокалипсис наносит {damage} урона!"
                 battle_log.append(f"☄️ {enemy['name']} вызывает апокалипсис! Ты получаешь {damage} урона!")
                 
             elif ability == 'omnipotence':
-                damage = random.randint(enemy['min_damage'] * 4, enemy['max_damage'] * 4)
+                damage = random.randint(enemy['min_magic_damage'] * 4, enemy['max_magic_damage'] * 4)
                 additional_effect = f" Всемогущество бога наносит {damage} урона!"
                 battle_log.append(f"⚡ {enemy['name']} использует свою божественную силу! Ты получаешь {damage} урона!")
                 
+            elif ability == 'stun_attack' or ability == 'mountain_slam':
+                damage = random.randint(enemy['min_physical_damage'], enemy['max_physical_damage'])
+                additional_effect = " Ты оглушен и пропускаешь следующий ход!"
+                battle_log.append(f"💫 {enemy['name']} оглушает тебя! Ты теряешь {damage} HP и не можешь действовать в следующем ходу!")
+                status_effect = 'stunned'
+                
             else:
                 # Базовая усиленная атака для других способностей
-                damage = random.randint(int(enemy['min_damage'] * 1.3), int(enemy['max_damage'] * 1.3))
+                if enemy['damage_type'] == 'physical':
+                    damage = random.randint(int(enemy['min_physical_damage'] * 1.3), int(enemy['max_physical_damage'] * 1.3))
+                else:
+                    damage = random.randint(int(enemy['min_magic_damage'] * 1.3), int(enemy['max_magic_damage'] * 1.3))
                 battle_log.append(f"✨ {enemy['name']} использует {ability.replace('_', ' ')}! Ты получаешь {damage} урона!")
     
-    return damage, additional_effect
+    return damage, additional_effect, status_effect
 
 # --- КЛАВИАТУРЫ ---
 
@@ -1782,20 +2308,26 @@ def get_level_up_keyboard(character, stat_points):
         # Кнопки характеристик
         keyboard.append([
             InlineKeyboardButton(
-                f"💪 СИЛА: {character['strength']}",
+                f"💪 СИЛА: {character['strength']} (+{character['strength']//10} урон)",
                 callback_data='levelup_strength'
             )
         ])
         keyboard.append([
             InlineKeyboardButton(
-                f"🏹 ЛОВКОСТЬ: {character['agility']}",
+                f"🏹 ЛОВКОСТЬ: {character['agility']} (+{calculate_player_dodge_chance(character['agility'])*100:.1f}% уклонение)",
                 callback_data='levelup_agility'
             )
         ])
         keyboard.append([
             InlineKeyboardButton(
-                f"🧠 ИНТЕЛЛЕКТ: {character['intelligence']}",
+                f"🧠 ИНТЕЛЛЕКТ: {character['intelligence']} (+{character['intelligence']//10} магич. урон)",
                 callback_data='levelup_intelligence'
+            )
+        ])
+        keyboard.append([
+            InlineKeyboardButton(
+                f"❤️ ЖИВУЧЕСТЬ: {character['vitality']} (+{character['vitality']*RACES[character['race']]['health_multiplier']} HP)",
+                callback_data='levelup_vitality'
             )
         ])
         
@@ -1868,7 +2400,7 @@ def get_race_selection_keyboard():
     for race_key, race_data in races.items():
         keyboard.append([
             InlineKeyboardButton(
-                f"{race_data['name']} (💪{race_data['strength']} | 🏹{race_data['agility']} | 🧠{race_data['intelligence']})",
+                f"{race_data['name']} (💪{race_data['strength']} | 🏹{race_data['agility']} | 🧠{race_data['intelligence']} | ❤️{race_data['vitality']})",
                 callback_data=f'race_{race_key}'
             )
         ])
@@ -1910,8 +2442,8 @@ def get_location_enemies_keyboard(location_rank, player_level):
     
     # Сначала обычные враги
     for enemy_key in location['enemies']:
-        if enemy_key == location['boss']:
-            continue  # Босса добавляем отдельно
+        if enemy_key == location['boss'] or enemy_key == location.get('mini_boss'):
+            continue  # Боссов и мини-боссов добавляем отдельно
             
         enemy = create_enemy(enemy_key, player_level)
         if enemy:
@@ -1922,6 +2454,20 @@ def get_location_enemies_keyboard(location_rank, player_level):
                 InlineKeyboardButton(
                     f"{difficulty_icon} {enemy['name']} {rank_icon}",
                     callback_data=f'battle_{enemy_key}'
+                )
+            ])
+    
+    # Затем мини-босс локации (если есть)
+    if location.get('mini_boss'):
+        mini_boss = create_enemy(location['mini_boss'], player_level)
+        if mini_boss:
+            mini_boss_icon = "⭐"
+            rank_icon = get_rank_icon(mini_boss['rank'])
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{mini_boss_icon} {mini_boss['name']} (МИНИ-БОСС) {rank_icon}",
+                    callback_data=f'battle_{location["mini_boss"]}'
                 )
             ])
     
@@ -1945,9 +2491,12 @@ def get_location_enemies_keyboard(location_rank, player_level):
 def get_battle_action_keyboard():
     """Клавиатура действий в бою"""
     keyboard = [
-        [InlineKeyboardButton("⚔️ УДАР", callback_data='attack'), InlineKeyboardButton("🛡️ БЛОК", callback_data='defend')],
-        [InlineKeyboardButton("✨ МАГИЯ РАСЫ", callback_data='ability')],
-        [InlineKeyboardButton("💊 ЗЕЛЬЕ ЗДОРОВЬЯ", callback_data='use_health_potion')],
+        [InlineKeyboardButton("⚔️ ФИЗИЧЕСКАЯ АТАКА", callback_data='attack_physical'),
+         InlineKeyboardButton("🔮 МАГИЧЕСКАЯ АТАКА", callback_data='attack_magic')],
+        [InlineKeyboardButton("🛡️ БЛОК", callback_data='defend'),
+         InlineKeyboardButton("✨ РАСОВАЯ СПОСОБНОСТЬ", callback_data='ability')],
+        [InlineKeyboardButton("💊 ЗЕЛЬЕ ЗДОРОВЬЯ", callback_data='use_health_potion'),
+         InlineKeyboardButton("🔮 ЗЕЛЬЕ МАНЫ", callback_data='use_mana_potion')],
         [InlineKeyboardButton("🏃 БЕЖАТЬ", callback_data='flee')]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -2012,7 +2561,7 @@ def get_shop_keyboard(character=None):
         if player_rank_index >= rank_order.index('C'):
             keyboard.append([
                 InlineKeyboardButton(
-                    "🛡️ Броня C-ранга (+10 здоровья) - 300💰",
+                    "🛡️ Броня C-ранга (+10 живучести) - 300💰",
                     callback_data='buy_1'
                 )
             ])
@@ -2021,6 +2570,22 @@ def get_shop_keyboard(character=None):
                 InlineKeyboardButton(
                     "🛡️ Броня C-ранга [Требуется C-ранг] - 300💰",
                     callback_data='buy_info_rank_c'
+                )
+            ])
+        
+        # Кольцо ловкости
+        if player_rank_index >= rank_order.index('C'):
+            keyboard.append([
+                InlineKeyboardButton(
+                    "💍 Кольцо ловкости (+8 ловкости) - 350💰",
+                    callback_data='buy_ring_of_agility'
+                )
+            ])
+        else:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "💍 Кольцо ловкости [Требуется C-ранг] - 350💰",
+                    callback_data='buy_info_ring_agility'
                 )
             ])
         
@@ -2066,7 +2631,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=f"🏰 *ДОБРО ПОЖАЛОВАТЬ В МИР ГЕРОЕВ!* 🏰\n\n"
                 f"👋 Приветствую тебя, путник *{user.first_name}*!\n\n"
                 f"📜 _Древние легенды гласят, что именно ты изменишь судьбу этого мира._\n"
-                f"Ты стоишь на главной площади деревни. Впереди — великие свершения!",
+                f"Ты стоишь на главной площади деревня. Впереди — великие свершения!",
         parse_mode='Markdown'
     )
     
@@ -2135,16 +2700,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚔️ **Классы и Бонусы:**
 👨 **Человек** — `Баланс` (+1 ко всем статам)
-🧝 **Эльф** — `Магия` (+50% маны)
-⚒️ **Дварф** — `Живучесть` (+20% здоровья)
+🧝 **Эльф** — `Магия` (+50% маны, +10% физического сопротивления)
+⚒️ **Дварф** — `Живучесть` (+20% здоровья, +20% магического сопротивления)
 👹 **Орк** — `Ярость` (Рискованные, но мощные атаки)
 
 📈 **Прокачка:**
 • За каждый уровень получаешь *3 очка характеристик*
 • Можешь распределить их между:
-  💪 *СИЛА* - Увеличивает урон в ближнем бою
-  🏹 *ЛОВКОСТЬ* - Увеличивает защиту и шанс увернуться
+  💪 *СИЛА* - Увеличивает физический урон
+  🏹 *ЛОВКОСТЬ* - Увеличивает шанс уклонения и критического удара
   🧠 *ИНТЕЛЛЕКТ* - Увеличивает магический урон и ману
+  ❤️ *ЖИВУЧЕСТЬ* - Увеличивает максимальное здоровье
 
 🎒 **Инвентарь:**
 • Теперь есть отдельная вкладка инвентаря!
@@ -2158,21 +2724,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚔️ **НОВАЯ СИСТЕМА ВРАГОВ:**
 • Враги усиливаются с твоим уровнем (+10% за уровень)
-• В каждой локации 3 типа врагов: легкий, средний, сильный
-• В каждой локации есть БОСС - самый сильный враг
-• Боссы дают в 2-4 раза больше опыта и золота
+• В каждой локации есть обычные враги, мини-боссы и боссы
+• Мини-боссы и боссы дают больше опыта и золота
 • У врагов есть особые способности (яд, лечение, призыв и т.д.)
+• Враги имеют физическое и магическое сопротивление
+
+🛡️ **НОВАЯ СИСТЕМА БОЯ:**
+• *Физический урон* - зависит от силы, снижается физическим сопротивлением
+• *Магический урон* - зависит от интеллекта, снижается магическим сопротивлением
+• *Шанс уклонения* - зависит от ловкости (до 50%)
+• *Шанс крита* - зависит от ловкости (до 25%)
+• *Сопротивления* - уменьшают получаемый урон соответствующего типа
 
 🗡 **Тактика боя:**
-• ⚔️ *Атака* - Базовый удар оружием (зависит от силы)
+• ⚔️ *Физическая атака* - Удар оружием (зависит от силы)
+• 🔮 *Магическая атака* - Магический удар (зависит от интеллекта)
 • 🛡️ *Защита* - Снижает урон на 50%
 • ✨ *Способность* - Уникальный навык твоей расы (тратит ману)
-• 💊 *Зелье* - Использование зелья здоровья из инвентаря
+• 💊 *Зелье* - Использование зелья из инвентаря
 • 🏃 *Сбежать* - Шанс 50% покинуть бой
 
 🏆 **Соревнование:**
 • Заходи в "👑 Топ игроков" чтобы увидеть лучших охотников
-• Теперь учитываются убитые боссы в статистике
+• Теперь учитываются убитые мини-боссы и боссы в статистике
 • Повышай свой рейтинг, чтобы попасть в топ
 
 _Удачи, герой! Пусть боги хранят тебя._ 🏹
@@ -2221,7 +2795,9 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"├ 💪 Сила: `{race_data['strength']}`\n"
                 f"├ 🏹 Ловкость: `{race_data['agility']}`\n"
                 f"├ 🧠 Интеллект: `{race_data['intelligence']}`\n"
-                f"├ ❤️ HP: `{race_data['health']}` | 🔮 MP: `{race_data['mana']}`\n"
+                f"├ ❤️ Живучесть: `{race_data['vitality']}`\n"
+                f"├ ❤️ Множитель здоровья: `{race_data['health_multiplier']}`\n"
+                f"├ 🔮 Множитель маны: `{race_data['mana_multiplier']}`\n"
                 f"└ ✨ _Навык: {race_data['racial_ability']}_\n\n"
             )
         
@@ -2245,9 +2821,10 @@ async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📊 *Базовые параметры:*\n"
                 f"💪 Сила: `{race_data['strength']}`\n"
                 f"🏹 Ловкость: `{race_data['agility']}`\n"
-                f"🧠 Интеллект: `{race_data['intelligence']}`\n\n"
-                f"❤️ Здоровье: `{race_data['health']}`\n"
-                f"🔮 Мана: `{race_data['mana']}`\n\n"
+                f"🧠 Интеллект: `{race_data['intelligence']}`\n"
+                f"❤️ Живучесть: `{race_data['vitality']}`\n\n"
+                f"❤️ Множитель здоровья: `{race_data['health_multiplier']}`\n"
+                f"🔮 Множитель маны: `{race_data['mana_multiplier']}`\n\n"
                 f"✨ *Особый дар:* _{race_data['racial_ability']}_",
         parse_mode='Markdown'
     )
@@ -2337,7 +2914,7 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith('levelup_'):
         stat_type = data[8:]  # Убираем 'levelup_'
         
-        if stat_type in ['strength', 'agility', 'intelligence']:
+        if stat_type in ['strength', 'agility', 'intelligence', 'vitality']:
             # Получаем текущего персонажа ДО прокачки
             character_before = get_character(user_id)
             old_value = character_before[stat_type]
@@ -2355,7 +2932,8 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stat_names = {
                     'strength': 'Сила 💪',
                     'agility': 'Ловкость 🏹', 
-                    'intelligence': 'Интеллект 🧠'
+                    'intelligence': 'Интеллект 🧠',
+                    'vitality': 'Живучесть ❤️'
                 }
                 stat_name = stat_names.get(stat_type, stat_type)
                 
@@ -2386,8 +2964,9 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"🎯 Твой герой стал сильнее!\n"
                         f"📊 Итоговые характеристики:\n"
                         f"💪 Сила: `{character_after['strength']}`\n"
-                        f"🏹 Ловкость: `{character_after['agility']}`\n"
-                        f"🧠 Интеллект: `{character_after['intelligence']}`\n\n"
+                        f"🏹 Ловкость: `{character_after['agility']}` (+{calculate_player_dodge_chance(character_after['agility'])*100:.1f}% уклонение)\n"
+                        f"🧠 Интеллект: `{character_after['intelligence']}`\n"
+                        f"❤️ Живучесть: `{character_after['vitality']}` (+{character_after['vitality']*RACES[character_after['race']]['health_multiplier']} HP)\n\n"
                         f"_Возвращаюсь в главное меню..._",
                         reply_markup=get_main_menu_keyboard(user_id),
                         parse_mode='Markdown'
@@ -2558,6 +3137,12 @@ async def show_profile(query, user_id):
     # Получаем следующий ранг
     next_rank_info = get_next_rank_info(rank, character['level'])
     
+    # Рассчитываем боевые параметры
+    dodge_chance = calculate_player_dodge_chance(character['agility'])
+    crit_chance = calculate_crit_chance(character['agility'])
+    physical_damage = character['strength'] // 10
+    magic_damage = character['intelligence'] // 10
+    
     await query.message.reply_photo(
         photo=image_url,
         caption=f"👤 *ПАСПОРТ ОХОТНИКА: {character['character_name']}*\n"
@@ -2611,14 +3196,18 @@ async def show_profile(query, user_id):
     profile_text = (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"⚔️ *БОЕВЫЕ ПАРАМЕТРЫ*\n"
-        f"💪 **Сила:**      `{character['strength']}`\n"
-        f"🏹 **Ловкость:**  `{character['agility']}`\n"
-        f"🧠 **Интеллект:** `{character['intelligence']}`\n"
+        f"💪 **Сила:**      `{character['strength']}` (+{physical_damage} физ. урон)\n"
+        f"🏹 **Ловкость:**  `{character['agility']}` (+{dodge_chance*100:.1f}% уклонение, +{crit_chance*100:.1f}% крит)\n"
+        f"🧠 **Интеллект:** `{character['intelligence']}` (+{magic_damage} маг. урон)\n"
+        f"❤️ **Живучесть:** `{character['vitality']}` (+{character['vitality']*race_data['health_multiplier']} HP)\n"
+        f"🛡️ **Физ. защита:** `{character.get('physical_resistance', 0)*100:.1f}%`\n"
+        f"🔮 **Маг. защита:** `{character.get('magic_resistance', 0)*100:.1f}%`\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💰 *БОГАТСТВО*\n"
         f"Золото: `{character['gold']}` монет\n\n"
         f"📜 *Достижения:*\n"
         f"⚔️ Побед: {character.get('battle_wins', 0)} | 💀 Поражений: {character.get('battle_losses', 0)}\n"
+        f"⭐ Убито мини-боссов: {character.get('mini_boss_kills', 0)}\n"
         f"👑 Убито боссов: {character.get('boss_kills', 0)}\n\n"
         f"{levelup_info}\n"
         f"{stats_info}\n\n"
@@ -2924,18 +3513,25 @@ async def start_battle(query, user_id, enemy_type):
         'enemy_type': enemy_type,
         'poisoned': False,
         'webbed': False,
-        'stunned': False
+        'stunned': False,
+        'player_damage_dealt': 0,
+        'player_damage_taken': 0
     }
     
     enemy_rank_icon = get_rank_icon(enemy_rank)
     difficulty_icon = get_difficulty_icon(enemy['difficulty'])
     
-    # Особое сообщение для боссов
+    # Особое сообщение для боссов и мини-боссов
     if enemy.get('is_boss', False):
         boss_message = f"👑 *ВНИМАНИЕ! ЭТО БОСС ЛОКАЦИИ!* 👑\n\n"
         boss_message += f"{enemy['name']} - самый сильный враг в этой локации!\n"
         boss_message += f"Победа над ним принесет огромные награды!\n\n"
         await query.message.reply_text(boss_message, parse_mode='Markdown')
+    elif enemy.get('is_mini_boss', False):
+        mini_boss_message = f"⭐ *ВНИМАНИЕ! ЭТО МИНИ-БОСС!* ⭐\n\n"
+        mini_boss_message += f"{enemy['name']} - сильный противник!\n"
+        mini_boss_message += f"Победа принесет хорошие награды!\n\n"
+        await query.message.reply_text(mini_boss_message, parse_mode='Markdown')
     
     await query.message.reply_photo(
         photo=enemy['image'],
@@ -2943,6 +3539,9 @@ async def start_battle(query, user_id, enemy_type):
                f"👿 Противник: *{enemy['name']}*\n"
                f"{enemy_rank_icon} *Ранг врага:* {enemy_rank} {difficulty_icon}\n"
                f"📊 *Уровень врага:* усилен в {enemy['level_multiplier']}x\n"
+               f"🛡️ *Физ. защита:* {enemy['physical_resistance']*100:.1f}%\n"
+               f"🔮 *Маг. защита:* {enemy['magic_resistance']*100:.1f}%\n"
+               f"🏹 *Уклонение:* {enemy['dodge_chance']*100:.1f}%\n"
                f"📜 _{enemy['description']}_",
         parse_mode='Markdown'
     )
@@ -3001,30 +3600,52 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         # Пропускаем ход игрока
     else:
         # Действие игрока
-        if data == 'attack':
-            # Урон зависит от силы
-            base_damage = character['strength']
-            player_damage = random.randint(base_damage // 2, base_damage)
+        if data == 'attack_physical':
+            # Физическая атака
+            damage, is_crit = calculate_damage(character, enemy, 'physical')
             
-            # Эффект ловкости: шанс на двойной удар
-            agility_bonus = character['agility'] // 10
-            if random.randint(1, 100) <= (5 + agility_bonus):
-                player_damage *= 2
-                battle_log.append(f"⚡️ *КРИТИЧЕСКИЙ УДАР!* Ловкость помогла! Нанесено *{player_damage}* урона!")
-            elif battle_data['enemy_defending']:
-                player_damage = max(1, player_damage // 2)
-                battle_log.append(f"🛡️ Враг в блоке! Ты нанес лишь *{player_damage}* урона.")
+            # Учитываем уклонение врага
+            if random.random() < enemy.get('dodge_chance', 0.05):
+                battle_log.append(f"💨 {enemy['name']} уворачивается от твоей атаки!")
+                damage = 0
             else:
-                battle_log.append(f"⚔️ Ты нанес *{player_damage}* урона!")
+                if is_crit:
+                    battle_log.append(f"💥 *КРИТИЧЕСКИЙ УДАР!* Ты наносишь *{damage}* физического урона!")
+                elif battle_data['enemy_defending']:
+                    damage = max(1, damage // 2)
+                    battle_log.append(f"🛡️ Враг в блоке! Ты наносишь *{damage}* физического урона.")
+                else:
+                    battle_log.append(f"⚔️ Ты наносишь *{damage}* физического урона!")
             
-            enemy['health'] -= player_damage
+            enemy['health'] -= damage
             enemy['health'] = max(0, enemy['health'])
+            battle_data['player_damage_dealt'] += damage
+            
+        elif data == 'attack_magic':
+            # Магическая атака
+            damage, is_crit = calculate_damage(character, enemy, 'magic')
+            
+            # Учитываем уклонение врага
+            if random.random() < enemy.get('dodge_chance', 0.05):
+                battle_log.append(f"💨 {enemy['name']} уворачивается от твоей магической атаки!")
+                damage = 0
+            else:
+                if is_crit:
+                    battle_log.append(f"💥 *КРИТИЧЕСКИЕ ЧАРЫ!* Ты наносишь *{damage}* магического урона!")
+                elif battle_data['enemy_defending']:
+                    damage = max(1, damage // 2)
+                    battle_log.append(f"🛡️ Враг в блоке! Ты наносишь *{damage}* магического урона.")
+                else:
+                    battle_log.append(f"🔮 Ты наносишь *{damage}* магического урона!")
+            
+            enemy['health'] -= damage
+            enemy['health'] = max(0, enemy['health'])
+            battle_data['player_damage_dealt'] += damage
             
         elif data == 'defend':
-            # Защита зависит от ловкости
-            agility_bonus = min(character['agility'] // 5, 50)
+            # Защита
             battle_data['player_defending'] = True
-            battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на {50 + agility_bonus}%")
+            battle_log.append(f"🛡️ Ты поднял щит! Урон снижен на 50%")
             
         elif data == 'ability':
             # Определяем стоимость маны для каждой расы
@@ -3053,13 +3674,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 elif character['race'] == 'elf':
                     # Магический дар: урон зависит от интеллекта
                     base_magic = character['intelligence']
+                    damage = base_magic
                     if random.random() < 0.3:
                         damage = base_magic * 2
-                        battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Затрачено {mana_cost} маны. Магия нанесла *{damage}* урона!")
+                        battle_log.append(f"🏹 *КРИТИЧЕСКИЙ ВЫСТРЕЛ!* Затрачено {mana_cost} маны. Магия наносит *{damage}* урона!")
                         enemy['health'] -= damage
                     else:
-                        damage = base_magic
-                        battle_log.append(f"🏹 *Точный выстрел!* Затрачено {mana_cost} маны. Нанесено *{damage}* урона!")
+                        battle_log.append(f"🏹 *Точный выстрел!* Затрачено {mana_cost} маны. Наносится *{damage}* урона!")
                         enemy['health'] -= damage
                     
                 elif character['race'] == 'dwarf':
@@ -3112,6 +3733,39 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             else:
                 battle_log.append(f"❌ В инвентаре нет зелий здоровья!")
                 
+        elif data == 'use_mana_potion':
+            # Пытаемся использовать зелье маны
+            inventory = get_inventory(user_id)
+            mana_potion = None
+            
+            # Ищем любое зелье маны
+            for item in inventory:
+                if 'mana_potion' in item['item_key']:
+                    mana_potion = item
+                    break
+            
+            if mana_potion:
+                success, message = use_item(
+                    user_id=user_id,
+                    item_key=mana_potion['item_key'],
+                    item_type=mana_potion['item_type'],
+                    item_name=mana_potion['item_name'],
+                    effect_amount=mana_potion.get('effect_amount', 0)
+                )
+                
+                if success:
+                    # Обновляем ману персонажа в сессии боя
+                    updated_character = get_character(user_id)
+                    if updated_character:
+                        old_mana = character['mana']
+                        character['mana'] = updated_character['mana']
+                        mana_restored = character['mana'] - old_mana
+                        battle_log.append(f"🔮 Использовано {mana_potion['item_name']}! Восстановлено *{mana_restored}* MP!")
+                else:
+                    battle_log.append(f"❌ {message}")
+            else:
+                battle_log.append(f"❌ В инвентаре нет зелий маны!")
+                
         elif data == 'flee':
             # Шанс сбежать зависит от ловкости
             agility_bonus = character['agility'] // 5
@@ -3133,9 +3787,12 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if enemy['health'] <= 0:
         battle_log.append("━━━━━━━━━━━━━━━━")
         
-        # Особое сообщение для боссов
+        # Особое сообщение для боссов и мини-боссов
         if enemy.get('is_boss', False):
             battle_log.append(f"👑 *ВЕЛИКАЯ ПОБЕДА НАД БОССОМ!* 👑")
+            battle_log.append(f"Ты победил {enemy['name']}!")
+        elif enemy.get('is_mini_boss', False):
+            battle_log.append(f"⭐ *ПОБЕДА НАД МИНИ-БОССОМ!* ⭐")
             battle_log.append(f"Ты победил {enemy['name']}!")
         else:
             battle_log.append("🏆 *ВЕЛИКАЯ ПОБЕДА!*")
@@ -3147,13 +3804,19 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         battle_log.append(f"💰 Трофеи: *{gold_gained}* золота")
         battle_log.append(f"🌟 Опыт: *{exp_gained}* XP")
         
-        # Бонус за босса
+        # Бонус за босса или мини-босса
         if enemy.get('is_boss', False):
             bonus_exp = exp_gained // 2
             bonus_gold = gold_gained // 2
             exp_gained += bonus_exp
             gold_gained += bonus_gold
             battle_log.append(f"👑 Бонус за босса: +{bonus_exp} XP, +{bonus_gold} золота")
+        elif enemy.get('is_mini_boss', False):
+            bonus_exp = exp_gained // 4
+            bonus_gold = gold_gained // 4
+            exp_gained += bonus_exp
+            gold_gained += bonus_gold
+            battle_log.append(f"⭐ Бонус за мини-босса: +{bonus_exp} XP, +{bonus_gold} золота")
         
         # Добавляем опыт и проверяем повышение уровня
         success, level_up, new_level, stat_points_gained = add_experience(user_id, exp_gained)
@@ -3179,9 +3842,11 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         # Добавляем золото
         add_gold(user_id, gold_gained)
         
-        # Если это босс, увеличиваем счетчик боссов
+        # Если это босс или мини-босс, увеличиваем счетчик
         if enemy.get('is_boss', False):
-            increment_boss_kills(user_id)
+            increment_boss_kills(user_id, is_mini_boss=False)
+        elif enemy.get('is_mini_boss', False):
+            increment_boss_kills(user_id, is_mini_boss=True)
         
         # Логируем бой
         log_battle(
@@ -3189,10 +3854,12 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_data['enemy_type'], 
             enemy['name'],
             'победа', 
-            0, 0, 
+            battle_data['player_damage_dealt'], 
+            battle_data['player_damage_taken'], 
             gold_gained, 
             exp_gained,
-            enemy.get('is_boss', False)
+            enemy.get('is_boss', False),
+            enemy.get('is_mini_boss', False)
         )
         
         del battle_sessions[user_id]
@@ -3214,33 +3881,38 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_data['poisoned'] = False
         
         # Обычная атака врага
-        enemy_damage = random.randint(enemy['min_damage'], enemy['max_damage'])
+        enemy_damage, is_dodged = calculate_enemy_damage(enemy, character)
         
-        # Защита игрока снижает урон
-        if battle_data['player_defending']:
-            agility_bonus = min(character['agility'] // 5, 50)
-            reduction = 50 + agility_bonus
-            enemy_damage = max(1, enemy_damage * (100 - reduction) // 100)
-            battle_log.append(f"🛡️ Твой блок поглотил {reduction}% урона! Получено *{enemy_damage}* ед.")
+        # Учитываем уклонение игрока
+        if is_dodged:
+            battle_log.append(f"💨 Ты уворачиваешься от атаки {enemy['name']}!")
+            enemy_damage = 0
         else:
-            battle_log.append(f"💔 {enemy['name']} атаковал тебя на *{enemy_damage}* урона!")
+            # Защита игрока снижает урон
+            if battle_data['player_defending']:
+                enemy_damage = max(1, enemy_damage // 2)
+                battle_log.append(f"🛡️ Твой блок поглотил 50% урона! Получено *{enemy_damage}* ед.")
+            else:
+                battle_log.append(f"💔 {enemy['name']} атаковал тебя на *{enemy_damage}* урона!")
         
         character['health'] -= enemy_damage
         character['health'] = max(0, character['health'])
+        battle_data['player_damage_taken'] += enemy_damage
         battle_data['player_defending'] = False
         
         # Специальная атака врага
-        special_damage, special_effect = process_enemy_special_attack(enemy, character, battle_log)
+        special_damage, special_effect, status_effect = process_enemy_special_attack(enemy, character, battle_log)
         if special_damage > 0:
             character['health'] -= special_damage
             character['health'] = max(0, character['health'])
+            battle_data['player_damage_taken'] += special_damage
         
         # Применяем статусные эффекты от специальных атак
-        if "опутан" in special_effect:
+        if status_effect == 'webbed':
             battle_data['webbed'] = True
-        if "оглушен" in special_effect:
+        elif status_effect == 'stunned':
             battle_data['stunned'] = True
-        if "отравлен" in special_effect:
+        elif status_effect == 'poisoned':
             battle_data['poisoned'] = True
     
     battle_data['enemy_defending'] = False
@@ -3261,8 +3933,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_data['enemy_type'], 
             enemy['name'],
             'поражение', 
-            0, 0, 0, 0,
-            enemy.get('is_boss', False)
+            battle_data['player_damage_dealt'], 
+            battle_data['player_damage_taken'], 0, 0,
+            enemy.get('is_boss', False),
+            enemy.get('is_mini_boss', False)
         )
         
         del battle_sessions[user_id]
@@ -3279,19 +3953,33 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     enemy_health_bar = get_health_bar(max(0, enemy['health']), enemy['max_health'], length=10)
     player_mana_bar = get_mana_bar(max(0, character['mana']), character['max_mana'], length=8)
     
-    status_text = (
+    # Показываем статусные эффекты
+    status_effects = []
+    if battle_data.get('poisoned', False):
+        status_effects.append("☠️ Отравлен")
+    if battle_data.get('webbed', False):
+        status_effects.append("🕸️ Опутан")
+    if battle_data.get('stunned', False):
+        status_effects.append("💫 Оглушен")
+    
+    status_text = ""
+    if status_effects:
+        status_text = f"📊 *Статус:* {', '.join(status_effects)}\n"
+    
+    turn_text = (
         f"⚔️ *Ход №{battle_data['turn']}*\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"👤 *ТЫ:* {player_health_bar}\n"
         f"🔮 *МАНА:* {player_mana_bar}\n"
         f"👿 *ВРАГ:* {enemy_health_bar}\n\n"
+        f"{status_text}\n"
         f"{chr(10).join(battle_log)}\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"⚡️ *Твои действия:*"
     )
     
     await query.edit_message_text(
-        text=status_text,
+        text=turn_text,
         parse_mode='Markdown',
         reply_markup=get_battle_action_keyboard()
     )
@@ -3370,7 +4058,7 @@ async def show_shop(query, user_id):
     rank_order = ['E', 'D', 'C', 'B', 'A', 'S']
     player_rank_index = rank_order.index(rank)
     
-    for rank_key, item_key in [('D', 'rank_d_weapon'), ('C', 'rank_c_armor'), ('B', 'rank_b_artifact')]:
+    for rank_key, item_key in [('D', 'rank_d_weapon'), ('C', 'rank_c_armor'), ('C', 'ring_of_agility'), ('B', 'rank_b_artifact')]:
         if item_key in SHOP_ITEMS:
             item = SHOP_ITEMS[item_key]
             rank_index = rank_order.index(rank_key)
@@ -3422,7 +4110,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'buy_large_mana_potion': 'large_mana_potion',
             'buy_0': 'rank_d_weapon',
             'buy_1': 'rank_c_armor',
-            'buy_2': 'rank_b_artifact'
+            'buy_2': 'rank_b_artifact',
+            'buy_ring_of_agility': 'ring_of_agility'
         }
         
         if data not in item_map:
@@ -3511,6 +4200,10 @@ async def show_stats(query, user_id):
     rank = character.get('rank', 'E')
     rank_icon = get_rank_icon(rank)
     
+    # Рассчитываем боевые параметры
+    dodge_chance = calculate_player_dodge_chance(character['agility'])
+    crit_chance = calculate_crit_chance(character['agility'])
+    
     stats_text = (
         f"🏆 *ЗАЛ СЛАВЫ: {character['character_name']}*\n"
         f"{rank_icon} *Ранг:* {rank}-ранг\n"
@@ -3522,7 +4215,13 @@ async def show_stats(query, user_id):
         f"💪 *Характеристики:*\n"
         f"Сила: `{character['strength']}` | "
         f"Ловкость: `{character['agility']}` | "
-        f"Интеллект: `{character['intelligence']}`\n\n"
+        f"Интеллект: `{character['intelligence']}` | "
+        f"Живучесть: `{character['vitality']}`\n\n"
+        f"⚔️ *Боевые параметры:*\n"
+        f"🛡️ Физ. защита: `{character.get('physical_resistance', 0)*100:.1f}%`\n"
+        f"🔮 Маг. защита: `{character.get('magic_resistance', 0)*100:.1f}%`\n"
+        f"🏹 Уклонение: `{dodge_chance*100:.1f}%`\n"
+        f"💥 Крит. шанс: `{crit_chance*100:.1f}%`\n\n"
         f"❤️ *Здоровье:* `{character['health']}/{character['max_health']}`\n"
         f"{get_health_bar(character['health'], character['max_health'], length=15)}\n\n"
         f"🔮 *Мана:* `{character['mana']}/{character['max_mana']}`\n"
@@ -3533,6 +4232,7 @@ async def show_stats(query, user_id):
         f"❌ Поражений: `{character.get('battle_losses', 0)}`\n"
         f"📉 Всего битв: `{total_battles}`\n"
         f"📈 Эффективность: `{win_rate:.1f}%`\n"
+        f"⭐ Убито мини-боссов: `{character.get('mini_boss_kills', 0)}`\n"
         f"👑 Убито боссов: `{character.get('boss_kills', 0)}`\n\n"
         f"📅 *Летопись:*\n"
         f"Рожден: {character['created_at'].strftime('%d.%m.%Y')}\n"
@@ -3571,7 +4271,8 @@ async def show_stats(query, user_id):
                 f"{medal} *{i}. {safe_name}*\n"
                 f"   {rank_icon} {player_rank}-ранг | ⭐ Ур. {player['level']}\n"
                 f"   ⚔️ {player.get('battle_wins', 0)}/{total_player_battles} побед ({win_rate_player:.1f}%)\n"
-                f"   👑 Боссов: {player.get('boss_kills', 0)} | 💰 {player.get('gold', 0)} золота\n"
+                f"   👑 Боссов: {player.get('boss_kills', 0)} | ⭐ Мини-боссов: {player.get('mini_boss_kills', 0)}\n"
+                f"   💰 {player.get('gold', 0)} золота\n"
             )
             
             if i < len(top_players):
@@ -3645,7 +4346,8 @@ async def show_top_players(query, user_id):
         top_text += (
             f"   {rank_icon} {player_rank}-ранг | ⭐ Ур. {player['level']}\n"
             f"   ⚔️ {player.get('battle_wins', 0)}/{total_battles} побед ({win_rate:.1f}%)\n"
-            f"   👑 Боссов: {player.get('boss_kills', 0)} | 💰 {player.get('gold', 0)} золота\n"
+            f"   👑 Боссов: {player.get('boss_kills', 0)} | ⭐ Мини-боссов: {player.get('mini_boss_kills', 0)}\n"
+            f"   💰 {player.get('gold', 0)} золота\n"
         )
         
         if i < len(top_players):
@@ -3698,9 +4400,10 @@ async def show_help(query):
 📈 **Система прокачки:**
 • За каждый уровень: *+3 очка характеристик*
 • Распределяй между:
-  💪 *СИЛА* - Урон в ближнем бою
-  🏹 *ЛОВКОСТЬ* - Защита и уворот
+  💪 *СИЛА* - Физ. урон в ближнем бою
+  🏹 *ЛОВКОСТЬ* - Шанс уклонения и критического удара
   🧠 *ИНТЕЛЛЕКТ* - Магический урон и мана
+  ❤️ *ЖИВУЧЕСТЬ* - Максимальное здоровье
 
 🎒 **Инвентарь:**
 • Нажми на кнопку 🎒 в главном меню
@@ -3716,16 +4419,24 @@ async def show_help(query):
 
 ⚔️ **НОВАЯ СИСТЕМА ВРАГОВ:**
 • Враги усиливаются с твоим уровнем (+10% за уровень)
-• В каждой локации 3 типа врагов: легкий, средний, сильный
-• В каждой локации есть БОСС - самый сильный враг
-• Боссы дают в 2-4 раза больше опыта и золота
+• В каждой локации есть обычные враги, мини-боссы и боссы
+• Мини-боссы и боссы дают больше опыта и золота
 • У врагов есть особые способности (яд, лечение, призыв и т.д.)
+• Враги имеют физическое и магическое сопротивление
+
+🛡️ **НОВАЯ СИСТЕМА БОЯ:**
+• *Физический урон* - зависит от силы, снижается физическим сопротивлением
+• *Магический урон* - зависит от интеллекта, снижается магическим сопротивлением
+• *Шанс уклонения* - зависит от ловкости (до 50%)
+• *Шанс крита* - зависит от ловкости (до 25%)
+• *Сопротивления* - уменьшают получаемый урон соответствующего типа
 
 🗡 **Тактика боя:**
-• ⚔️ *Атака* - Базовый удар оружием (зависит от силы)
+• ⚔️ *Физическая атака* - Удар оружием (зависит от силы)
+• 🔮 *Магическая атака* - Магический удар (зависит от интеллекта)
 • 🛡️ *Защита* - Снижает урон на 50%
 • ✨ *Способность* - Уникальный навык твоей расы (тратит ману)
-• 💊 *Зелье* - Использование зелья здоровья из инвентаря
+• 💊 *Зелье* - Использование зелья из инвентаря
 • 🏃 *Сбежать* - Шанс 50% покинуть бой
 
 ⚡ **Советы против боссов:**
@@ -3782,7 +4493,7 @@ def main():
                     CallbackQueryHandler(battle_menu_handler, pattern='^(location_|battle_|back_to_main|back_to_battle_menu)')
                 ],
                 IN_BATTLE: [
-                    CallbackQueryHandler(battle_action_handler, pattern='^(attack|defend|ability|use_health_potion|flee)$')
+                    CallbackQueryHandler(battle_action_handler, pattern='^(attack_physical|attack_magic|defend|ability|use_health_potion|use_mana_potion|flee)$')
                 ],
                 SHOP_MENU: [
                     CallbackQueryHandler(shop_handler)
