@@ -4,43 +4,43 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 import json
 
-# Константы для database.py
+# Константы для database.py - УСЛОЖНЕННЫЕ ЗНАЧЕНИЯ
 RACES = {
     "human": {
         "name": "Человек",
-        "strength": 10,
-        "agility": 10,
-        "intelligence": 10,
-        "health": 100,
-        "mana": 50,
-        "racial_ability": "Адаптивность: +1 ко всем характеристикам"
+        "strength": 8,
+        "agility": 8,
+        "intelligence": 8,
+        "health": 80,
+        "mana": 30,
+        "racial_ability": "Адаптивность: +5% ко всем характеристикам на 1 ход"
     },
     "elf": {
         "name": "Эльф",
-        "strength": 8,
-        "agility": 14,
-        "intelligence": 12,
-        "health": 80,
-        "mana": 100,
-        "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
+        "strength": 6,
+        "agility": 12,
+        "intelligence": 10,
+        "health": 65,
+        "mana": 60,
+        "racial_ability": "Магический дар: +30% к мане, точные выстрелы"
     },
     "dwarf": {
         "name": "Дварф",
-        "strength": 14,
-        "agility": 8,
-        "intelligence": 9,
-        "health": 120,
-        "mana": 30,
-        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
+        "strength": 11,
+        "agility": 5,
+        "intelligence": 7,
+        "health": 100,
+        "mana": 20,
+        "racial_ability": "Каменная кожа: +15% к здоровью, сопротивление к магии"
     },
     "orc": {
         "name": "Орк",
-        "strength": 16,
-        "agility": 9,
-        "intelligence": 6,
-        "health": 110,
-        "mana": 20,
-        "racial_ability": "Ярость: двойной урон при низком здоровье"
+        "strength": 13,
+        "agility": 7,
+        "intelligence": 5,
+        "health": 90,
+        "mana": 15,
+        "racial_ability": "Ярость: +50% урон при низком здоровье"
     }
 }
 
@@ -180,7 +180,7 @@ def init_db():
             conn.close()
 
 def create_character(user_id, username, character_name, race):
-    """Создание нового персонажа"""
+    """Создание нового персонажа - УСЛОЖНЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -201,13 +201,13 @@ def create_character(user_id, username, character_name, race):
         if cursor.fetchone():
             return False, "У вас уже есть персонаж!"
         
-        # Создаем персонажа с характеристиками расы
+        # Создаем персонажа с характеристиками расы - МЕНЬШЕ НАЧАЛЬНЫХ РЕСУРСОВ
         cursor.execute("""
             INSERT INTO player_characters 
             (user_id, character_name, race, level, experience, rank,
              strength, agility, intelligence, health, max_health, 
              mana, max_mana, gold, stat_points)
-            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, 100, 3)
+            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, 50, 2)
         """, (
             user_id, character_name, race,
             race_data['strength'], race_data['agility'], race_data['intelligence'],
@@ -312,11 +312,11 @@ def apply_regeneration(character):
             if last_regeneration:
                 time_diff = current_time - last_regeneration
                 
-                # Регенерация каждые 5 минут (300 секунд)
-                if time_diff.total_seconds() >= 300:
-                    # Рассчитываем регенерацию
-                    health_regen = character['max_health'] * 0.05  # 5% от макс. здоровья
-                    mana_regen = character['max_mana'] * 0.10  # 10% от макс. маны
+                # Регенерация каждые 10 минут (600 секунд) - реже
+                if time_diff.total_seconds() >= 600:
+                    # Меньшая регенерация
+                    health_regen = character['max_health'] * 0.03  # 3% от макс. здоровья
+                    mana_regen = character['max_mana'] * 0.05  # 5% от макс. маны
                     
                     new_health = min(character['max_health'], character['health'] + int(health_regen))
                     new_mana = min(character['max_mana'], character['mana'] + int(mana_regen))
@@ -388,14 +388,14 @@ def update_character_stats(user_id, **kwargs):
             conn.close()
 
 def calculate_rank(level, experience):
-    """Определение ранга на основе уровня и опыта"""
-    if level >= 30:
+    """Определение ранга на основе уровня и опыта - УСЛОЖНЕННЫЙ ВАРИАНТ"""
+    if level >= 50:  # Повышены требования
         return 'S'
-    elif level >= 25:
+    elif level >= 40:
         return 'A'
-    elif level >= 20:
+    elif level >= 30:
         return 'B'
-    elif level >= 15:
+    elif level >= 20:
         return 'C'
     elif level >= 10:
         return 'D'
@@ -403,7 +403,7 @@ def calculate_rank(level, experience):
         return 'E'
 
 def add_experience(user_id, exp_amount):
-    """Добавление опыта персонажу"""
+    """Добавление опыта персонажу - УСЛОЖНЕННАЯ ВЕРСИЯ"""
     conn = None
     cursor = None
     try:
@@ -426,29 +426,31 @@ def add_experience(user_id, exp_amount):
         current_exp, current_level, current_stat_points, current_rank = result
         new_exp = current_exp + exp_amount
         
-        # Проверка повышения уровня (каждые 100 опыта)
+        # УСЛОЖНЕННАЯ ПРОВЕРКА ПОВЫШЕНИЯ УРОВНЯ
         new_level = current_level
         level_up = False
         stat_points_gained = 0
         
-        # Если опыт превысил порог для текущего уровня
-        exp_needed = current_level * 100
+        # Формула: для перехода с уровня N на N+1 нужно N * 150 опыта
+        exp_needed = current_level * 150
+        
+        # Можно получить несколько уровней сразу, если много опыта
         if new_exp >= exp_needed:
             new_level = current_level + 1
             level_up = True
-            stat_points_gained = 3  # Даем 3 очка характеристик за уровень
+            stat_points_gained = 2  # Даем только 2 очка характеристик за уровень
             
             # Рассчитываем новый ранг
             new_rank = calculate_rank(new_level, new_exp)
             
-            # Увеличиваем характеристики при повышении уровня (базовые бонусы)
+            # Меньшее увеличение характеристик при повышении уровня
             cursor.execute("""
                 UPDATE player_characters 
                 SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
-                    max_health = max_health + 10,
-                    max_mana = max_mana + 5,
-                    health = max_health + 10,  -- Восстанавливаем здоровье
-                    mana = max_mana + 5        -- Восстанавливаем ману
+                    max_health = max_health + 5,
+                    max_mana = max_mana + 3,
+                    health = max_health + 5,  # Восстанавливаем здоровье
+                    mana = max_mana + 3        # Восстанавливаем ману
                 WHERE user_id = %s
             """, (new_exp, new_level, stat_points_gained, new_rank, user_id))
         else:
@@ -598,13 +600,13 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
         # Устанавливаем effect_amount по умолчанию, если не передан
         if effect_amount is None:
             if 'small_health_potion' in item_key:
-                effect_amount = 30
+                effect_amount = 20  # Было 30
             elif 'large_health_potion' in item_key:
-                effect_amount = 60
+                effect_amount = 40  # Было 60
             elif 'small_mana_potion' in item_key:
-                effect_amount = 20
+                effect_amount = 15  # Было 20
             elif 'large_mana_potion' in item_key:
-                effect_amount = 40
+                effect_amount = 30  # Было 40
             else:
                 effect_amount = 0
         
