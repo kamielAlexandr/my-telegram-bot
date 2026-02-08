@@ -79,8 +79,8 @@ IMAGE_URLS = {
     'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
-    'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
-    'slime': 'https://img.freepik.com/free-photo/green-slime-monster_23-2150911234.jpg',
+    'goblin': 'https://dnd.su/gallery/articles/166_1_1630101300_s.png',
+    'slime': 'https://i.pinimg.com/736x/04/83/e5/0483e5f76f6b53e83f42d32242d37359.jpg',
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
     'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
@@ -94,7 +94,7 @@ IMAGE_URLS = {
     'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
     'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
     'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
-    'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
+    'forest': 'https://i.pinimg.com/736x/6c/e6/4a/6ce64aa09233baac80c7a047b0e46251.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
     'training_camp': 'https://img.freepik.com/free-photo/medieval-camp-with-tents-night_107791-16981.jpg',
@@ -102,7 +102,7 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fentezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
-    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
+    'inventory': 'https://i.pinimg.com/originals/c8/53/f8/c853f8df9894948af44cbf738e5ca57b.jpg'
 }
 
 # Товары в магазине
