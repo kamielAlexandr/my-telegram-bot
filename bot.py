@@ -33,49 +33,45 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
 # Константы для database.py
+# Константы для database.py
 RACES = {
     "human": {
         "name": "Человек",
-        "strength": 10,
-        "agility": 10,
-        "intelligence": 10,
-        "vitality": 10,
-        "health_multiplier": 10,
-        "mana_multiplier": 5,
-        "racial_ability": "Адаптивность: +1 ко всем характеристикам"
+        "strength": 8,
+        "agility": 8,
+        "intelligence": 8,
+        "health": 80,
+        "mana": 30,
+        "racial_ability": "Адаптивность: +5% ко всем характеристикам на 1 ход"
     },
     "elf": {
         "name": "Эльф",
-        "strength": 8,
-        "agility": 14,
-        "intelligence": 12,
-        "vitality": 8,
-        "health_multiplier": 8,
-        "mana_multiplier": 10,
-        "racial_ability": "Магический дар: +50% к мане, точные выстрелы"
+        "strength": 6,
+        "agility": 12,
+        "intelligence": 10,
+        "health": 65,
+        "mana": 60,
+        "racial_ability": "Магический дар: +30% к мане, точные выстрелы"
     },
     "dwarf": {
         "name": "Дварф",
-        "strength": 14,
-        "agility": 8,
-        "intelligence": 9,
-        "vitality": 15,
-        "health_multiplier": 12,
-        "mana_multiplier": 3,
-        "racial_ability": "Каменная кожа: +20% к здоровью, сопротивление к магии"
+        "strength": 11,
+        "agility": 5,
+        "intelligence": 7,
+        "health": 100,
+        "mana": 20,
+        "racial_ability": "Каменная кожа: +15% к здоровью, сопротивление к магии"
     },
     "orc": {
         "name": "Орк",
-        "strength": 16,
-        "agility": 9,
-        "intelligence": 6,
-        "vitality": 13,
-        "health_multiplier": 11,
-        "mana_multiplier": 2,
-        "racial_ability": "Ярость: двойной урон при низком здоровье"
+        "strength": 13,
+        "agility": 7,
+        "intelligence": 5,
+        "health": 90,
+        "mana": 15,
+        "racial_ability": "Ярость: +50% урон при низком здоровье"
     }
 }
-
 # Ссылки на изображения
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
@@ -2100,50 +2096,46 @@ def get_mana_bar(current, maximum, length=10):
     return f"{bar} {current}/{maximum}"
 
 def calculate_player_dodge_chance(agility):
-    """Рассчитывает шанс уклонения игрока на основе ловкости"""
-    base_chance = 0.05  # Базовый шанс 5%
-    agility_bonus = min(agility * 0.005, 0.25)  # 0.5% за 1 ловкости, максимум 25%
-    return min(base_chance + agility_bonus, 0.5)  # Максимум 50%
-
-def calculate_crit_chance(agility):
-    """Рассчитывает шанс критического удара на основе ловкости"""
-    base_chance = 0.05  # Базовый шанс 5%
+    """Рассчитывает шанс уклонения игрока на основе ловкости - УСЛОЖНЕННЫЙ ВАРИАНТ"""
+    base_chance = 0.03  # Уменьшен базовый шанс 3%
     agility_bonus = min(agility * 0.003, 0.15)  # 0.3% за 1 ловкости, максимум 15%
     return min(base_chance + agility_bonus, 0.25)  # Максимум 25%
 
+def calculate_crit_chance(agility):
+    """Рассчитывает шанс критического удара на основе ловкости - УСЛОЖНЕННЫЙ ВАРИАНТ"""
+    base_chance = 0.03  # Уменьшен базовый шанс 3%
+    agility_bonus = min(agility * 0.002, 0.10)  # 0.2% за 1 ловкости, максимум 10%
+    return min(base_chance + agility_bonus, 0.15)  # Максимум 15%
+
 def calculate_damage(character, enemy, damage_type='physical'):
-    """Расчет урона с учетом сопротивлений"""
-    # Базовый урон
+    """Расчет урона с учетом сопротивлений - УСЛОЖНЕННЫЙ ВАРИАНТ"""
+    # Базовый урон (сильнее уменьшен)
     if damage_type == 'physical':
-        base_damage = character['strength']
+        base_damage = max(1, character['strength'] // 3)  # Сила дает меньше урона
         enemy_resistance = enemy.get('physical_resistance', 0.0)
-        # Учитываем сопротивление игрока к физическому урону
-        character_resistance = character.get('physical_resistance', 0.0)
     else:  # magical
-        base_damage = character['intelligence']
+        base_damage = max(1, character['intelligence'] // 3)  # Интеллект дает меньше урона
         enemy_resistance = enemy.get('magic_resistance', 0.0)
-        # Учитываем сопротивление игрока к магическому урону
-        character_resistance = character.get('magic_resistance', 0.0)
     
-    # Случайный разброс урона
-    min_damage = int(base_damage * 0.7)
-    max_damage = int(base_damage * 1.3)
+    # Меньший разброс урона
+    min_damage = int(base_damage * 0.8)
+    max_damage = int(base_damage * 1.2)
     damage = random.randint(min_damage, max_damage)
     
-    # Применяем сопротивление врага
-    damage = int(damage * (1 - enemy_resistance))
+    # Сильнее применяем сопротивление врага
+    damage = max(1, int(damage * (1 - enemy_resistance)))
     
     # Учитываем шанс критического удара
-    crit_chance = calculate_crit_chance(character.get('agility', 10))
+    crit_chance = calculate_crit_chance(character.get('agility', 8))
     is_crit = random.random() < crit_chance
     
     if is_crit:
-        damage = int(damage * 2.0)
+        damage = int(damage * 1.5)  # Уменьшен множитель крита
     
     return damage, is_crit
 
 def calculate_enemy_damage(enemy, character):
-    """Расчет урона врага с учетом сопротивлений персонажа"""
+    """Расчет урона врага с учетом сопротивлений персонажа - УСЛОЖНЕННЫЙ ВАРИАНТ"""
     if enemy['damage_type'] == 'physical':
         min_damage = enemy['min_physical_damage']
         max_damage = enemy['max_physical_damage']
@@ -2153,7 +2145,6 @@ def calculate_enemy_damage(enemy, character):
         max_damage = enemy['max_magic_damage']
         character_resistance = character.get('magic_resistance', 0.0)
     else:  # mixed
-        # Случайно выбираем тип урона для смешанных врагов
         if random.random() < 0.5:
             min_damage = enemy['min_physical_damage']
             max_damage = enemy['max_physical_damage']
@@ -2165,14 +2156,14 @@ def calculate_enemy_damage(enemy, character):
     
     damage = random.randint(min_damage, max_damage)
     
-    # Применяем сопротивление персонажа
+    # Сильнее применяем сопротивление персонажа
     damage = int(damage * (1 - character_resistance))
     
     # Учитываем шанс уклонения игрока
-    dodge_chance = calculate_player_dodge_chance(character.get('agility', 10))
+    dodge_chance = calculate_player_dodge_chance(character.get('agility', 8))
     is_dodged = random.random() < dodge_chance
     
-    return damage, is_dodged
+    return max(1, damage), is_dodged
 
 # Функция для обработки специальных атак врагов
 def process_enemy_special_attack(enemy, character, battle_log):
