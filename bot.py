@@ -84,7 +84,7 @@ IMAGE_URLS = {
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
-    'slime': 'https://img.freepik.com/free-photo/green-slime-monster_23-2150911234.jpg',
+    'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
     'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
