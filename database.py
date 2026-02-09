@@ -1,4 +1,3 @@
-import telebot
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -106,30 +105,19 @@ def init_db():
                 last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 battle_wins INTEGER DEFAULT 0,
-                battle_losses INTEGER DEFAULT 0,
-                boss_kills INTEGER DEFAULT 0,
-                mini_boss_kills INTEGER DEFAULT 0
+                battle_losses INTEGER DEFAULT 0
             )
         """)
         
-        # Проверяем и добавляем недостающие столбцы
-        columns_to_check = [
-            ('rank', "VARCHAR(10) DEFAULT 'E'"),
-            ('last_active', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
-            ('last_regeneration', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'),
-            ('boss_kills', 'INTEGER DEFAULT 0'),
-            ('mini_boss_kills', 'INTEGER DEFAULT 0')
-        ]
-        
-        for column_name, column_type in columns_to_check:
-            cursor.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='player_characters' AND column_name=%s
-            """, (column_name,))
-            if not cursor.fetchone():
-                cursor.execute(f"ALTER TABLE player_characters ADD COLUMN {column_name} {column_type}")
-                print(f"✅ Столбец '{column_name}' добавлен в таблицу 'player_characters'")
+        # Проверяем, есть ли столбец rank, если нет - добавляем
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='player_characters' and column_name='rank'
+        """)
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE player_characters ADD COLUMN rank VARCHAR(10) DEFAULT 'E'")
+            print("✅ Столбец 'rank' добавлен в таблицу 'player_characters'")
         
         print("✅ Таблица 'player_characters' создана/обновлена")
         
@@ -139,14 +127,11 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
                 enemy_type VARCHAR(100),
-                enemy_name VARCHAR(100),
                 result VARCHAR(50),
                 damage_dealt INTEGER DEFAULT 0,
                 damage_taken INTEGER DEFAULT 0,
                 gold_earned INTEGER DEFAULT 0,
                 experience_earned INTEGER DEFAULT 0,
-                is_boss BOOLEAN DEFAULT FALSE,
-                is_mini_boss BOOLEAN DEFAULT FALSE,
                 battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -155,7 +140,7 @@ def init_db():
         cursor.execute("DROP TABLE IF EXISTS player_inventory CASCADE")
         print("🗑️ Старая таблица инвентаря удалена")
         
-        # СОЗДАЕМ НОВУЮ ТАБЛИЦУ ИНВЕНТАРЯ
+        # СОЗДАЕМ НОВУЮ ТАБЛИЦУ ИНВЕНТАРЯ БЕЗ UNIQUE КОНСТРЕЙНТОВ
         cursor.execute("""
             CREATE TABLE player_inventory (
                 id SERIAL PRIMARY KEY,
@@ -169,7 +154,7 @@ def init_db():
             )
         """)
         
-        # Создаем индексы для быстрого поиска
+        # Создаем индексы для быстрого поиска, но НЕ уникальные
         cursor.execute("""
             CREATE INDEX idx_player_inventory_user_item 
             ON player_inventory (user_id, item_key)
@@ -182,7 +167,7 @@ def init_db():
         
         conn.commit()
         print("✅ База данных полностью пересоздана и инициализирована")
-        print("✅ Таблица 'player_inventory' создана")
+        print("✅ Таблица 'player_inventory' создана без уникальных ограничений")
         
     except Exception as e:
         print(f"❌ Ошибка при создании таблиц: {e}")
@@ -216,7 +201,7 @@ def create_character(user_id, username, character_name, race):
         if cursor.fetchone():
             return False, "У вас уже есть персонаж!"
         
-        # Создаем персонажа с характеристиками расы
+        # Создаем персонажа с характеристиками расы - МЕНЬШЕ НАЧАЛЬНЫХ РЕСУРСОВ
         cursor.execute("""
             INSERT INTO player_characters 
             (user_id, character_name, race, level, experience, rank,
@@ -327,20 +312,14 @@ def apply_regeneration(character):
             if last_regeneration:
                 time_diff = current_time - last_regeneration
                 
-                # Регенерация каждые 10 минут (600 секунд)
+                # Регенерация каждые 10 минут (600 секунд) - реже
                 if time_diff.total_seconds() >= 600:
-                    # Рассчитываем сколько интервалов прошло
-                    intervals_passed = int(time_diff.total_seconds() // 600)
+                    # Меньшая регенерация
+                    health_regen = character['max_health'] * 0.03  # 3% от макс. здоровья
+                    mana_regen = character['max_mana'] * 0.05  # 5% от макс. маны
                     
-                    # Регенерация за каждый интервал
-                    health_per_interval = character['max_health'] * 0.03  # 3% от макс. здоровья
-                    mana_per_interval = character['max_mana'] * 0.05  # 5% от макс. маны
-                    
-                    total_health_regen = int(health_per_interval * intervals_passed)
-                    total_mana_regen = int(mana_per_interval * intervals_passed)
-                    
-                    new_health = min(character['max_health'], character['health'] + total_health_regen)
-                    new_mana = min(character['max_mana'], character['mana'] + total_mana_regen)
+                    new_health = min(character['max_health'], character['health'] + int(health_regen))
+                    new_mana = min(character['max_mana'], character['mana'] + int(mana_regen))
                     
                     # Обновляем в базе данных
                     cursor.execute("""
@@ -434,7 +413,7 @@ def add_experience(user_id, exp_amount):
         
         cursor = conn.cursor()
         
-        # Получаем текущие данные персонажа
+        # Получаем текущий опыт, уровень и очки характеристик
         cursor.execute("""
             SELECT experience, level, stat_points, rank 
             FROM player_characters WHERE user_id = %s
@@ -452,42 +431,28 @@ def add_experience(user_id, exp_amount):
         level_up = False
         stat_points_gained = 0
         
-        # Проверяем, достаточно ли опыта для повышения уровня
         # Формула: для перехода с уровня N на N+1 нужно N * 150 опыта
         exp_needed = current_level * 150
         
         # Можно получить несколько уровней сразу, если много опыта
-        while True:
-            # Общий опыт для уровня L: сумма от 1 до L (i * 150)
-            total_exp_for_next_level = ((new_level) * (new_level + 1) * 150) // 2
+        if new_exp >= exp_needed:
+            new_level = current_level + 1
+            level_up = True
+            stat_points_gained = 2  # Даем только 2 очка характеристик за уровень
             
-            if new_exp >= total_exp_for_next_level:
-                new_level += 1
-                level_up = True
-                stat_points_gained += 2  # Даем только 2 очка характеристик за уровень
-            else:
-                break
-        
-        if level_up:
             # Рассчитываем новый ранг
             new_rank = calculate_rank(new_level, new_exp)
             
-            # Рассчитываем увеличение здоровья и маны (5 HP и 3 MP за уровень)
-            health_increase = 5 * (new_level - current_level)
-            mana_increase = 3 * (new_level - current_level)
-            
-            # Обновляем персонажа
+            # Меньшее увеличение характеристик при повышении уровня
             cursor.execute("""
                 UPDATE player_characters 
                 SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
-                    max_health = max_health + %s,
-                    max_mana = max_mana + %s,
-                    health = max_health + %s,  # Восстанавливаем здоровье до нового максимума
-                    mana = max_mana + %s       # Восстанавливаем ману до нового максимума
+                    max_health = max_health + 5,
+                    max_mana = max_mana + 3,
+                    health = max_health + 5,  # Восстанавливаем здоровье
+                    mana = max_mana + 3        # Восстанавливаем ману
                 WHERE user_id = %s
-            """, (new_exp, new_level, stat_points_gained, new_rank, 
-                  health_increase, mana_increase, health_increase, mana_increase, 
-                  user_id))
+            """, (new_exp, new_level, stat_points_gained, new_rank, user_id))
         else:
             # Обновляем только опыт
             cursor.execute("""
@@ -549,13 +514,9 @@ def add_stat_point(user_id, stat_type):
             """, (user_id,))
             
         elif stat_type == 'intelligence':
-            # При повышении интеллекта также увеличиваем максимальную ману
             cursor.execute("""
                 UPDATE player_characters 
-                SET intelligence = intelligence + 1, 
-                    stat_points = stat_points - 1,
-                    max_mana = max_mana + 3,
-                    mana = mana + 3
+                SET intelligence = intelligence + 1, stat_points = stat_points - 1
                 WHERE user_id = %s
             """, (user_id,))
             
@@ -606,58 +567,6 @@ def add_gold(user_id, gold_amount):
         if conn:
             conn.close()
 
-def increment_battle_stats(user_id, won=True, is_boss=False, is_mini_boss=False):
-    """Увеличение счетчика побед/поражений и убийств боссов"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        if won:
-            if is_boss:
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET battle_wins = battle_wins + 1,
-                        boss_kills = boss_kills + 1
-                    WHERE user_id = %s
-                """, (user_id,))
-            elif is_mini_boss:
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET battle_wins = battle_wins + 1,
-                        mini_boss_kills = mini_boss_kills + 1
-                    WHERE user_id = %s
-                """, (user_id,))
-            else:
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET battle_wins = battle_wins + 1
-                    WHERE user_id = %s
-                """, (user_id,))
-        else:
-            cursor.execute("""
-                UPDATE player_characters 
-                SET battle_losses = battle_losses + 1
-                WHERE user_id = %s
-            """, (user_id,))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при обновлении статистики боя: {e}")
-        if conn:
-            conn.rollback()
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
     """Покупка предмета в магазине - ПРОСТАЯ РАБОЧАЯ ВЕРСИЯ"""
     conn = None
@@ -691,13 +600,13 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None)
         # Устанавливаем effect_amount по умолчанию, если не передан
         if effect_amount is None:
             if 'small_health_potion' in item_key:
-                effect_amount = 20
+                effect_amount = 20  # Было 30
             elif 'large_health_potion' in item_key:
-                effect_amount = 40
+                effect_amount = 40  # Было 60
             elif 'small_mana_potion' in item_key:
-                effect_amount = 15
+                effect_amount = 15  # Было 20
             elif 'large_mana_potion' in item_key:
-                effect_amount = 30
+                effect_amount = 30  # Было 40
             else:
                 effect_amount = 0
         
@@ -882,8 +791,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
         if conn:
             conn.close()
 
-def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_taken=0, 
-               gold_earned=0, experience_earned=0, is_boss=False, is_mini_boss=False):
+def log_battle(user_id, enemy_type, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0):
     """Логирование боя"""
     conn = None
     cursor = None
@@ -896,11 +804,9 @@ def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_t
         
         cursor.execute("""
             INSERT INTO battle_logs 
-            (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, 
-             gold_earned, experience_earned, is_boss, is_mini_boss)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, 
-              gold_earned, experience_earned, is_boss, is_mini_boss))
+            (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (user_id, enemy_type, result, damage_dealt, damage_taken, gold_earned, experience_earned))
         
         conn.commit()
         return True
@@ -934,8 +840,6 @@ def get_player_stats(user_id):
                 stat_points,
                 battle_wins,
                 battle_losses,
-                boss_kills,
-                mini_boss_kills,
                 gold,
                 created_at
             FROM player_characters 
@@ -973,12 +877,10 @@ def get_top_players(limit=10):
                 experience,
                 battle_wins,
                 battle_losses,
-                boss_kills,
-                mini_boss_kills,
                 gold,
                 created_at
             FROM player_characters 
-            ORDER BY level DESC, experience DESC, boss_kills DESC, battle_wins DESC
+            ORDER BY level DESC, experience DESC, battle_wins DESC
             LIMIT %s
         """, (limit,))
         
