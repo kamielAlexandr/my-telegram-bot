@@ -1,53 +1,19 @@
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from datetime import datetime, timedelta
+import telebot
+import database  # Импортируем функции из database.py
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import random
+import time
 
-# Константы для database.py - УСЛОЖНЕННЫЕ ЗНАЧЕНИЯ
-RACES = {
-    "human": {
-        "name": "Человек",
-        "strength": 8,
-        "agility": 8,
-        "intelligence": 8,
-        "vitality": 8,
-        "health_multiplier": 8,
-        "mana_multiplier": 3,
-        "racial_ability": "Адаптивность: +5% ко всем характеристикам на 1 ход"
-    },
-    "elf": {
-        "name": "Эльф",
-        "strength": 6,
-        "agility": 12,
-        "intelligence": 10,
-        "vitality": 6,
-        "health_multiplier": 6,
-        "mana_multiplier": 6,
-        "racial_ability": "Магический дар: +30% к мане, точные выстрелы"
-    },
-    "dwarf": {
-        "name": "Дварф",
-        "strength": 11,
-        "agility": 5,
-        "intelligence": 7,
-        "vitality": 10,
-        "health_multiplier": 10,
-        "mana_multiplier": 2,
-        "racial_ability": "Каменная кожа: +15% к здоровью, сопротивление к магии"
-    },
-    "orc": {
-        "name": "Орк",
-        "strength": 13,
-        "agility": 7,
-        "intelligence": 5,
-        "vitality": 9,
-        "health_multiplier": 9,
-        "mana_multiplier": 1.5,
-        "racial_ability": "Ярость: +50% урон при низком здоровье"
-    }
-}
+# Инициализация бота
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+if not TOKEN:
+    print("⚠️ Предупреждение: TELEGRAM_TOKEN не найден в переменных окружения")
+    TOKEN = "YOUR_BOT_TOKEN_HERE"  # Замените на реальный токен
 
-# Ссылки на изображения
+bot = telebot.TeleBot(TOKEN)
+
+# Константы для бота
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
@@ -334,570 +300,6 @@ BASE_ENEMIES = {
         'boss_bonus': 2.5,
         'attack_range': 'melee'
     },
-    
-    # D-ранг враги
-    'forest_spider': {
-        'name': '🕷️ Лесной Паук',
-        'base_health': 65,
-        'base_min_physical_damage': 8,
-        'base_max_physical_damage': 16,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 25,
-        'base_gold': 16,
-        'rank': 'D',
-        'description': 'Огромный паук, плетущий смертельные сети.',
-        'image': 'https://img.freepik.com/free-photo/giant-spider_23-2150911307.jpg',
-        'difficulty': 'medium',
-        'abilities': ['basic_attack', 'web_shot', 'poison_bite'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.15,
-        'physical_resistance': 0.15,
-        'magic_resistance': 0.05,
-        'special_chance': 0.25,
-        'web_chance': 0.30,
-        'attack_range': 'melee'
-    },
-    'ghost': {
-        'name': '👻 Призрак',
-        'base_health': 55,
-        'base_min_physical_damage': 7,
-        'base_max_physical_damage': 14,
-        'base_min_magic_damage': 4,
-        'base_max_magic_damage': 9,
-        'base_exp': 28,
-        'base_gold': 20,
-        'rank': 'D',
-        'description': 'Бесформенный дух, способный проходить сквозь стены.',
-        'image': 'https://img.freepik.com/free-photo/ghost_23-2150762306.jpg',
-        'difficulty': 'medium',
-        'abilities': ['basic_attack', 'fear', 'phase_through'],
-        'damage_type': 'magic',
-        'dodge_chance': 0.25,
-        'physical_resistance': 0.60,
-        'magic_resistance': 0.25,
-        'special_chance': 0.30,
-        'attack_range': 'ranged'
-    },
-    'wild_boar': {
-        'name': '🐗 Дикий Кабан',
-        'base_health': 85,
-        'base_min_physical_damage': 10,
-        'base_max_physical_damage': 20,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 32,
-        'base_gold': 24,
-        'rank': 'D',
-        'description': 'Массивное животное с острыми клыками.',
-        'image': 'https://img.freepik.com/free-photo/wild-boar_23-2150911295.jpg',
-        'difficulty': 'medium',
-        'abilities': ['basic_attack', 'charge', 'tusks'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.08,
-        'physical_resistance': 0.30,
-        'magic_resistance': 0.05,
-        'special_chance': 0.25,
-        'charge_chance': 0.35,
-        'attack_range': 'melee'
-    },
-    'forest_troll': {
-        'name': '🌳 Лесной тролль',
-        'base_health': 110,
-        'base_min_physical_damage': 15,
-        'base_max_physical_damage': 23,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 48,
-        'base_gold': 36,
-        'rank': 'D',
-        'description': 'Мощное лесное существо с регенерацией.',
-        'image': 'https://img.freepik.com/free-photo/troll_23-2150911292.jpg',
-        'difficulty': 'mini_boss',
-        'abilities': ['basic_attack', 'regeneration', 'club_smash'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.12,
-        'physical_resistance': 0.35,
-        'magic_resistance': 0.15,
-        'special_chance': 0.35,
-        'mini_boss_bonus': 1.9,
-        'attack_range': 'melee'
-    },
-    'forest_guardian': {
-        'name': '🌳 Хранитель Леса',
-        'base_health': 150,
-        'base_min_physical_damage': 13,
-        'base_max_physical_damage': 25,
-        'base_min_magic_damage': 7,
-        'base_max_magic_damage': 13,
-        'base_exp': 80,
-        'base_gold': 64,
-        'rank': 'D',
-        'description': 'Древнее дерево, пробужденное магией леса.',
-        'image': 'https://img.freepik.com/free-photo/treant_23-2150911290.jpg',
-        'difficulty': 'boss',
-        'abilities': ['basic_attack', 'root_grab', 'healing_leaves', 'forest_rage'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.08,
-        'physical_resistance': 0.45,
-        'magic_resistance': 0.35,
-        'special_chance': 0.40,
-        'boss_bonus': 2.7,
-        'heal_chance': 0.25,
-        'attack_range': 'mixed'
-    },
-    
-    # C-ранг враги
-    'skeleton_warrior': {
-        'name': '💀 Скелет-воин',
-        'base_health': 100,
-        'base_min_physical_damage': 13,
-        'base_max_physical_damage': 23,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 48,
-        'base_gold': 32,
-        'rank': 'C',
-        'description': 'Оживленные кости с ржавым мечом и щитом.',
-        'image': IMAGE_URLS['skeleton'],
-        'difficulty': 'hard',
-        'abilities': ['basic_attack', 'shield_bash', 'bone_armor'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.12,
-        'physical_resistance': 0.35,
-        'magic_resistance': 0.15,
-        'special_chance': 0.30,
-        'block_chance': 0.35,
-        'attack_range': 'melee'
-    },
-    'ghoul': {
-        'name': '🧟 Гуль',
-        'base_health': 115,
-        'base_min_physical_damage': 12,
-        'base_max_physical_damage': 22,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 52,
-        'base_gold': 36,
-        'rank': 'C',
-        'description': 'Ненасытная нежить, питающаяся плотью.',
-        'image': IMAGE_URLS['zombie'],
-        'difficulty': 'hard',
-        'abilities': ['basic_attack', 'life_drain', 'frenzy'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.10,
-        'physical_resistance': 0.25,
-        'magic_resistance': 0.05,
-        'special_chance': 0.35,
-        'drain_chance': 0.30,
-        'attack_range': 'melee'
-    },
-    'dark_priest': {
-        'name': '🕯️ Темный Жрец',
-        'base_health': 90,
-        'base_min_physical_damage': 7,
-        'base_max_physical_damage': 13,
-        'base_min_magic_damage': 15,
-        'base_max_magic_damage': 28,
-        'base_exp': 60,
-        'base_gold': 44,
-        'rank': 'C',
-        'description': 'Служитель темных богов, владеющий запретной магией.',
-        'image': IMAGE_URLS['mage'],
-        'difficulty': 'hard',
-        'abilities': ['basic_attack', 'dark_bolt', 'curse', 'sacrifice'],
-        'damage_type': 'magic',
-        'dodge_chance': 0.15,
-        'physical_resistance': 0.15,
-        'magic_resistance': 0.30,
-        'special_chance': 0.40,
-        'spell_chance': 0.45,
-        'attack_range': 'ranged'
-    },
-    'crypt_keeper': {
-        'name': '💀 Хранитель склепа',
-        'base_health': 140,
-        'base_min_physical_damage': 15,
-        'base_max_physical_damage': 25,
-        'base_min_magic_damage': 10,
-        'base_max_magic_damage': 19,
-        'base_exp': 72,
-        'base_gold': 56,
-        'rank': 'C',
-        'description': 'Древний некромант, охраняющий катакомбы.',
-        'image': 'https://img.freepik.com/free-photo/necromancer_23-2150911284.jpg',
-        'difficulty': 'mini_boss',
-        'abilities': ['basic_attack', 'raise_dead', 'death_bolt', 'bone_shield'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.18,
-        'physical_resistance': 0.25,
-        'magic_resistance': 0.40,
-        'special_chance': 0.40,
-        'mini_boss_bonus': 2.0,
-        'attack_range': 'ranged'
-    },
-    'catacomb_lord': {
-        'name': '👑 Повелитель Катакомб',
-        'base_health': 225,
-        'base_min_physical_damage': 19,
-        'base_max_physical_damage': 32,
-        'base_min_magic_damage': 13,
-        'base_max_magic_damage': 23,
-        'base_exp': 160,
-        'base_gold': 120,
-        'rank': 'C',
-        'description': 'Древний король, проклятый вечно охранять свои владения.',
-        'image': 'https://img.freepik.com/free-photo/skeleton-king_23-2150911291.jpg',
-        'difficulty': 'boss',
-        'abilities': ['basic_attack', 'royal_decree', 'summon_skeletons', 'kings_wrath'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.15,
-        'physical_resistance': 0.40,
-        'magic_resistance': 0.30,
-        'special_chance': 0.45,
-        'boss_bonus': 3.0,
-        'summon_chance': 0.35,
-        'attack_range': 'mixed'
-    },
-    
-    # B-ранг враги
-    'knight': {
-        'name': '⚔️ Проклятый рыцарь',
-        'base_health': 150,
-        'base_min_physical_damage': 19,
-        'base_max_physical_damage': 32,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 80,
-        'base_gold': 64,
-        'rank': 'B',
-        'description': 'Броня сияет темной энергией, а меч жаждет крови.',
-        'image': IMAGE_URLS['knight'],
-        'difficulty': 'very_hard',
-        'abilities': ['basic_attack', 'shield_wall', 'vengeful_strike', 'dark_aura'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.20,
-        'physical_resistance': 0.45,
-        'magic_resistance': 0.25,
-        'special_chance': 0.35,
-        'defense_bonus': 0.45,
-        'attack_range': 'melee'
-    },
-    'vampire': {
-        'name': '🦇 Молодой вампир',
-        'base_health': 125,
-        'base_min_physical_damage': 23,
-        'base_max_physical_damage': 35,
-        'base_min_magic_damage': 0,
-        'base_max_magic_damage': 0,
-        'base_exp': 96,
-        'base_gold': 80,
-        'rank': 'B',
-        'description': 'Аристократ ночи, пьющий кровь жертв.',
-        'image': IMAGE_URLS['vampire'],
-        'difficulty': 'very_hard',
-        'abilities': ['basic_attack', 'blood_drain', 'bat_swarm', 'hypnosis'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.25,
-        'physical_resistance': 0.30,
-        'magic_resistance': 0.20,
-        'special_chance': 0.40,
-        'heal_from_damage': 0.35,
-        'attack_range': 'melee'
-    },
-    'warlock': {
-        'name': '🔮 Чернокнижник',
-        'base_health': 115,
-        'base_min_physical_damage': 7,
-        'base_max_physical_damage': 13,
-        'base_min_magic_damage': 25,
-        'base_max_magic_damage': 40,
-        'base_exp': 104,
-        'base_gold': 88,
-        'rank': 'B',
-        'description': 'Маг, заключивший договор с демонами.',
-        'image': IMAGE_URLS['mage'],
-        'difficulty': 'very_hard',
-        'abilities': ['basic_attack', 'shadow_bolt', 'demon_summon', 'soul_burn'],
-        'damage_type': 'magic',
-        'dodge_chance': 0.18,
-        'physical_resistance': 0.15,
-        'magic_resistance': 0.45,
-        'special_chance': 0.45,
-        'summon_chance': 0.30,
-        'attack_range': 'ranged'
-    },
-    'death_knight': {
-        'name': '💀 Рыцарь смерти',
-        'base_health': 190,
-        'base_min_physical_damage': 25,
-        'base_max_physical_damage': 38,
-        'base_min_magic_damage': 13,
-        'base_max_magic_damage': 23,
-        'base_exp': 144,
-        'base_gold': 112,
-        'rank': 'B',
-        'description': 'Бывший паладин, павший во тьму и получивший нежить.',
-        'image': 'https://img.freepik.com/free-photo/death-knight_23-2150911264.jpg',
-        'difficulty': 'mini_boss',
-        'abilities': ['basic_attack', 'death_coil', 'anti_magic_shell', 'army_of_the_dead'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.23,
-        'physical_resistance': 0.50,
-        'magic_resistance': 0.40,
-        'special_chance': 0.45,
-        'mini_boss_bonus': 2.1,
-        'attack_range': 'melee'
-    },
-    'castle_overlord': {
-        'name': '🏰 Владыка Замка',
-        'base_health': 315,
-        'base_min_physical_damage': 25,
-        'base_max_physical_damage': 44,
-        'base_min_magic_damage': 19,
-        'base_max_magic_damage': 32,
-        'base_exp': 280,
-        'base_gold': 200,
-        'rank': 'B',
-        'description': 'Бывший король, павший во тьму и превративший свой замок в обитель зла.',
-        'image': 'https://img.freepik.com/free-photo/dark-king_23-2150911261.jpg',
-        'difficulty': 'boss',
-        'abilities': ['basic_attack', 'royal_command', 'castle_defense', 'tyrants_wrath'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.20,
-        'physical_resistance': 0.55,
-        'magic_resistance': 0.35,
-        'special_chance': 0.50,
-        'boss_bonus': 3.3,
-        'defense_bonus': 0.55,
-        'attack_range': 'mixed'
-    },
-    
-    # A-ранг враги
-    'demon': {
-        'name': '😈 Младший демон',
-        'base_health': 190,
-        'base_min_physical_damage': 32,
-        'base_max_physical_damage': 50,
-        'base_min_magic_damage': 13,
-        'base_max_magic_damage': 25,
-        'base_exp': 160,
-        'base_gold': 120,
-        'rank': 'A',
-        'description': 'Призван из бездны, жаждет разрушения.',
-        'image': IMAGE_URLS['demon'],
-        'difficulty': 'extreme',
-        'abilities': ['basic_attack', 'hellfire', 'demonic_claws', 'fear_aura'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.25,
-        'physical_resistance': 0.35,
-        'magic_resistance': 0.45,
-        'special_chance': 0.40,
-        'fire_chance': 0.35,
-        'attack_range': 'mixed'
-    },
-    'hellhound': {
-        'name': '🔥 Адская Гончая',
-        'base_health': 225,
-        'base_min_physical_damage': 28,
-        'base_max_physical_damage': 48,
-        'base_min_magic_damage': 7,
-        'base_max_magic_damage': 13,
-        'base_exp': 144,
-        'base_gold': 112,
-        'rank': 'A',
-        'description': 'Пес из преисподней с горящей шерстью.',
-        'image': 'https://img.freepik.com/free-photo/hellhound_23-2150911276.jpg',
-        'difficulty': 'extreme',
-        'abilities': ['basic_attack', 'fire_breath', 'pack_hunt', 'hellish_howl'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.30,
-        'physical_resistance': 0.30,
-        'magic_resistance': 0.40,
-        'special_chance': 0.35,
-        'burn_chance': 0.30,
-        'attack_range': 'melee'
-    },
-    'infernal_mage': {
-        'name': '🔥 Инфернальный Маг',
-        'base_health': 165,
-        'base_min_physical_damage': 13,
-        'base_max_physical_damage': 23,
-        'base_min_magic_damage': 35,
-        'base_max_magic_damage': 56,
-        'base_exp': 176,
-        'base_gold': 136,
-        'rank': 'A',
-        'description': 'Мастер огненной и демонической магии.',
-        'image': 'https://img.freepik.com/free-photo/fire-mage_23-2150911269.jpg',
-        'difficulty': 'extreme',
-        'abilities': ['basic_attack', 'meteor_shower', 'demonic_gate', 'inferno'],
-        'damage_type': 'magic',
-        'dodge_chance': 0.20,
-        'physical_resistance': 0.20,
-        'magic_resistance': 0.55,
-        'special_chance': 0.45,
-        'aoe_chance': 0.40,
-        'attack_range': 'ranged'
-    },
-    'pit_fiend': {
-        'name': '😈 Повелитель бездны',
-        'base_health': 275,
-        'base_min_physical_damage': 35,
-        'base_max_physical_damage': 53,
-        'base_min_magic_damage': 25,
-        'base_max_magic_damage': 40,
-        'base_exp': 240,
-        'base_gold': 176,
-        'rank': 'A',
-        'description': 'Высший демон, командующий легионами преисподней.',
-        'image': 'https://img.freepik.com/free-photo/pit-fiend_23-2150911286.jpg',
-        'difficulty': 'mini_boss',
-        'abilities': ['basic_attack', 'summon_demons', 'infernal_rage', 'dimensional_rip'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.28,
-        'physical_resistance': 0.45,
-        'magic_resistance': 0.50,
-        'special_chance': 0.50,
-        'mini_boss_bonus': 2.2,
-        'attack_range': 'mixed'
-    },
-    'demon_general': {
-        'name': '😈 Генерал Преисподней',
-        'base_health': 440,
-        'base_min_physical_damage': 38,
-        'base_max_physical_damage': 63,
-        'base_min_magic_damage': 32,
-        'base_max_magic_damage': 50,
-        'base_exp': 400,
-        'base_gold': 280,
-        'rank': 'A',
-        'description': 'Командующий армиями ада. Его появление предвещает конец света.',
-        'image': 'https://img.freepik.com/free-photo/demon-general_23-2150911263.jpg',
-        'difficulty': 'boss',
-        'abilities': ['basic_attack', 'army_command', 'apocalypse', 'final_judgment'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.25,
-        'physical_resistance': 0.50,
-        'magic_resistance': 0.45,
-        'special_chance': 0.55,
-        'boss_bonus': 3.5,
-        'army_bonus': 1.6,
-        'attack_range': 'mixed'
-    },
-    
-    # S-ранг враги
-    'dragon_ancient': {
-        'name': '🐉 Древний Дракон',
-        'base_health': 500,
-        'base_min_physical_damage': 44,
-        'base_max_physical_damage': 69,
-        'base_min_magic_damage': 32,
-        'base_max_magic_damage': 50,
-        'base_exp': 480,
-        'base_gold': 320,
-        'rank': 'S',
-        'description': 'Владыка небес. Его пламя сжигает все живое.',
-        'image': IMAGE_URLS['dragon_ancient'],
-        'difficulty': 'legendary',
-        'abilities': ['basic_attack', 'dragon_breath', 'wing_gust', 'ancient_roar'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.30,
-        'physical_resistance': 0.55,
-        'magic_resistance': 0.55,
-        'special_chance': 0.45,
-        'breath_chance': 0.40,
-        'attack_range': 'mixed'
-    },
-    'titan': {
-        'name': '🏔️ Титан',
-        'base_health': 625,
-        'base_min_physical_damage': 50,
-        'base_max_physical_damage': 75,
-        'base_min_magic_damage': 19,
-        'base_max_magic_damage': 32,
-        'base_exp': 560,
-        'base_gold': 360,
-        'rank': 'S',
-        'description': 'Ходячая гора из плоти и камня.',
-        'image': IMAGE_URLS['titan'],
-        'difficulty': 'legendary',
-        'abilities': ['basic_attack', 'earthquake', 'mountain_slam', 'titanic_rage'],
-        'damage_type': 'physical',
-        'dodge_chance': 0.15,
-        'physical_resistance': 0.65,
-        'magic_resistance': 0.35,
-        'special_chance': 0.40,
-        'stun_chance': 0.35,
-        'attack_range': 'melee'
-    },
-    'fallen_angel': {
-        'name': '😇 Падший Ангел',
-        'base_health': 565,
-        'base_min_physical_damage': 48,
-        'base_max_physical_damage': 73,
-        'base_min_magic_damage': 38,
-        'base_max_magic_damage': 56,
-        'base_exp': 520,
-        'base_gold': 336,
-        'rank': 'S',
-        'description': 'Бывший слуга небес, изгнанный за гордыню.',
-        'image': 'https://img.freepik.com/free-photo/fallen-angel_23-2150911260.jpg',
-        'difficulty': 'legendary',
-        'abilities': ['basic_attack', 'heavenly_light', 'fallen_wings', 'judgment_sword'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.35,
-        'physical_resistance': 0.45,
-        'magic_resistance': 0.65,
-        'special_chance': 0.50,
-        'heal_chance': 0.30,
-        'attack_range': 'mixed'
-    },
-    'archangel': {
-        'name': '😇 Архангел',
-        'base_health': 475,
-        'base_min_physical_damage': 40,
-        'base_max_physical_damage': 60,
-        'base_min_magic_damage': 44,
-        'base_max_magic_damage': 65,
-        'base_exp': 440,
-        'base_gold': 304,
-        'rank': 'S',
-        'description': 'Верховный ангел, защитник небесного трона.',
-        'image': 'https://img.freepik.com/free-photo/archangel_23-2150911259.jpg',
-        'difficulty': 'mini_boss',
-        'abilities': ['basic_attack', 'divine_smite', 'angelic_shield', 'holy_aura'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.40,
-        'physical_resistance': 0.40,
-        'magic_resistance': 0.60,
-        'special_chance': 0.55,
-        'mini_boss_bonus': 2.3,
-        'attack_range': 'mixed'
-    },
-    'final_god': {
-        'name': '⚡ Верховный Бог',
-        'base_health': 1250,
-        'base_min_physical_damage': 63,
-        'base_max_physical_damage': 100,
-        'base_min_magic_damage': 50,
-        'base_max_magic_damage': 88,
-        'base_exp': 1200,
-        'base_gold': 800,
-        'rank': 'S',
-        'description': 'Верховное божество этого мира. Победа над ним сделает тебя легендой.',
-        'image': IMAGE_URLS['fallen_god'],
-        'difficulty': 'boss',
-        'abilities': ['basic_attack', 'divine_judgment', 'creation', 'annihilation', 'omnipotence'],
-        'damage_type': 'mixed',
-        'dodge_chance': 0.45,
-        'physical_resistance': 0.65,
-        'magic_resistance': 0.65,
-        'special_chance': 0.65,
-        'boss_bonus': 4.5,
-        'god_powers': True,
-        'attack_range': 'mixed'
-    }
 }
 
 # Функция для создания врага с учетом уровня игрока - УСИЛЕННЫЙ ВАРИАНТ
@@ -966,1005 +368,624 @@ def create_enemy(enemy_key, player_level):
     
     return enemy
 
-def get_connection():
-    """Создание подключения к PostgreSQL"""
-    database_url = os.getenv('DATABASE_URL')
+# Инициализация базы данных при старте
+print("🔄 Инициализация базы данных...")
+database.init_db()
+print("✅ База данных инициализирована")
+
+# ==================== ОСНОВНЫЕ КОМАНДЫ ====================
+
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    """Обработка команды /start"""
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
     
-    if not database_url:
-        # Для локальной разработки
-        db_host = os.getenv('PGHOST', 'localhost')
-        db_port = os.getenv('PGPORT', '5432')
-        db_name = os.getenv('PGDATABASE', 'railway')
-        db_user = os.getenv('PGUSER', 'postgres')
-        db_password = os.getenv('PGPASSWORD', '')
-        database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    # Проверяем, есть ли уже персонаж у пользователя
+    character = database.get_character(user_id)
     
-    try:
-        conn = psycopg2.connect(database_url, sslmode='require')
-        return conn
-    except Exception as e:
-        print(f"❌ Ошибка подключения с sslmode=require: {e}")
-        # Пробуем подключиться без sslmode
-        try:
-            conn = psycopg2.connect(database_url)
-            return conn
-        except Exception as e2:
-            print(f"❌ Не удалось подключиться к БД: {e2}")
-            return None
-
-def init_db():
-    """Инициализация таблиц в базе данных"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            print("❌ Не удалось подключиться к БД для инициализации")
-            return
+    if character:
+        # Персонаж уже существует
+        keyboard = InlineKeyboardMarkup()
+        keyboard.row(
+            InlineKeyboardButton("👤 Профиль", callback_data="profile"),
+            InlineKeyboardButton("🎒 Инвентарь", callback_data="inventory")
+        )
+        keyboard.row(
+            InlineKeyboardButton("⚔️ Атаковать", callback_data="battle_menu"),
+            InlineKeyboardButton("🏪 Магазин", callback_data="shop_menu")
+        )
+        keyboard.row(
+            InlineKeyboardButton("📊 Статистика", callback_data="stats"),
+            InlineKeyboardButton("🏆 Топ игроков", callback_data="top_players")
+        )
         
-        cursor = conn.cursor()
+        welcome_text = (
+            f"✨ Добро пожаловать обратно, {character['character_name']}!\n\n"
+            f"Ты {database.get_all_races()[character['race']]['name']} {character['rank']}-ранга, уровень {character['level']}.\n"
+            f"❤️ Здоровье: {character['health']}/{character['max_health']}\n"
+            f"🔮 Мана: {character['mana']}/{character['max_mana']}\n"
+            f"💰 Золото: {character['gold']}\n\n"
+            f"Выбери действие:"
+        )
         
-        # Создаем таблицу, если она не существует
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS player_characters (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL UNIQUE,
-                character_name VARCHAR(100) NOT NULL,
-                race VARCHAR(50) NOT NULL,
-                level INTEGER DEFAULT 1,
-                experience INTEGER DEFAULT 0,
-                rank VARCHAR(10) DEFAULT 'E',
-                strength INTEGER DEFAULT 8,
-                agility INTEGER DEFAULT 8,
-                intelligence INTEGER DEFAULT 8,
-                vitality INTEGER DEFAULT 8,
-                health INTEGER DEFAULT 64,
-                max_health INTEGER DEFAULT 64,
-                mana INTEGER DEFAULT 24,
-                max_mana INTEGER DEFAULT 24,
-                gold INTEGER DEFAULT 50,
-                stat_points INTEGER DEFAULT 2,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_regeneration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                battle_wins INTEGER DEFAULT 0,
-                battle_losses INTEGER DEFAULT 0,
-                boss_kills INTEGER DEFAULT 0,
-                mini_boss_kills INTEGER DEFAULT 0,
-                physical_resistance DECIMAL DEFAULT 0.0,
-                magic_resistance DECIMAL DEFAULT 0.0
+        if character.get('image'):
+            bot.send_photo(
+                message.chat.id,
+                photo=character.get('image'),
+                caption=welcome_text,
+                reply_markup=keyboard
             )
-        """)
-        
-        # Проверяем, есть ли столбец vitality, если нет - добавляем
-        cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='player_characters' and column_name='vitality'
-        """)
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_characters ADD COLUMN vitality INTEGER DEFAULT 8")
-            print("✅ Столбец 'vitality' добавлен в таблицу 'player_characters'")
-        
-        # Проверяем, есть ли столбец mini_boss_kills, если нет - добавляем
-        cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='player_characters' and column_name='mini_boss_kills'
-        """)
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_characters ADD COLUMN mini_boss_kills INTEGER DEFAULT 0")
-            print("✅ Столбец 'mini_boss_kills' добавлен в таблицу 'player_characters'")
-        
-        # Проверяем, есть ли столбцы сопротивлений, если нет - добавляем
-        cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name='player_characters' and column_name='physical_resistance'
-        """)
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE player_characters ADD COLUMN physical_resistance DECIMAL DEFAULT 0.0")
-            cursor.execute("ALTER TABLE player_characters ADD COLUMN magic_resistance DECIMAL DEFAULT 0.0")
-            print("✅ Столбцы сопротивлений добавлены в таблицу 'player_characters'")
-        
-        print("✅ Таблица 'player_characters' создана/обновлена")
-        
-        # Создаем таблицу для логов боев
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS battle_logs (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                enemy_type VARCHAR(100),
-                enemy_name VARCHAR(100),
-                result VARCHAR(50),
-                damage_dealt INTEGER DEFAULT 0,
-                damage_taken INTEGER DEFAULT 0,
-                gold_earned INTEGER DEFAULT 0,
-                experience_earned INTEGER DEFAULT 0,
-                is_boss BOOLEAN DEFAULT FALSE,
-                is_mini_boss BOOLEAN DEFAULT FALSE,
-                battle_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        else:
+            bot.send_message(
+                message.chat.id,
+                welcome_text,
+                reply_markup=keyboard
             )
-        """)
-        
-        # Создаем таблицу инвентаря
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS player_inventory (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                item_key VARCHAR(100) NOT NULL,
-                item_type VARCHAR(50) NOT NULL,
-                item_name VARCHAR(100) NOT NULL,
-                quantity INTEGER DEFAULT 1,
-                effect_amount INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Создаем индексы для быстрого поиска
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_player_inventory_user_item 
-            ON player_inventory (user_id, item_key)
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_player_inventory_user 
-            ON player_inventory (user_id)
-        """)
-        
-        conn.commit()
-        print("✅ База данных инициализирована")
-        
-    except Exception as e:
-        print(f"❌ Ошибка при создании таблиц: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def create_character(user_id, username, character_name, race):
-    """Создание нового персонажа - УСЛОЖНЕННЫЙ ВАРИАНТ"""
-    conn = None
-    cursor = None
-    try:
-        # Проверяем, что раса существует
-        if race not in RACES:
-            return False, "Неизвестная раса"
-        
-        race_data = RACES[race]
-        
-        # Рассчитываем начальные характеристики на основе расы
-        strength = race_data['strength']
-        agility = race_data['agility']
-        intelligence = race_data['intelligence']
-        vitality = race_data['vitality']
-        
-        # Рассчитываем здоровье и ману
-        health = vitality * race_data['health_multiplier']
-        mana = intelligence * race_data['mana_multiplier']
-        
-        # Рассчитываем начальные сопротивления на основе расы
-        physical_resistance = 0.0
-        magic_resistance = 0.0
-        
-        if race == 'dwarf':
-            magic_resistance = 0.15  # Было 0.2
-        elif race == 'elf':
-            physical_resistance = 0.08  # Было 0.1
-        
-        conn = get_connection()
-        if not conn:
-            return False, "Не удалось подключиться к базе данных"
-        
-        cursor = conn.cursor()
-        
-        # Проверяем, есть ли уже персонаж у пользователя
-        cursor.execute("SELECT id FROM player_characters WHERE user_id = %s", (user_id,))
-        if cursor.fetchone():
-            return False, "У вас уже есть персонаж!"
-        
-        # Создаем персонажа с характеристиками расы - МЕНЬШЕ РЕСУРСОВ
-        cursor.execute("""
-            INSERT INTO player_characters 
-            (user_id, character_name, race, level, experience, rank,
-             strength, agility, intelligence, vitality, health, max_health, 
-             mana, max_mana, gold, stat_points, physical_resistance, magic_resistance)
-            VALUES (%s, %s, %s, 1, 0, 'E', %s, %s, %s, %s, %s, %s, %s, %s, 50, 2, %s, %s)
-        """, (
-            user_id, character_name, race,
-            strength, agility, intelligence, vitality,
-            health, health, mana, mana,
-            physical_resistance, magic_resistance
-        ))
-        
-        conn.commit()
-        print(f"✅ Персонаж создан для user_id: {user_id}")
-        return True, "Персонаж успешно создан!"
-        
-    except Exception as e:
-        print(f"❌ Ошибка при создании персонажа: {e}")
-        if conn:
-            conn.rollback()
-        return False, f"Ошибка при создании персонажа: {e}"
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def get_character(user_id):
-    """Получение информации о персонаже"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            print("❌ Не удалось подключиться к БД для получения персонажа")
-            return None
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("""
-            SELECT * FROM player_characters 
-            WHERE user_id = %s
-        """, (user_id,))
-        
-        character = cursor.fetchone()
-        
-        if character:
-            # Применяем регенерацию здоровья и маны
-            character = apply_regeneration(character)
-            
-            # Обновляем время последней активности
-            cursor.execute("""
-                UPDATE player_characters 
-                SET last_active = CURRENT_TIMESTAMP 
-                WHERE user_id = %s
-            """, (user_id,))
-            
-            # Если ранг не установлен, рассчитываем его
-            if not character.get('rank'):
-                rank = calculate_rank(character['level'], character['experience'])
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET rank = %s
-                    WHERE user_id = %s
-                """, (rank, user_id))
-                character['rank'] = rank
-            
-            conn.commit()
-        
-        return character
-        
-    except Exception as e:
-        print(f"❌ Ошибка при получении персонажа: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def apply_regeneration(character):
-    """Применение регенерации здоровья и маны"""
-    conn = None
-    cursor = None
-    try:
-        if not character:
-            return character
-        
-        conn = get_connection()
-        if not conn:
-            return character
-        
-        cursor = conn.cursor()
-        
-        # Проверяем, прошло ли достаточно времени с последней регенерации
-        last_regeneration = character.get('last_regeneration')
-        current_time = datetime.now()
-        
-        if last_regeneration:
-            # Преобразуем строку в datetime, если нужно
-            if isinstance(last_regeneration, str):
-                try:
-                    last_regeneration = datetime.fromisoformat(last_regeneration.replace('Z', '+00:00'))
-                except:
-                    try:
-                        last_regeneration = datetime.strptime(last_regeneration, '%Y-%m-%d %H:%M:%S.%f')
-                    except:
-                        last_regeneration = None
-            
-            if last_regeneration:
-                time_diff = current_time - last_regeneration
-                
-                # Регенерация каждые 10 минут (600 секунд)
-                if time_diff.total_seconds() >= 600:
-                    # Рассчитываем сколько интервалов прошло
-                    intervals_passed = int(time_diff.total_seconds() // 600)
-                    
-                    # Регенерация за каждый интервал
-                    health_per_interval = character['max_health'] * 0.03  # 3% от макс. здоровья
-                    mana_per_interval = character['max_mana'] * 0.05  # 5% от макс. маны
-                    
-                    total_health_regen = int(health_per_interval * intervals_passed)
-                    total_mana_regen = int(mana_per_interval * intervals_passed)
-                    
-                    new_health = min(character['max_health'], character['health'] + total_health_regen)
-                    new_mana = min(character['max_mana'], character['mana'] + total_mana_regen)
-                    
-                    # Обновляем в базе данных
-                    cursor.execute("""
-                        UPDATE player_characters 
-                        SET health = %s, mana = %s, last_regeneration = CURRENT_TIMESTAMP
-                        WHERE user_id = %s
-                        RETURNING health, mana
-                    """, (new_health, new_mana, character['user_id']))
-                    
-                    result = cursor.fetchone()
-                    conn.commit()
-                    
-                    if result:
-                        character['health'] = result[0]
-                        character['mana'] = result[1]
-                        character['last_regeneration'] = current_time
-        
-        return character
-        
-    except Exception as e:
-        print(f"❌ Ошибка при регенерации: {e}")
-        return character
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def get_all_races():
-    """Получение списка всех рас"""
-    return RACES
-
-def update_character_stats(user_id, **kwargs):
-    """Обновление характеристик персонажа"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        set_clauses = []
-        values = []
-        for key, value in kwargs.items():
-            set_clauses.append(f"{key} = %s")
-            values.append(value)
-        
-        values.append(user_id)
-        query = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id = %s"
-        
-        cursor.execute(query, values)
-        conn.commit()
-        return True
-        
-    except Exception as e:
-        print(f"❌ Ошибка при обновлении персонажа: {e}")
-        if conn:
-            conn.rollback()
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def calculate_rank(level, experience):
-    """Определение ранга на основе уровня и опыта - УСЛОЖНЕННЫЙ ВАРИАНТ"""
-    if level >= 50:  # Повышены требования
-        return 'S'
-    elif level >= 40:
-        return 'A'
-    elif level >= 30:
-        return 'B'
-    elif level >= 20:
-        return 'C'
-    elif level >= 10:
-        return 'D'
     else:
-        return 'E'
+        # Создаем нового персонажа
+        bot.send_message(
+            message.chat.id,
+            f"🎮 Добро пожаловать в мир приключений, {username}!\n\n"
+            "Это мир, полный опасностей и возможностей. Прежде чем начать, тебе нужно создать своего персонажа.\n\n"
+            "Выбери расу для своего героя:"
+        )
+        show_race_selection(message)
 
-def add_experience(user_id, exp_amount):
-    """Добавление опыта персонажу - УСЛОЖНЕННАЯ ВЕРСИЯ"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False, False, 0, 0
+def show_race_selection(message):
+    """Показывает выбор расы"""
+    races = database.get_all_races()
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    for race_key, race_info in races.items():
+        keyboard.add(InlineKeyboardButton(
+            race_info['name'], 
+            callback_data=f"create_{race_key}"
+        ))
+    
+    bot.send_message(
+        message.chat.id,
+        "📝 Выбери расу своего персонажа:",
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['profile'])
+def profile_command(message):
+    """Показывает профиль персонажа"""
+    user_id = message.from_user.id
+    character = database.get_character(user_id)
+    
+    if not character:
+        bot.send_message(message.chat.id, "❌ У тебя еще нет персонажа! Используй /start для создания.")
+        return
+    
+    race_info = database.get_all_races().get(character['race'], {})
+    
+    profile_text = (
+        f"👤 *Профиль персонажа*\n\n"
+        f"*Имя:* {character['character_name']}\n"
+        f"*Раса:* {race_info.get('name', 'Неизвестно')}\n"
+        f"*Уровень:* {character['level']}\n"
+        f"*Ранг:* {character['rank']}\n"
+        f"*Опыт:* {character['experience']}\n\n"
+        f"*Характеристики:*\n"
+        f"💪 Сила: {character['strength']}\n"
+        f"🏃‍♂️ Ловкость: {character['agility']}\n"
+        f"🧠 Интеллект: {character['intelligence']}\n\n"
+        f"*Состояние:*\n"
+        f"❤️ Здоровье: {character['health']}/{character['max_health']}\n"
+        f"🔮 Мана: {character['mana']}/{character['max_mana']}\n"
+        f"💰 Золото: {character['gold']}\n\n"
+        f"*Очки характеристик:* {character['stat_points']}\n"
+    )
+    
+    if character['stat_points'] > 0:
+        keyboard = InlineKeyboardMarkup(row_width=3)
+        keyboard.add(
+            InlineKeyboardButton("💪 +1 Сила", callback_data="stat_strength"),
+            InlineKeyboardButton("🏃‍♂️ +1 Ловкость", callback_data="stat_agility"),
+            InlineKeyboardButton("🧠 +1 Интеллект", callback_data="stat_intelligence")
+        )
+        profile_text += "\n🎯 У тебя есть очки характеристик для распределения!"
+    else:
+        keyboard = None
+    
+    bot.send_message(
+        message.chat.id,
+        profile_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['shop'])
+def shop_command(message):
+    """Показывает магазин"""
+    user_id = message.from_user.id
+    character = database.get_character(user_id)
+    
+    if not character:
+        bot.send_message(message.chat.id, "❌ У тебя еще нет персонажа! Используй /start для создания.")
+        return
+    
+    shop_text = "🏪 *Магазин приключений*\n\n"
+    shop_text += f"💰 Твой баланс: {character['gold']} золота\n\n"
+    shop_text += "*Доступные товары:*\n\n"
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    
+    for i, (item_key, item_info) in enumerate(SHOP_ITEMS.items()):
+        # Проверяем доступность по рангу
+        required_rank = item_info.get('required_rank')
+        if required_rank:
+            rank_order = {'E': 0, 'D': 1, 'C': 2, 'B': 3, 'A': 4, 'S': 5}
+            if rank_order.get(character['rank'], 0) < rank_order.get(required_rank, 0):
+                continue
         
-        cursor = conn.cursor()
+        shop_text += f"{item_info['name']}\n"
+        shop_text += f"📝 {item_info['description']}\n"
+        shop_text += f"💰 Цена: {item_info['price']} золота\n"
+        shop_text += "─" * 20 + "\n"
         
-        # Получаем текущие данные персонажа
-        cursor.execute("""
-            SELECT experience, level, stat_points, rank, vitality, intelligence, race
-            FROM player_characters WHERE user_id = %s
-        """, (user_id,))
-        result = cursor.fetchone()
+        callback_data = f"buy_{item_key}"
+        keyboard.add(InlineKeyboardButton(
+            f"{item_info['name']} - {item_info['price']}💰", 
+            callback_data=callback_data
+        ))
+    
+    keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
+    
+    bot.send_message(
+        message.chat.id,
+        shop_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['inventory'])
+def inventory_command(message):
+    """Показывает инвентарь"""
+    user_id = message.from_user.id
+    character = database.get_character(user_id)
+    
+    if not character:
+        bot.send_message(message.chat.id, "❌ У тебя еще нет персонажа! Используй /start для создания.")
+        return
+    
+    inventory = database.get_inventory(user_id)
+    
+    if not inventory:
+        inventory_text = "🎒 *Твой инвентарь пуст*\n\n"
+        inventory_text += "Посети 🏪 Магазин, чтобы купить предметы!"
+    else:
+        inventory_text = "🎒 *Твой инвентарь*\n\n"
         
-        if not result:
-            return False, False, 0, 0
+        keyboard = InlineKeyboardMarkup(row_width=2)
         
-        current_exp, current_level, current_stat_points, current_rank, vitality, intelligence, race = result
-        
-        # Добавляем опыт
-        new_exp = current_exp + exp_amount
-        new_level = current_level
-        level_up = False
-        stat_points_gained = 0
-        
-        # Проверяем, достаточно ли опыта для повышения уровня
-        # Формула: для перехода с уровня N на N+1 нужно N * 150 опыта (вместо 100)
-        
-        while True:
-            # Общий опыт для уровня L: сумма от 1 до L (i * 150)
-            total_exp_for_next_level = ((new_level) * (new_level + 1) * 150) // 2
+        for item in inventory:
+            inventory_text += f"{item['item_name']} ×{item['quantity']}\n"
+            if item['effect_amount'] > 0:
+                inventory_text += f"📊 Эффект: +{item['effect_amount']}\n"
+            inventory_text += "─" * 20 + "\n"
             
-            if new_exp >= total_exp_for_next_level:
-                new_level += 1
-                level_up = True
-                stat_points_gained += 2  # Только 2 очка за уровень
-            else:
+            if 'potion' in item['item_key']:
+                keyboard.add(InlineKeyboardButton(
+                    f"Использовать {item['item_name']}", 
+                    callback_data=f"use_{item['item_key']}"
+                ))
+    
+    keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
+    
+    bot.send_message(
+        message.chat.id,
+        inventory_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['battle'])
+def battle_command(message):
+    """Начинает битву"""
+    user_id = message.from_user.id
+    character = database.get_character(user_id)
+    
+    if not character:
+        bot.send_message(message.chat.id, "❌ У тебя еще нет персонажа! Используй /start для создания.")
+        return
+    
+    # Проверяем здоровье
+    if character['health'] <= 0:
+        bot.send_message(message.chat.id, "💀 Ты слишком слаб для битвы! Подожди регенерации или используй зелье здоровья.")
+        return
+    
+    # Создаем случайного врага
+    enemy_key = random.choice(['wolf', 'goblin', 'slime'])
+    enemy = create_enemy(enemy_key, character['level'])
+    
+    if not enemy:
+        bot.send_message(message.chat.id, "❌ Ошибка при создании врага!")
+        return
+    
+    battle_text = (
+        f"⚔️ *БОЕВАЯ СИТУАЦИЯ!*\n\n"
+        f"Ты встретил {enemy['name']}!\n"
+        f"{enemy['description']}\n\n"
+        f"*Характеристики врага:*\n"
+        f"❤️ Здоровье: {enemy['health']}\n"
+        f"⚔️ Урон: {enemy['min_physical_damage']}-{enemy['max_physical_damage']}\n\n"
+        f"*Твое состояние:*\n"
+        f"❤️ Здоровье: {character['health']}/{character['max_health']}\n"
+        f"🔮 Мана: {character['mana']}/{character['max_mana']}\n\n"
+        f"Выбери действие:"
+    )
+    
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        InlineKeyboardButton("⚔️ Атаковать", callback_data=f"attack_{enemy_key}"),
+        InlineKeyboardButton("🛡️ Защищаться", callback_data=f"defend_{enemy_key}")
+    )
+    keyboard.add(
+        InlineKeyboardButton("🏃‍♂️ Убежать", callback_data="run_away"),
+        InlineKeyboardButton("🎒 Исп. предмет", callback_data="use_in_battle")
+    )
+    
+    bot.send_photo(
+        message.chat.id,
+        photo=enemy['image'],
+        caption=battle_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+# ==================== ОБРАБОТЧИКИ CALLBACK ====================
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback(call):
+    """Обработка всех callback запросов"""
+    user_id = call.from_user.id
+    
+    if call.data.startswith('create_'):
+        # Создание персонажа
+        race = call.data.replace('create_', '')
+        username = call.from_user.username or call.from_user.first_name
+        
+        # Запрашиваем имя персонажа
+        msg = bot.send_message(call.message.chat.id, f"📝 Вы выбрали расу: {database.get_all_races()[race]['name']}\n\nТеперь введите имя вашего персонажа:")
+        bot.register_next_step_handler(msg, process_character_name, race, username)
+    
+    elif call.data == "main_menu":
+        show_main_menu(call.message)
+    
+    elif call.data == "profile":
+        profile_command(call.message)
+    
+    elif call.data == "inventory":
+        inventory_command(call.message)
+    
+    elif call.data == "shop_menu":
+        shop_command(call.message)
+    
+    elif call.data == "stats":
+        show_stats(call.message)
+    
+    elif call.data == "top_players":
+        show_top_players(call.message)
+    
+    elif call.data.startswith('stat_'):
+        # Распределение характеристик
+        stat_type = call.data.replace('stat_', '')
+        success, message = database.add_stat_point(user_id, stat_type)
+        
+        if success:
+            bot.answer_callback_query(call.id, message)
+            profile_command(call.message)
+        else:
+            bot.answer_callback_query(call.id, message)
+    
+    elif call.data.startswith('buy_'):
+        # Покупка предмета
+        item_key = call.data.replace('buy_', '')
+        
+        if item_key in SHOP_ITEMS:
+            item_info = SHOP_ITEMS[item_key]
+            
+            # Проверяем, есть ли персонаж
+            character = database.get_character(user_id)
+            if not character:
+                bot.answer_callback_query(call.id, "❌ У тебя нет персонажа!")
+                return
+            
+            # Проверяем ранг
+            required_rank = item_info.get('required_rank')
+            if required_rank:
+                rank_order = {'E': 0, 'D': 1, 'C': 2, 'B': 3, 'A': 4, 'S': 5}
+                if rank_order.get(character['rank'], 0) < rank_order.get(required_rank, 0):
+                    bot.answer_callback_query(call.id, f"❌ Нужен ранг {required_rank} или выше!")
+                    return
+            
+            success, message = database.buy_item(
+                user_id, 
+                item_key, 
+                item_info['type'], 
+                item_info['name'], 
+                item_info['price'],
+                item_info.get('effect')
+            )
+            
+            bot.answer_callback_query(call.id, message)
+            
+            if success:
+                shop_command(call.message)
+    
+    elif call.data.startswith('use_'):
+        # Использование предмета
+        item_key = call.data.replace('use_', '')
+        
+        # Ищем предмет в инвентаре
+        inventory = database.get_inventory(user_id)
+        item_to_use = None
+        
+        for item in inventory:
+            if item['item_key'] == item_key:
+                item_to_use = item
                 break
         
+        if not item_to_use:
+            bot.answer_callback_query(call.id, "❌ Предмет не найден!")
+            return
+        
+        success, message = database.use_item(
+            user_id,
+            item_key,
+            item_to_use['item_type'],
+            item_to_use['item_name'],
+            item_to_use['effect_amount']
+        )
+        
+        bot.answer_callback_query(call.id, message)
+        
+        if success:
+            inventory_command(call.message)
+    
+    elif call.data.startswith('attack_'):
+        # Атака врага
+        enemy_key = call.data.replace('attack_', '')
+        perform_attack(call.message, user_id, enemy_key)
+    
+    elif call.data == "run_away":
+        bot.answer_callback_query(call.id, "🏃‍♂️ Ты успешно сбежал с поля боя!")
+        show_main_menu(call.message)
+
+def process_character_name(message, race, username):
+    """Обработка ввода имени персонажа"""
+    character_name = message.text.strip()
+    
+    if len(character_name) < 2:
+        msg = bot.send_message(message.chat.id, "❌ Имя должно содержать минимум 2 символа. Попробуй еще раз:")
+        bot.register_next_step_handler(msg, process_character_name, race, username)
+        return
+    
+    if len(character_name) > 20:
+        msg = bot.send_message(message.chat.id, "❌ Имя слишком длинное (макс. 20 символов). Попробуй еще раз:")
+        bot.register_next_step_handler(msg, process_character_name, race, username)
+        return
+    
+    # Создаем персонажа
+    success, result_message = database.create_character(message.from_user.id, username, character_name, race)
+    
+    if success:
+        bot.send_message(
+            message.chat.id,
+            f"✅ {result_message}\n\n"
+            f"🎉 Твой персонаж {character_name} ({database.get_all_races()[race]['name']}) успешно создан!\n\n"
+            f"Используй /profile чтобы посмотреть характеристики,\n"
+            f"/battle чтобы сражаться с монстрами,\n"
+            f"/shop чтобы посетить магазин."
+        )
+        show_main_menu(message)
+    else:
+        bot.send_message(message.chat.id, f"❌ {result_message}")
+
+def show_main_menu(message):
+    """Показывает главное меню"""
+    user_id = message.from_user.id
+    character = database.get_character(user_id)
+    
+    if not character:
+        return
+    
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row(
+        InlineKeyboardButton("👤 Профиль", callback_data="profile"),
+        InlineKeyboardButton("🎒 Инвентарь", callback_data="inventory")
+    )
+    keyboard.row(
+        InlineKeyboardButton("⚔️ Атаковать", callback_data="battle_menu"),
+        InlineKeyboardButton("🏪 Магазин", callback_data="shop_menu")
+    )
+    keyboard.row(
+        InlineKeyboardButton("📊 Статистика", callback_data="stats"),
+        InlineKeyboardButton("🏆 Топ игроков", callback_data="top_players")
+    )
+    
+    bot.send_message(
+        message.chat.id,
+        "🎮 *Главное меню*\n\nВыбери действие:",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+def show_stats(message):
+    """Показывает статистику игрока"""
+    user_id = message.from_user.id
+    stats = database.get_player_stats(user_id)
+    
+    if not stats:
+        bot.send_message(message.chat.id, "❌ Статистика не найдена!")
+        return
+    
+    stats_text = (
+        f"📊 *Статистика игрока*\n\n"
+        f"👤 Имя: {stats['character_name']}\n"
+        f"🏆 Ранг: {stats['rank']}\n"
+        f"⭐ Уровень: {stats['level']}\n"
+        f"📈 Опыт: {stats['experience']}\n\n"
+        f"⚔️ Победы: {stats['battle_wins']}\n"
+        f"💀 Поражения: {stats['battle_losses']}\n"
+        f"👑 Убито боссов: {stats['boss_kills']}\n"
+        f"🎯 Убито мини-боссов: {stats['mini_boss_kills']}\n\n"
+        f"💰 Золото: {stats['gold']}\n"
+        f"📅 Дата создания: {stats['created_at'].strftime('%d.%m.%Y') if stats.get('created_at') else 'Неизвестно'}\n"
+    )
+    
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
+    
+    bot.send_message(
+        message.chat.id,
+        stats_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+def show_top_players(message):
+    """Показывает топ игроков"""
+    top_players = database.get_top_players(10)
+    
+    if not top_players:
+        bot.send_message(message.chat.id, "🏆 Топ игроков пока пуст!")
+        return
+    
+    top_text = "🏆 *ТОП 10 ИГРОКОВ*\n\n"
+    
+    for i, player in enumerate(top_players, 1):
+        top_text += f"{i}. *{player['character_name']}*\n"
+        top_text += f"   ⭐ Уровень: {player['level']} | 🏆 Ранг: {player['rank']}\n"
+        top_text += f"   ⚔️ Победы: {player['battle_wins']} | 👑 Боссы: {player['boss_kills']}\n"
+        top_text += "─" * 30 + "\n"
+    
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data="main_menu"))
+    
+    bot.send_message(
+        message.chat.id,
+        top_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+def perform_attack(message, user_id, enemy_key):
+    """Выполняет атаку на врага"""
+    character = database.get_character(user_id)
+    enemy = create_enemy(enemy_key, character['level'])
+    
+    if not character or not enemy:
+        bot.send_message(message.chat.id, "❌ Ошибка в битве!")
+        return
+    
+    # Игрок атакует врага
+    player_damage = random.randint(
+        character['strength'] // 2,
+        character['strength']
+    )
+    
+    # Учитываем сопротивление врага
+    if enemy['damage_type'] == 'physical':
+        damage_multiplier = 1.0 - enemy['physical_resistance']
+    else:
+        damage_multiplier = 1.0 - enemy['magic_resistance']
+    
+    actual_damage = max(1, int(player_damage * damage_multiplier))
+    enemy['health'] -= actual_damage
+    
+    battle_text = f"⚔️ Ты атаковал {enemy['name']} и нанес {actual_damage} урона!\n"
+    
+    # Проверяем, побежден ли враг
+    if enemy['health'] <= 0:
+        # Победа!
+        experience_gained = enemy['exp']
+        gold_gained = enemy['gold']
+        
+        # Добавляем опыт и золото
+        database.add_experience(user_id, experience_gained)
+        database.add_gold(user_id, gold_gained)
+        database.increment_battle_stats(user_id, won=True)
+        
+        battle_text += f"\n🎉 *ПОБЕДА!*\n"
+        battle_text += f"✨ Получено опыта: {experience_gained}\n"
+        battle_text += f"💰 Получено золота: {gold_gained}\n\n"
+        
+        # Проверяем повышение уровня
+        success, level_up, new_level, stat_points = database.add_experience(user_id, experience_gained)
         if level_up:
-            # Рассчитываем новый ранг
-            new_rank = calculate_rank(new_level, new_exp)
+            battle_text += f"🎊 *ПОВЫШЕНИЕ УРОВНЯ!*\n"
+            battle_text += f"📈 Новый уровень: {new_level}\n"
+            battle_text += f"🎯 Получено очков характеристик: {stat_points}\n\n"
+        
+        battle_text += f"Что хочешь сделать дальше?"
+        
+        keyboard = InlineKeyboardMarkup()
+        keyboard.add(
+            InlineKeyboardButton("⚔️ Сражаться снова", callback_data="battle_menu"),
+            InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")
+        )
+        
+    else:
+        # Враг атакует в ответ
+        enemy_damage = random.randint(
+            enemy['min_physical_damage'],
+            enemy['max_physical_damage']
+        )
+        
+        character['health'] -= enemy_damage
+        
+        battle_text += f"💥 {enemy['name']} контратаковал и нанес {enemy_damage} урона!\n"
+        battle_text += f"\n❤️ Твое здоровье: {max(0, character['health'])}/{character['max_health']}\n"
+        battle_text += f"❤️ Здоровье врага: {enemy['health']}/{enemy['max_health']}\n\n"
+        
+        # Обновляем здоровье персонажа в БД
+        database.update_character_stats(user_id, health=max(0, character['health']))
+        
+        # Проверяем, жив ли игрок
+        if character['health'] <= 0:
+            # Поражение
+            battle_text += f"💀 *ПОРАЖЕНИЕ!*\n"
+            battle_text += f"Ты был повержен {enemy['name']}.\n\n"
+            battle_text += f"Подожди регенерации или используй зелье здоровья."
             
-            # Рассчитываем увеличение здоровья и маны
-            race_info = RACES.get(race, RACES['human'])
-            new_max_health = vitality * race_info['health_multiplier']
-            new_max_mana = intelligence * race_info['mana_multiplier']
+            database.increment_battle_stats(user_id, won=False)
             
-            # Обновляем персонажа
-            cursor.execute("""
-                UPDATE player_characters 
-                SET experience = %s, level = %s, stat_points = stat_points + %s, rank = %s,
-                    max_health = %s,
-                    max_mana = %s,
-                    health = %s,
-                    mana = %s
-                WHERE user_id = %s
-            """, (
-                new_exp, new_level, stat_points_gained, new_rank,
-                new_max_health,
-                new_max_mana,
-                new_max_health,
-                new_max_mana,
-                user_id
-            ))
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu"))
         else:
-            # Обновляем только опыт
-            cursor.execute("""
-                UPDATE player_characters 
-                SET experience = %s
-                WHERE user_id = %s
-            """, (new_exp, user_id))
-        
-        conn.commit()
-        return True, level_up, new_level, stat_points_gained
-        
-    except Exception as e:
-        print(f"❌ Ошибка при добавлении опыта: {e}")
-        if conn:
-            conn.rollback()
-        return False, False, 0, 0
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+            # Бой продолжается
+            battle_text += f"Выбери следующее действие:"
+            
+            keyboard = InlineKeyboardMarkup(row_width=2)
+            keyboard.add(
+                InlineKeyboardButton("⚔️ Атаковать", callback_data=f"attack_{enemy_key}"),
+                InlineKeyboardButton("🛡️ Защищаться", callback_data=f"defend_{enemy_key}")
+            )
+            keyboard.add(
+                InlineKeyboardButton("🏃‍♂️ Убежать", callback_data="run_away"),
+                InlineKeyboardButton("🎒 Исп. предмет", callback_data="use_in_battle")
+            )
+    
+    bot.send_message(
+        message.chat.id,
+        battle_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
 
-def add_stat_point(user_id, stat_type):
-    """Распределение очка характеристики"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False, "Ошибка подключения к БД"
-        
-        cursor = conn.cursor()
-        
-        # Проверяем, есть ли очки характеристик
-        cursor.execute("SELECT stat_points FROM player_characters WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
-        
-        if not result:
-            return False, "Персонаж не найден"
-        
-        stat_points = result[0]
-        
-        if stat_points <= 0:
-            return False, "У тебя нет очков характеристик для распределения!"
-        
-        # Определяем, какую характеристику улучшаем
-        if stat_type == 'strength':
-            cursor.execute("""
-                UPDATE player_characters 
-                SET strength = strength + 1, stat_points = stat_points - 1
-                WHERE user_id = %s
-            """, (user_id,))
-            
-        elif stat_type == 'agility':
-            cursor.execute("""
-                UPDATE player_characters 
-                SET agility = agility + 1, stat_points = stat_points - 1
-                WHERE user_id = %s
-            """, (user_id,))
-            
-        elif stat_type == 'intelligence':
-            cursor.execute("""
-                UPDATE player_characters 
-                SET intelligence = intelligence + 1, stat_points = stat_points - 1
-                WHERE user_id = %s
-            """, (user_id,))
-            
-        elif stat_type == 'vitality':
-            # При повышении живучести также увеличиваем максимальное здоровье
-            cursor.execute("""
-                SELECT vitality, race FROM player_characters WHERE user_id = %s
-            """, (user_id,))
-            char_result = cursor.fetchone()
-            
-            if char_result:
-                vitality, race = char_result
-                race_info = RACES.get(race, RACES['human'])
-                health_per_vitality = race_info['health_multiplier']
-                
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET vitality = vitality + 1, 
-                        stat_points = stat_points - 1,
-                        max_health = max_health + %s,
-                        health = health + %s
-                    WHERE user_id = %s
-                """, (health_per_vitality, health_per_vitality, user_id))
-            
-        else:
-            return False, "Неизвестная характеристика"
-        
-        conn.commit()
-        return True, f"Характеристика '{stat_type}' увеличена на 1!"
-        
-    except Exception as e:
-        print(f"❌ Ошибка при распределении характеристики: {e}")
-        if conn:
-            conn.rollback()
-        return False, f"Ошибка: {e}"
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+# ==================== ЗАПУСК БОТА ====================
 
-def add_gold(user_id, gold_amount):
-    """Добавление золота персонажу"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE player_characters 
-            SET gold = gold + %s 
-            WHERE user_id = %s
-        """, (gold_amount, user_id))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при добавлении золота: {e}")
-        if conn:
-            conn.rollback()
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def increment_boss_kills(user_id, is_mini_boss=False):
-    """Увеличение счетчика убитых боссов"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        if is_mini_boss:
-            cursor.execute("""
-                UPDATE player_characters 
-                SET mini_boss_kills = mini_boss_kills + 1
-                WHERE user_id = %s
-            """, (user_id,))
-        else:
-            cursor.execute("""
-                UPDATE player_characters 
-                SET boss_kills = boss_kills + 1
-                WHERE user_id = %s
-            """, (user_id,))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при увеличении счетчика боссов: {e}")
-        if conn:
-            conn.rollback()
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=None):
-    """Покупка предмета в магазине"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False, "Ошибка подключения к БД"
-        
-        cursor = conn.cursor()
-        
-        # Проверяем баланс игрока
-        cursor.execute("SELECT gold FROM player_characters WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
-        
-        if not result:
-            return False, "Персонаж не найден"
-        
-        current_gold = result[0]
-        
-        if current_gold < price:
-            return False, f"Недостаточно золота! Нужно {price}, есть {current_gold}"
-        
-        # Списываем золото
-        cursor.execute("""
-            UPDATE player_characters 
-            SET gold = gold - %s 
-            WHERE user_id = %s
-        """, (price, user_id))
-        
-        # Устанавливаем effect_amount по умолчанию, если не передан
-        if effect_amount is None:
-            if 'small_health_potion' in item_key:
-                effect_amount = 20
-            elif 'large_health_potion' in item_key:
-                effect_amount = 40
-            elif 'small_mana_potion' in item_key:
-                effect_amount = 15
-            elif 'large_mana_potion' in item_key:
-                effect_amount = 30
-            else:
-                effect_amount = 0
-        
-        # Проверяем, есть ли уже такой предмет в инвентаре
-        cursor.execute("""
-            SELECT id, quantity FROM player_inventory 
-            WHERE user_id = %s AND item_key = %s
-        """, (user_id, item_key))
-        
-        existing_item = cursor.fetchone()
-        
-        if existing_item:
-            # Увеличиваем количество
-            item_id, quantity = existing_item
-            cursor.execute("""
-                UPDATE player_inventory 
-                SET quantity = quantity + 1
-                WHERE id = %s
-            """, (item_id,))
-        else:
-            # Вставляем новую запись
-            cursor.execute("""
-                INSERT INTO player_inventory 
-                (user_id, item_key, item_type, item_name, quantity, effect_amount)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (user_id, item_key, item_type, item_name, 1, effect_amount))
-        
-        conn.commit()
-        return True, f"Предмет '{item_name}' куплен успешно!"
-        
-    except Exception as e:
-        print(f"❌ Ошибка при покупке предмета: {e}")
-        if conn:
-            conn.rollback()
-        return False, f"Ошибка при покупке: {e}"
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def get_inventory(user_id):
-    """Получение инвентаря игрока"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return []
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Группируем предметы по item_key и суммируем количество
-        cursor.execute("""
-            SELECT 
-                item_key,
-                item_type,
-                item_name,
-                SUM(quantity) as quantity,
-                MAX(effect_amount) as effect_amount
-            FROM player_inventory 
-            WHERE user_id = %s AND quantity > 0
-            GROUP BY item_key, item_type, item_name
-            ORDER BY 
-                CASE item_type
-                    WHEN 'potion' THEN 1
-                    WHEN 'weapon' THEN 2
-                    WHEN 'armor' THEN 3
-                    WHEN 'artifact' THEN 4
-                    ELSE 5
-                END,
-                item_name
-        """, (user_id,))
-        
-        return cursor.fetchall()
-        
-    except Exception as e:
-        print(f"❌ Ошибка при получении инвентаря: {e}")
-        return []
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """Использование предмета из инвентаря"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False, "Ошибка подключения к БД"
-        
-        cursor = conn.cursor()
-        
-        # Находим первую запись с этим предметом
-        cursor.execute("""
-            SELECT id, quantity, effect_amount FROM player_inventory 
-            WHERE user_id = %s AND item_key = %s AND quantity > 0
-            ORDER BY id
-            LIMIT 1
-        """, (user_id, item_key))
-        
-        result = cursor.fetchone()
-        if not result:
-            return False, "Предмет не найден в инвентаре"
-        
-        item_id, quantity, db_effect_amount = result
-        
-        # Используем effect_amount из базы, если он не передан
-        if effect_amount is None or effect_amount == 0:
-            effect_amount = db_effect_amount or 0
-        
-        # Уменьшаем количество на 1
-        new_quantity = quantity - 1
-        
-        if new_quantity <= 0:
-            # Удаляем запись, если предметы закончились
-            cursor.execute("""
-                DELETE FROM player_inventory 
-                WHERE id = %s
-            """, (item_id,))
-        else:
-            # Обновляем количество
-            cursor.execute("""
-                UPDATE player_inventory 
-                SET quantity = %s
-                WHERE id = %s
-            """, (new_quantity, item_id))
-        
-        # Восстанавливаем здоровье или ману
-        message = ""
-        
-        if 'health_potion' in item_key:
-            # Зелье здоровья - получаем текущее состояние персонажа
-            cursor.execute("""
-                SELECT health, max_health FROM player_characters 
-                WHERE user_id = %s
-            """, (user_id,))
-            char_result = cursor.fetchone()
-            
-            if not char_result:
-                conn.rollback()
-                return False, "Персонаж не найден"
-            
-            current_health, max_health = char_result
-            new_health = min(max_health, current_health + effect_amount)
-            health_restored = new_health - current_health
-            
-            # Обновляем здоровье
-            cursor.execute("""
-                UPDATE player_characters 
-                SET health = %s
-                WHERE user_id = %s
-            """, (new_health, user_id))
-            
-            message = f"Использовано {item_name}. Восстановлено {health_restored} HP!"
-            
-        elif 'mana_potion' in item_key:
-            # Зелье маны - получаем текущее состояние персонажа
-            cursor.execute("""
-                SELECT mana, max_mana FROM player_characters 
-                WHERE user_id = %s
-            """, (user_id,))
-            char_result = cursor.fetchone()
-            
-            if not char_result:
-                conn.rollback()
-                return False, "Персонаж не найден"
-            
-            current_mana, max_mana = char_result
-            new_mana = min(max_mana, current_mana + effect_amount)
-            mana_restored = new_mana - current_mana
-            
-            # Обновляем ману
-            cursor.execute("""
-                UPDATE player_characters 
-                SET mana = %s
-                WHERE user_id = %s
-            """, (new_mana, user_id))
-            
-            message = f"Использовано {item_name}. Восстановлено {mana_restored} MP!"
-        else:
-            # Для других типов предметов (оружие, броня, артефакты)
-            # Здесь можно добавить логику для применения эффектов предметов
-            message = f"Предмет '{item_name}' использован!"
-        
-        conn.commit()
-        return True, message
-        
-    except Exception as e:
-        print(f"❌ Ошибка при использовании предмета: {e}")
-        if conn:
-            conn.rollback()
-        return False, f"Ошибка: {e}"
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def log_battle(user_id, enemy_type, enemy_name, result, damage_dealt=0, damage_taken=0, gold_earned=0, experience_earned=0, is_boss=False, is_mini_boss=False):
-    """Логирование боя"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return False
-        
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO battle_logs 
-            (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss, is_mini_boss)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (user_id, enemy_type, enemy_name, result, damage_dealt, damage_taken, gold_earned, experience_earned, is_boss, is_mini_boss))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка при логировании боя: {e}")
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def get_player_stats(user_id):
-    """Получение статистики игрока"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return None
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("""
-            SELECT 
-                character_name,
-                race,
-                level,
-                rank,
-                experience,
-                stat_points,
-                battle_wins,
-                battle_losses,
-                boss_kills,
-                mini_boss_kills,
-                gold,
-                created_at,
-                physical_resistance,
-                magic_resistance
-            FROM player_characters 
-            WHERE user_id = %s
-        """, (user_id,))
-        
-        return cursor.fetchone()
-        
-    except Exception as e:
-        print(f"❌ Ошибка при получении статистики: {e}")
-        return None
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-def get_top_players(limit=10):
-    """Получение топ-N игроков по уровню и опыту"""
-    conn = None
-    cursor = None
-    try:
-        conn = get_connection()
-        if not conn:
-            return []
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cursor.execute("""
-            SELECT 
-                character_name,
-                race,
-                level,
-                rank,
-                experience,
-                battle_wins,
-                battle_losses,
-                boss_kills,
-                mini_boss_kills,
-                gold,
-                created_at
-            FROM player_characters 
-            ORDER BY level DESC, experience DESC, boss_kills DESC, battle_wins DESC
-            LIMIT %s
-        """, (limit,))
-        
-        return cursor.fetchall()
-        
-    except Exception as e:
-        print(f"❌ Ошибка при получении топа игроков: {e}")
-        return []
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+if __name__ == "__main__":
+    print("🤖 Бот запускается...")
+    print("✅ Используется импорт из database.py")
+    
+    # Удаляем вебхук (если есть)
+    bot.remove_webhook()
+    
+    # Запускаем опрос
+    print("🔄 Запускаю polling...")
+    bot.infinity_polling(timeout=60, long_polling_timeout=60)
