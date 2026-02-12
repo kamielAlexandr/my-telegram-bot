@@ -2,37 +2,23 @@ import os
 import logging
 import random
 import html
-from datetime import datetime
+from datetime import datetime, time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    ContextTypes, 
-    ConversationHandler, 
-    MessageHandler, 
-    filters
+    Application, CommandHandler, CallbackQueryHandler, 
+    ContextTypes, ConversationHandler, MessageHandler, filters
 )
-# Импортируем модуль базы данных
 import database
+import pytz
 
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Состояния для ConversationHandler
 CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(8)
-
-# Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-# Глобальная переменная для хранения данных о боях
 battle_sessions = {}
 
-# Константы (для отображения в боте)
+# --- КОНТЕНТ ---
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
@@ -67,10 +53,10 @@ IMAGE_URLS = {
 }
 
 SHOP_ITEMS = {
-    'small_health_potion': {'name': '💊 Малое зелье здоровья', 'description': 'Восстанавливает 20 HP', 'price': 40, 'type': 'potion', 'effect': 20, 'available': True},
-    'large_health_potion': {'name': '💊 Большое зелье здоровья', 'description': 'Восстанавливает 40 HP', 'price': 75, 'type': 'potion', 'effect': 40, 'available': True},
-    'small_mana_potion': {'name': '🔮 Малое зелье маны', 'description': 'Восстанавливает 15 MP', 'price': 35, 'type': 'potion', 'effect': 15, 'available': True},
-    'large_mana_potion': {'name': '🔮 Большое зелье маны', 'description': 'Восстанавливает 30 MP', 'price': 65, 'type': 'potion', 'effect': 30, 'available': True},
+    'small_health_potion': {'name': '💊 Малое зелье здоровья', 'description': 'Восстанавливает 20 HP', 'price': 40, 'type': 'potion', 'effect': 20, 'available': True, 'required_rank': 'E'},
+    'large_health_potion': {'name': '💊 Большое зелье здоровья', 'description': 'Восстанавливает 40 HP', 'price': 75, 'type': 'potion', 'effect': 40, 'available': True, 'required_rank': 'D'},
+    'small_mana_potion': {'name': '🔮 Малое зелье маны', 'description': 'Восстанавливает 15 MP', 'price': 35, 'type': 'potion', 'effect': 15, 'available': True, 'required_rank': 'E'},
+    'large_mana_potion': {'name': '🔮 Большое зелье маны', 'description': 'Восстанавливает 30 MP', 'price': 65, 'type': 'potion', 'effect': 30, 'available': True, 'required_rank': 'D'},
     'rank_d_weapon': {'name': '⚔️ Меч D-ранга', 'description': '+3 к силе (требуется D-ранг)', 'price': 300, 'type': 'weapon', 'effect': 3, 'available': True, 'required_rank': 'D'},
     'rank_c_armor': {'name': '🛡️ Броня C-ранга', 'description': '+5 к живучести (требуется C-ранг)', 'price': 400, 'type': 'armor', 'effect': 5, 'available': True, 'required_rank': 'C'},
     'rank_b_artifact': {'name': '💎 Артефакт B-ранга', 'description': '+8 к интеллекту (требуется B-ранг)', 'price': 600, 'type': 'artifact', 'effect': 8, 'available': True, 'required_rank': 'B'},
@@ -381,10 +367,21 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == 'profile':
         char = database.get_character(user_id) # Реген тут
+        
+        # Расчет статов для отображения
+        phys_dmg = max(1, char['strength'] // 3)
+        mag_dmg = max(1, char['intelligence'] // 3)
+        dodge_pct = int(min(0.03 + (char['agility'] * 0.003), 0.25) * 100)
+        
         txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
                f"HP: {get_health_bar(char['health'], char['max_health'])} | MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
-               f"Золото: {char['gold']}\n"
-               f"Опыт: {get_xp_bar(char['level'], char['experience'])}")
+               f"Золото: {char['gold']} | Опыт: {get_xp_bar(char['level'], char['experience'])}\n\n"
+               f"💪 Сила: {char['strength']} | 🏹 Ловкость: {char['agility']}\n"
+               f"🧠 Интеллект: {char['intelligence']} | ❤️ Живучесть: {char['vitality']}\n\n"
+               f"⚔️ Урон: {phys_dmg} (Физ) / {mag_dmg} (Маг)\n"
+               f"🛡 Уклонение: {dodge_pct}%\n"
+               f"♻️ Регенерация: 5% в минуту (вне боя)")
+               
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
     elif data == 'inventory':
         await show_inventory_menu(update, context)
@@ -398,6 +395,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = f"Магазин. Золото: {char['gold']}"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_keyboard(char))
         return SHOP_MENU
+    elif data == 'stats':
+        # Перенаправляем на новую функцию
+        await show_top_players(query, user_id)
     elif data == 'top_players':
         await show_top_players(query, user_id)
     elif data == 'refresh':
@@ -485,8 +485,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     # Ход игрока
     if action == 'flee':
         if random.random() < 0.5:
+            # ИСПРАВЛЕНИЕ: Сохраняем текущее здоровье перед удалением сессии
+            database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
             del battle_sessions[user_id]
-            await safe_edit(query, text="🏃 Вы сбежали!", media=InputMediaPhoto(IMAGE_URLS['village'], caption="🏃 Вы сбежали!", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            await safe_edit(query, text="🏃 Вы сбежали!", media=InputMediaPhoto(IMAGE_URLS['village'], caption="🏃 Вы сбежали! Здоровье сохранено.", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         log.append("🚫 Побег не удался!")
     elif 'attack' in action:
@@ -539,19 +541,32 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     data = query.data
     user_id = query.from_user.id
     
     if data == 'back_to_main':
+        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('buy_'):
         item_key = data.split('_', 1)[1]
         item = SHOP_ITEMS.get(item_key)
+        
+        # ПРОВЕРКА РАНГА
+        char = database.get_character(user_id)
+        if item.get('required_rank'):
+            ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+            p_rank_idx = ranks_order.index(char['rank'])
+            i_rank_idx = ranks_order.index(item['required_rank'])
+            
+            if p_rank_idx < i_rank_idx:
+                await query.answer(f"🔒 Нужен ранг {item['required_rank']}!", show_alert=True)
+                return SHOP_MENU
+
         if item:
             res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item['effect'])
             await query.answer(msg, show_alert=True)
+            # Обновляем баланс
             char = database.get_character(user_id)
             txt = f"Магазин. Золото: {char['gold']}"
             await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_keyboard(char))
@@ -644,12 +659,25 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
          await update.message.reply_text(text, parse_mode='Markdown')
 
+async def daily_reminder(context: ContextTypes.DEFAULT_TYPE):
+    """Рассылка сообщения всем пользователям"""
+    users = database.get_all_users()
+    for uid in users:
+        try:
+            await context.bot.send_message(chat_id=uid, text="🌅 Новый день настал! Ваш герой готов к подвигам! (/start)")
+        except:
+            pass # Если пользователь заблокировал бота
+
 import telegram 
 
 def main():
     database.init_db()
     app = Application.builder().token(TOKEN).build()
     
+    # Ежедневное напоминание в 12:00 UTC
+    if app.job_queue:
+        app.job_queue.run_daily(daily_reminder, time=datetime.strptime("12:00", "%H:%M").time(), days=(0,1,2,3,4,5,6))
+
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
