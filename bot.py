@@ -12,10 +12,7 @@ from telegram.ext import (
 import database
 
 # Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Состояния
@@ -24,7 +21,7 @@ CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP,
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
-# --- КОНТЕНТ (ИЗОБРАЖЕНИЯ ОСТАЛИСЬ ПРЕЖНИМИ) ---
+# --- КОНТЕНТ (КАРТИНКИ И ОПИСАНИЯ) ---
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
@@ -114,7 +111,7 @@ LOCATIONS = {
     'S': {'name': '⚡ Трон Падшего Бога', 'description': 'Вершина мироздания, где решается судьба всего сущего. Здесь обитают легендарные существа, а в конце пути ждет сам безумный Творец. Лишь истинная легенда сможет бросить ему вызов.', 'enemies': ['dragon_ancient', 'titan', 'fallen_angel', 'archangel', 'final_god'], 'mini_boss': 'archangel', 'boss': 'final_god', 'image': IMAGE_URLS['throne_god'], 'min_level': 50, 'max_level': 70, 'difficulty': 'legendary'}
 }
 
-# --- ФУНКЦИИ БОТА (БЕЗ ИЗМЕНЕНИЙ ЛОГИКИ, ТОЛЬКО БАЛАНС В create_enemy и calculate_damage) ---
+# --- ФУНКЦИИ БОТА ---
 
 async def safe_edit(query, text=None, keyboard=None, media=None):
     try:
@@ -134,6 +131,24 @@ async def safe_edit(query, text=None, keyboard=None, media=None):
              await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
         elif text:
              await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
+        elif keyboard and not text and not media:
+             await query.message.reply_text("Меню обновлено", reply_markup=keyboard)
+
+# Глобальный обработчик неизвестных команд/текста (для перезапуска)
+async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отлавливает любые сообщения вне диалога и просит перезапуск."""
+    await update.message.reply_text(
+        "🔮 *Связь с миром потеряна...*\n\nВетра магии изменились, и старые тропы больше не ведут никуда. Вы затерялись в Пустоте.\n\nПроизнеси заклинание /start, чтобы вновь воплотиться в этом мире.",
+        parse_mode='Markdown'
+    )
+
+async def unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отлавливает нажатия на старые кнопки."""
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text(
+        "⏳ *Этот магический след развеялся...*\n\nСобытие больше недоступно. Начни заново: /start.",
+        parse_mode='Markdown'
+    )
 
 def create_enemy(enemy_key, player_level):
     if enemy_key not in BASE_ENEMIES: 
@@ -319,7 +334,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     char = database.get_character(user.id)
     if char:
-        # ЛОР: Приветствие для существующего героя
+        # ЛОР: Приветствие
         msg = f"С возвращением в этот проклятый мир, {char['character_name']}. Тьма сгущается, и лишь сильнейшие выживут."
         await update.message.reply_photo(IMAGE_URLS['village'], caption=msg, reply_markup=get_main_menu_keyboard(user.id))
         return MAIN_MENU
@@ -338,7 +353,7 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text
     user = update.effective_user
     database.create_character(user.id, user.username, name, context.user_data['race'])
-    # ЛОР: Сообщение о создании героя
+    # ЛОР: Сообщение о создании
     msg = "Герой создан. Твой путь начинается в лагере наемников. Тренируйся, сражайся и, возможно, ты станешь той легендой, что сокрушит Падшего Бога."
     await update.message.reply_photo(IMAGE_URLS['village'], caption=msg, reply_markup=get_main_menu_keyboard(user.id))
     return MAIN_MENU
@@ -350,7 +365,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     
     if data == 'profile':
-        char = database.get_character(user_id) 
+        char = database.get_character(user_id)
         # Доп. статистика для стратегии
         phys = max(1, char['strength'] // 2)
         mag = max(1, char['intelligence'] // 2)
@@ -441,7 +456,6 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif data == 'back_to_battle_menu':
         char = database.get_character(user_id)
         await safe_edit(query, text="Куда ты отправишься?", media=InputMediaPhoto(IMAGE_URLS['forest'], caption="Куда ты отправишься?", parse_mode='Markdown'), keyboard=get_battle_menu_keyboard(char))
-        
     return BATTLE_MENU
 
 async def render_battle(query, user_id):
@@ -462,7 +476,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     c, e, log = s['char'], s['enemy'], s['log']
     
-    # Ход игрока
     if action == 'flee':
         if random.random() < 0.5:
             # СОХРАНЯЕМ ТЕКУЩЕЕ ЗДОРОВЬЕ ПРИ ПОБЕГЕ
@@ -487,7 +500,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             e['health'] -= dmg
             log.append(f"⚔️ Твой удар нанес {dmg}{status} урона!")
 
-    # Победа
     if e['health'] <= 0:
         database.add_experience(user_id, e['exp'])
         database.add_gold(user_id, e['gold'])
@@ -500,7 +512,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # Ход врага
     if action != 'flee':
         dmg, dodge = calculate_enemy_damage(e, c)
         if not dodge:
@@ -510,7 +521,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             log.append("💨 Ты ловко уклонился от атаки врага!")
 
-    # Поражение
     if c['health'] <= 0:
         database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
         del battle_sessions[user_id]
@@ -538,11 +548,14 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ПРОВЕРКИ МАГАЗИНА
         char = database.get_character(user_id)
         if item.get('required_rank'):
-            ranks = ['E', 'D', 'C', 'B', 'A', 'S']
-            if ranks.index(char['rank']) < ranks.index(item['required_rank']):
+            ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+            p_rank_idx = ranks_order.index(char['rank'])
+            i_rank_idx = ranks_order.index(item['required_rank'])
+            
+            if p_rank_idx < i_rank_idx:
                 await query.answer(f"🔒 Торговец: 'Этот товар только для охотников ранга {item['required_rank']}. Проваливай.'", show_alert=True)
                 return SHOP_MENU
-        
+
         if item and char['gold'] >= item['price']:
             res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item['effect'])
             await query.answer(f"Торговец: 'Хороший выбор. {msg}'", show_alert=True)
@@ -559,7 +572,6 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-    
     if data == 'back_to_main':
         await safe_edit(query, text="Главное меню", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
@@ -580,7 +592,6 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-    
     if data == 'back_to_main':
         await safe_edit(query, text="Главное меню", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
@@ -600,7 +611,6 @@ async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query if update.callback_query else update
     user_id = query.from_user.id
     items = database.get_inventory(user_id)
-    
     txt = "🎒 Твой походный мешок:" if items else "В твоем мешке пусто."
     kb = get_inventory_keyboard(items, 0) if items else get_main_menu_keyboard(user_id)
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['inventory'], caption=txt, parse_mode='Markdown'), keyboard=kb)
@@ -608,25 +618,18 @@ async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def show_top_players(query, user_id):
     top_players = database.get_top_players(10)
-    # ЛОР: Заголовок топа
     top_text = "🏆 *ЛЕГЕНДЫ УМИРАЮЩЕГО МИРА*\nТе, кто выжил там, где погибли остальные:\n━━━━━━━━━━━━━━━━\n"
-
     for i, player in enumerate(top_players, 1):
         name = html.escape(player['character_name'])
         lvl = player['level']
         race_key = player['race']
         race_name = database.RACES.get(race_key, {}).get('name', 'Неизвестно')
         bosses = player.get('boss_kills', 0)
-
         medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
-        top_text += f"{medal} <b>{name}</b>\n"
-        top_text += f"   └ 🎭 {race_name} | ⭐ {lvl} ур.\n"
-        top_text += f"   └ ☠️ Повержено боссов: {bosses}\n\n"
-    
+        top_text += f"{medal} <b>{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Повержено боссов: {bosses}\n\n"
     await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ЛОР: Текст помощи
     text = """
 🆘 *РУКОВОДСТВО ПО ВЫЖИВАНИЮ*
 
@@ -645,18 +648,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          await update.message.reply_text(text, parse_mode='Markdown')
 
 async def daily_reminder(context: ContextTypes.DEFAULT_TYPE):
-    """Ежедневное уведомление всем игрокам"""
     users = database.get_all_users()
     for uid in users:
-        # ЛОР: Ежедневное напоминание
         try: await context.bot.send_message(chat_id=uid, text="🌅 Новый день в мире тьмы. Твои раны затянулись. Пора снова отправиться в путь, пока смерть не настигла тебя в постели. (/start)")
         except: pass
+
+# --- ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ (ДЛЯ ПЕРЕЗАПУСКА) ---
+async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🔮 *Связь с миром потеряна...*\n\nВетра магии изменились, и старые тропы больше не ведут никуда. Вы затерялись в Пустоте.\n\nПроизнеси заклинание /start, чтобы вновь воплотиться в этом мире.",
+        parse_mode='Markdown'
+    )
+
+async def unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.reply_text(
+        "⏳ *Этот магический след развеялся...*\n\nСобытие больше недоступно. Начни заново: /start.",
+        parse_mode='Markdown'
+    )
 
 def main():
     database.init_db()
     app = Application.builder().token(TOKEN).build()
     
-    # Ежедневное напоминание в 12:00 UTC
     if app.job_queue:
         app.job_queue.run_daily(daily_reminder, time=datetime.strptime("12:00", "%H:%M").time(), days=(0,1,2,3,4,5,6))
 
@@ -674,9 +688,13 @@ def main():
         },
         fallbacks=[CommandHandler('start', start)]
     )
-    
     app.add_handler(conv)
     app.add_handler(CommandHandler('help', help_command))
+    
+    # Добавляем глобальные обработчики ПОСЛЕ ConversationHandler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
+    app.add_handler(CallbackQueryHandler(unknown_callback))
+
     print("Бот запущен!")
     app.run_polling()
 
