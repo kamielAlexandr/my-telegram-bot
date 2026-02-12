@@ -2,12 +2,13 @@ import os
 import logging
 import random
 import html
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
     ContextTypes, ConversationHandler, MessageHandler, filters
 )
-# Импортируем наш модуль базы данных
+# Импортируем модуль базы данных
 import database
 
 # Настройка логирования
@@ -37,7 +38,6 @@ IMAGE_URLS = {
     'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
-    # Враги
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
@@ -76,14 +76,12 @@ def create_enemy(enemy_key, player_level):
     if enemy_key not in BASE_ENEMIES: return None
     base = BASE_ENEMIES[enemy_key].copy()
     
-    # Множитель уровня: +15% за каждый уровень игрока
     mult = 1.0 + (player_level - 1) * 0.15
     
     enemy = base.copy()
     enemy['health'] = int(base['base_health'] * mult)
     enemy['max_health'] = enemy['health']
     
-    # Скейлинг урона
     for dmg_key in ['min_physical_damage', 'max_physical_damage', 'min_magic_damage', 'max_magic_damage']:
         if dmg_key in base:
             enemy[dmg_key] = int(base[dmg_key] * mult)
@@ -100,8 +98,7 @@ def create_enemy(enemy_key, player_level):
     return enemy
 
 def get_xp_bar(level, exp, length=10):
-    needed = (level * (level + 1) * 150) // 2 # Накопительный опыт
-    # Для упрощения показа текущего уровня
+    needed = (level * (level + 1) * 150) // 2 
     prev_needed = ((level - 1) * level * 150) // 2
     
     current_level_exp = exp - prev_needed
@@ -116,13 +113,12 @@ def get_xp_bar(level, exp, length=10):
 # --- КЛАВИАТУРЫ ---
 
 def get_main_menu_keyboard(user_id):
-    # При получении клавиатуры мы запрашиваем персонажа, что триггерит регенерацию в базе
     char = database.get_character(user_id)
     
     kb = [
         [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
-        [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Топ", callback_data='stats')],
+        [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Топ игроков", callback_data='stats')],
         [InlineKeyboardButton("🔄 Обновить (Реген)", callback_data='refresh')]
     ]
     if char and char['stat_points'] > 0:
@@ -177,7 +173,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    char = database.get_character(user_id) # ТУТ СРАБАТЫВАЕТ РЕГЕНЕРАЦИЯ
+    char = database.get_character(user_id)
     
     text = (
         f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
@@ -193,11 +189,31 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_caption(caption=text, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
     return MAIN_MENU
 
+# --- НОВАЯ ФУНКЦИЯ СТАТИСТИКИ (ТОП ИГРОКОВ) ---
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    
+    top = database.get_top_players(10)
+    
+    text = "🏆 *ТОП ЛЕГЕНД*\n\n"
+    for i, p in enumerate(top, 1):
+        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else "▫️"
+        text += f"{medal} {i}. *{p['character_name']}* (Ур.{p['level']})\n"
+        text += f"   ⚔️ {p['battle_wins']} побед | 💰 {p['gold']}\n\n"
+        
+    await query.edit_message_caption(
+        caption=text, 
+        parse_mode='Markdown', 
+        reply_markup=get_main_menu_keyboard(user_id)
+    )
+    return MAIN_MENU
+
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка для визуального обновления регенерации"""
     query = update.callback_query
     await query.answer("Данные обновлены!")
-    await profile(update, context) # Просто вызываем профиль снова
+    await profile(update, context)
     return MAIN_MENU
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -219,7 +235,6 @@ async def buy_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success, msg = database.buy_item(query.from_user.id, item_key, item['type'], item['name'], item['price'], item['effect'])
         await query.answer(msg, show_alert=True)
     
-    # Обновляем меню магазина
     await shop(update, context)
     return SHOP_MENU
 
@@ -278,7 +293,6 @@ async def start_battle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    # Выбор врага
     enemy_key = random.choice(loc['enemies'])
     enemy = create_enemy(enemy_key, char['level'])
     
@@ -294,7 +308,7 @@ async def start_battle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_battle_interface(query, user_id):
     session = battle_sessions[user_id]
     enemy = session['enemy']
-    char = session['char'] # Это копия, здоровье отнимаем тут
+    char = session['char']
     
     text = (
         f"🆚 *БОЙ*\n"
@@ -308,7 +322,6 @@ async def show_battle_interface(query, user_id):
         [InlineKeyboardButton("🛡 Блок", callback_data='defend'), InlineKeyboardButton("🏃 Сбежать", callback_data='flee')]
     ]
     
-    # Используем edit_message_caption если картинка та же, или media если меняем
     try:
         await query.edit_message_media(
             media=telegram.InputMediaPhoto(enemy['image'], caption=text, parse_mode='Markdown'),
@@ -317,39 +330,55 @@ async def show_battle_interface(query, user_id):
     except:
         await query.edit_message_caption(caption=text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
 
+# --- ИСПРАВЛЕННЫЙ BATTLE ACTION (РАБОЧИЙ ПОБЕГ) ---
 async def battle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    action = query.data.split('_')[1]
+    action = query.data.split('_')[0] if '_' in query.data else query.data # atk_phys -> atk
+    sub_action = query.data.split('_')[1] if '_' in query.data else None # atk_phys -> phys
+    
     session = battle_sessions[user_id]
     char = session['char']
     enemy = session['enemy']
     log = session['log']
     
+    player_turn_done = False
+
     # Ход игрока
     if action == 'flee':
         if random.random() < 0.5:
             del battle_sessions[user_id]
-            await query.edit_message_caption(caption="🏃 Вы успешно сбежали!", reply_markup=get_main_menu_keyboard(user_id))
+            await query.edit_message_caption(
+                caption="🏃 Вы успешно сбежали в безопасную зону!", 
+                reply_markup=get_main_menu_keyboard(user_id)
+            )
             return MAIN_MENU
         else:
-            log.append("🚫 Побег не удался!")
+            log.append("🚫 Побег не удался! Враг атакует!")
+            player_turn_done = True
     
-    dmg = 0
-    if action == 'phys':
-        dmg = max(1, int(char['strength'] / 3 * random.uniform(0.8, 1.2)))
-        log.append(f"⚔️ Вы нанесли {dmg} урона.")
-    elif action == 'mag':
-        if char['mana'] >= 5:
-            dmg = max(1, int(char['intelligence'] / 3 * random.uniform(1.0, 1.5)))
-            char['mana'] -= 5
-            log.append(f"🔮 Вы нанесли {dmg} урона (-5 MP).")
-        else:
-            log.append("❌ Нет маны!")
-            
-    enemy['health'] -= dmg
-    
+    elif action == 'atk':
+        dmg = 0
+        if sub_action == 'phys':
+            dmg = max(1, int(char['strength'] / 3 * random.uniform(0.8, 1.2)))
+            log.append(f"⚔️ Вы нанесли {dmg} урона.")
+        elif sub_action == 'mag':
+            if char['mana'] >= 5:
+                dmg = max(1, int(char['intelligence'] / 3 * random.uniform(1.0, 1.5)))
+                char['mana'] -= 5
+                log.append(f"🔮 Вы нанесли {dmg} урона (-5 MP).")
+            else:
+                log.append("❌ Нет маны! Слабый удар посохом.")
+                dmg = 1
+        
+        enemy['health'] -= dmg
+        player_turn_done = True
+
+    elif action == 'defend':
+        log.append("🛡 Вы встали в защитную стойку.")
+        player_turn_done = True
+
     # Проверка победы
     if enemy['health'] <= 0:
         database.add_experience(user_id, enemy['exp'])
@@ -364,12 +393,13 @@ async def battle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return MAIN_MENU
     
-    # Ход врага
-    if action != 'flee':
+    # Ход врага (если игрок что-то сделал, или пытался сбежать и не вышло)
+    if player_turn_done:
         e_dmg = random.randint(enemy['min_physical_damage'], enemy['max_physical_damage'])
+        
         if action == 'defend':
             e_dmg //= 2
-            log.append(f"🛡 Вы заблокировали часть урона ({e_dmg} получено).")
+            log.append(f"🛡 Блок снизил урон! Получено {e_dmg}.")
         else:
             log.append(f"💔 Враг нанес {e_dmg} урона.")
         
@@ -399,9 +429,6 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return MAIN_MENU
 
-# Добавлен import telegram для InputMediaPhoto
-import telegram 
-
 def main():
     database.init_db()
     app = Application.builder().token(TOKEN).build()
@@ -416,12 +443,14 @@ def main():
                 CallbackQueryHandler(inventory, pattern='^inventory$'),
                 CallbackQueryHandler(battle_menu, pattern='^battle_menu$'),
                 CallbackQueryHandler(shop, pattern='^shop$'),
-                CallbackQueryHandler(refresh, pattern='^refresh$') # Рефреш для регенерации
+                CallbackQueryHandler(show_stats, pattern='^stats$'), # ДОБАВИЛ СЮДА
+                CallbackQueryHandler(refresh, pattern='^refresh$')
             ],
             SHOP_MENU: [CallbackQueryHandler(buy_handler, pattern='^buy_'), CallbackQueryHandler(back_to_main, pattern='^back_')],
             INVENTORY_MENU: [CallbackQueryHandler(use_handler, pattern='^use_'), CallbackQueryHandler(back_to_main, pattern='^back_')],
             BATTLE_MENU: [CallbackQueryHandler(start_battle, pattern='^loc_'), CallbackQueryHandler(back_to_main, pattern='^back_')],
-            IN_BATTLE: [CallbackQueryHandler(battle_action, pattern='^(atk_|defend|flee)')]
+            # Исправлен паттерн для битвы, чтобы ловить все действия
+            IN_BATTLE: [CallbackQueryHandler(battle_action, pattern='^(atk|defend|flee)')]
         },
         fallbacks=[CommandHandler('start', start)]
     )
