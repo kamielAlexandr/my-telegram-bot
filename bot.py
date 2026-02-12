@@ -28,7 +28,7 @@ IMAGE_URLS = {
     'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
     'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
-    'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
+    'goblin': 'https://i.pinimg.com/236x/44/68/77/446877e7b222981d52bab10a9c22a7ac.jpg',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
     'hot_goblin': 'https://i.pinimg.com/736x/c8/26/9c/c8269c5d8631f0081b84de0e481542bb.jpg',
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
@@ -52,7 +52,7 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
     'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
     'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
-    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
+    'inventory': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSF6wV-FbRT3AB5HxKoGLTjujIZaKpdfOAmeA&s'
 }
 
 # ОБНОВЛЕННЫЕ ОПИСАНИЯ ПРЕДМЕТОВ (ЛОР)
@@ -432,7 +432,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = query.from_user.id
     
     if data == 'back_to_main':
-        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        await safe_edit(query, text="Деревня новичков, здесь вы можете подлататься и набраться сил для следующего боя", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('location_'):
         rank = data.split('_')[1]
