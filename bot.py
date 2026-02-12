@@ -2,23 +2,30 @@ import os
 import logging
 import random
 import html
-from datetime import datetime, time
+# Используем стандартный модуль datetime вместо pytz
+from datetime import datetime, time, timezone
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
     ContextTypes, ConversationHandler, MessageHandler, filters
 )
+# Импортируем нашу базу данных
 import database
-import pytz
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
+# Состояния
 CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(8)
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
-# --- КОНТЕНТ ---
+# --- КОНТЕНТ (КАРТИНКИ И ОПИСАНИЯ) ---
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
