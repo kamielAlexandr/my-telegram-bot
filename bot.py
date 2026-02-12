@@ -1,434 +1,566 @@
 import os
 import logging
 import random
-import telegram
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+import html
+from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, 
-    ContextTypes, ConversationHandler, MessageHandler, filters
+    Application, 
+    CommandHandler, 
+    CallbackQueryHandler, 
+    ContextTypes, 
+    ConversationHandler, 
+    MessageHandler, 
+    filters
 )
+# Импортируем модуль базы данных
 import database
 
 # Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
+# Состояния для ConversationHandler
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(8)
+
+# Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+# Глобальная переменная для хранения данных о боях
 battle_sessions = {}
 
-# --- КОНТЕНТ (КАРТИНКИ И ОПИСАНИЯ) ---
-IMAGES = {
-    'start': 'https://img.freepik.com/premium-photo/fantasy-medieval-village-tavern_360032-15.jpg',
-    'map': 'https://i.pinimg.com/564x/4e/1c/0e/4e1c0e3e26703a553075253106362536.jpg',
-    'shop': 'https://i.pinimg.com/564x/1a/1a/1a/1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a.jpg',
-    'profile': 'https://i.pinimg.com/564x/e3/37/29/e337296068eb4c434997033784033333.jpg',
-    # Локации
-    'forest': 'https://i.pinimg.com/736x/2d/7b/72/2d7b72522c009945030222079075727e.jpg',
-    'mine': 'https://i.pinimg.com/736x/8a/34/06/8a340632b49673992224772863777722.jpg',
+# Константы (для отображения в боте)
+IMAGE_URLS = {
+    'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
+    'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
+    'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
+    'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
+    'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
+    'goblin': 'https://img.freepik.com/free-photo/goblin-digital-art_23-2151061965.jpg',
+    'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
+    'hot_goblin': 'https://i.pinimg.com/736x/c8/26/9c/c8269c5d8631f0081b84de0e481542bb.jpg',
+    'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
+    'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
+    'mage': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
+    'vampire': 'https://img.freepik.com/free-photo/vampire_23-2150762308.jpg',
+    'knight': 'https://i.pinimg.com/originals/92/11/34/9211349d21f146a07aa1e2f920d5c2f4.jpg',
+    'demon': 'https://img.freepik.com/free-photo/demon_23-2150762325.jpg',
+    'lich': 'https://img.freepik.com/free-photo/lich_23-2150911246.jpg',
+    'dragon': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
+    'dragon_young': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
+    'dragon_ancient': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
+    'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
+    'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
+    'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
+    'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
+    'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
+    'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
+    'training_camp': 'https://img1.liveinternet.ru/images/attach/b/2/1/726/1726838_full0011.jpg',
+    'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
+    'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
+    'shop': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
+    'levelup': 'https://i.pinimg.com/736x/7f/9a/97/7f9a97fdbbd70577225c213ad8a6e75c.jpg',
+    'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
 }
 
-# Локации и мобы
-LOCATIONS = {
-    'forest': {
-        'name': '🌲 Гнилой Лес', 'rank': 'E', 'img': IMAGES['forest'],
-        'desc': 'Темная чаща, где деревья шепчут проклятия.',
-        'mobs': ['rat', 'spider', 'wolf', 'bandit', 'bear']
-    },
-    'mine': {
-        'name': '⛏ Заброшенная Шахта', 'rank': 'E', 'img': IMAGES['mine'],
-        'desc': 'Старые туннели, кишащие подземными тварями.',
-        'mobs': ['bat', 'kobold', 'slime', 'dwarf_zombie', 'golem']
-    }
-}
-
-MOBS = {
-    'rat': {'name': '🐀 Чумная Крыса', 'lvl': 1, 'hp': 25, 'str': 5, 'agi': 5, 'xp': 10, 'gold': 5, 'img': 'https://i.pinimg.com/564x/f3/d3/de/f3d3de7a56327344073f84307379766d.jpg'},
-    'spider': {'name': '🕷 Лесной Паук', 'lvl': 3, 'hp': 35, 'str': 7, 'agi': 10, 'xp': 15, 'gold': 8, 'img': 'https://i.pinimg.com/564x/27/7f/73/277f73db0c202022464736f94793672d.jpg'},
-    'wolf': {'name': '🐺 Серый Волк', 'lvl': 5, 'hp': 50, 'str': 10, 'agi': 8, 'xp': 20, 'gold': 12, 'img': 'https://i.pinimg.com/564x/c7/2b/9d/c72b9d034237d6929944372922442c7f.jpg'},
-    'bandit': {'name': '🗡 Разбойник', 'lvl': 7, 'hp': 70, 'str': 12, 'agi': 7, 'xp': 30, 'gold': 20, 'img': 'https://i.pinimg.com/564x/7d/87/40/7d8740d2492d52927233267232230206.jpg'},
-    'bear': {'name': '🐻 Медведь-Людоед', 'lvl': 10, 'hp': 120, 'str': 15, 'agi': 3, 'xp': 50, 'gold': 35, 'img': 'https://i.pinimg.com/564x/a4/09/8f/a4098f98e87490022723049282387342.jpg'},
-    'bat': {'name': '🦇 Летучая Мышь', 'lvl': 2, 'hp': 30, 'str': 4, 'agi': 15, 'xp': 12, 'gold': 6, 'img': 'https://i.pinimg.com/564x/76/01/cc/7601cc3370e7e462d733230a84364024.jpg'},
-    'kobold': {'name': '🦎 Кобольд', 'lvl': 4, 'hp': 45, 'str': 8, 'agi': 9, 'xp': 18, 'gold': 10, 'img': 'https://i.pinimg.com/564x/3b/22/e0/3b22e032f30663673c99092497640f8e.jpg'},
-    'slime': {'name': '🟢 Слизь', 'lvl': 6, 'hp': 80, 'str': 6, 'agi': 1, 'xp': 25, 'gold': 15, 'img': 'https://i.pinimg.com/564x/c3/84/04/c384048704207908b988f07094200673.jpg'},
-    'dwarf_zombie': {'name': '🧟 Зомби-Дварф', 'lvl': 8, 'hp': 100, 'str': 14, 'agi': 2, 'xp': 40, 'gold': 25, 'img': 'https://i.pinimg.com/564x/e7/76/9b/e7769bf4772023023249497e84240742.jpg'},
-    'golem': {'name': '🗿 Голем', 'lvl': 12, 'hp': 150, 'str': 20, 'agi': 0, 'xp': 65, 'gold': 50, 'img': 'https://i.pinimg.com/564x/24/76/8f/24768f00030026e99279743936934c20.jpg'},
-}
-
+# Магазин
 SHOP_ITEMS = {
-    'small_hp': {'name': '💊 Зелье HP (+50)', 'price': 30, 'effect': 50},
-    'small_mp': {'name': '🔮 Зелье MP (+30)', 'price': 30, 'effect': 30},
+    'small_health_potion': {'name': '💊 Малое зелье здоровья', 'description': 'Восстанавливает 20 HP', 'price': 40, 'type': 'potion', 'effect': 20, 'available': True},
+    'large_health_potion': {'name': '💊 Большое зелье здоровья', 'description': 'Восстанавливает 40 HP', 'price': 75, 'type': 'potion', 'effect': 40, 'available': True},
+    'small_mana_potion': {'name': '🔮 Малое зелье маны', 'description': 'Восстанавливает 15 MP', 'price': 35, 'type': 'potion', 'effect': 15, 'available': True},
+    'large_mana_potion': {'name': '🔮 Большое зелье маны', 'description': 'Восстанавливает 30 MP', 'price': 65, 'type': 'potion', 'effect': 30, 'available': True},
+    'rank_d_weapon': {'name': '⚔️ Меч D-ранга', 'description': '+3 к силе (требуется D-ранг)', 'price': 300, 'type': 'weapon', 'effect': 3, 'available': True, 'required_rank': 'D'},
+    'rank_c_armor': {'name': '🛡️ Броня C-ранга', 'description': '+5 к живучести (требуется C-ранг)', 'price': 400, 'type': 'armor', 'effect': 5, 'available': True, 'required_rank': 'C'},
+    'rank_b_artifact': {'name': '💎 Артефакт B-ранга', 'description': '+8 к интеллекту (требуется B-ранг)', 'price': 600, 'type': 'artifact', 'effect': 8, 'available': True, 'required_rank': 'B'},
+    'ring_of_agility': {'name': '💍 Кольцо ловкости', 'description': '+5 к ловкости', 'price': 450, 'type': 'artifact', 'effect': 5, 'available': True, 'required_rank': 'C'}
 }
 
-# Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, LOCATION_MENU, MOB_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(9)
+# Враги (ПОЛНЫЙ СПИСОК)
+BASE_ENEMIES = {
+    'wolf': {'name': '🐺 Бешеный Волк', 'base_health': 35, 'base_min_physical_damage': 5, 'base_max_physical_damage': 8, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 12, 'base_gold': 8, 'rank': 'E', 'description': 'Его глаза горят голодом, а клыки обнажены.', 'image': IMAGE_URLS['wolf'], 'difficulty': 'easy', 'abilities': ['basic_attack'], 'damage_type': 'physical', 'dodge_chance': 0.08, 'physical_resistance': 0.15, 'magic_resistance': 0.0, 'special_chance': 0.15, 'attack_range': 'melee'},
+    'goblin': {'name': '👹 Гоблин-разведчик', 'base_health': 40, 'base_min_physical_damage': 6, 'base_max_physical_damage': 10, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 16, 'base_gold': 12, 'rank': 'E', 'description': 'Мелкий и трусливый, но опасный в стае.', 'image': IMAGE_URLS['goblin'], 'difficulty': 'easy', 'abilities': ['basic_attack', 'dirty_trick'], 'damage_type': 'physical', 'dodge_chance': 0.12, 'physical_resistance': 0.05, 'magic_resistance': 0.0, 'special_chance': 0.20, 'attack_range': 'melee'},
+    'slime': {'name': '🟢 Ядовитая Слизь', 'base_health': 45, 'base_min_physical_damage': 3, 'base_max_physical_damage': 8, 'base_min_magic_damage': 2, 'base_max_magic_damage': 5, 'base_exp': 10, 'base_gold': 7, 'rank': 'E', 'description': 'Желейная масса, медленная, но ядовитая.', 'image': IMAGE_URLS['slime'], 'difficulty': 'easy', 'abilities': ['basic_attack', 'poison_spit'], 'damage_type': 'mixed', 'dodge_chance': 0.03, 'physical_resistance': 0.35, 'magic_resistance': 0.15, 'special_chance': 0.25, 'poison_chance': 0.35, 'attack_range': 'ranged'},
+    'goblin_elite': {'name': '👹 Элитный гоблин', 'base_health': 75, 'base_min_physical_damage': 10, 'base_max_physical_damage': 18, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 28, 'base_gold': 20, 'rank': 'E', 'description': 'Опытный воин гоблинов, вооруженный стальным оружием.', 'image': IMAGE_URLS['hot_goblin'], 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'power_strike', 'goblin_shout'], 'damage_type': 'physical', 'dodge_chance': 0.15, 'physical_resistance': 0.20, 'magic_resistance': 0.08, 'special_chance': 0.30, 'mini_boss_bonus': 1.8, 'attack_range': 'melee'},
+    'training_master': {'name': '⚔️ Мастер-тренер', 'base_health': 100, 'base_min_physical_damage': 10, 'base_max_physical_damage': 20, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 40, 'base_gold': 32, 'rank': 'E', 'description': 'Опытный воин, обучающий новичков. Не стоит недооценивать его!', 'image': IMAGE_URLS['knight'], 'difficulty': 'boss', 'abilities': ['basic_attack', 'training_strike', 'defensive_stance', 'encouraging_shout'], 'damage_type': 'physical', 'dodge_chance': 0.20, 'physical_resistance': 0.25, 'magic_resistance': 0.15, 'special_chance': 0.35, 'boss_bonus': 2.5, 'attack_range': 'melee'},
+    'forest_spider': {'name': '🕷️ Лесной Паук', 'base_health': 65, 'base_min_physical_damage': 8, 'base_max_physical_damage': 16, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 25, 'base_gold': 16, 'rank': 'D', 'description': 'Огромный паук, плетущий смертельные сети.', 'image': 'https://img.freepik.com/free-photo/giant-spider_23-2150911307.jpg', 'difficulty': 'medium', 'abilities': ['basic_attack', 'web_shot', 'poison_bite'], 'damage_type': 'physical', 'dodge_chance': 0.15, 'physical_resistance': 0.15, 'magic_resistance': 0.05, 'special_chance': 0.25, 'web_chance': 0.30, 'attack_range': 'melee'},
+    'ghost': {'name': '👻 Призрак', 'base_health': 55, 'base_min_physical_damage': 7, 'base_max_physical_damage': 14, 'base_min_magic_damage': 4, 'base_max_magic_damage': 9, 'base_exp': 28, 'base_gold': 20, 'rank': 'D', 'description': 'Бесформенный дух, способный проходить сквозь стены.', 'image': 'https://img.freepik.com/free-photo/ghost_23-2150762306.jpg', 'difficulty': 'medium', 'abilities': ['basic_attack', 'fear', 'phase_through'], 'damage_type': 'magic', 'dodge_chance': 0.25, 'physical_resistance': 0.60, 'magic_resistance': 0.25, 'special_chance': 0.30, 'attack_range': 'ranged'},
+    'wild_boar': {'name': '🐗 Дикий Кабан', 'base_health': 85, 'base_min_physical_damage': 10, 'base_max_physical_damage': 20, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 32, 'base_gold': 24, 'rank': 'D', 'description': 'Массивное животное с острыми клыками.', 'image': 'https://img.freepik.com/free-photo/wild-boar_23-2150911295.jpg', 'difficulty': 'medium', 'abilities': ['basic_attack', 'charge', 'tusks'], 'damage_type': 'physical', 'dodge_chance': 0.08, 'physical_resistance': 0.30, 'magic_resistance': 0.05, 'special_chance': 0.25, 'charge_chance': 0.35, 'attack_range': 'melee'},
+    'forest_troll': {'name': '🌳 Лесной тролль', 'base_health': 110, 'base_min_physical_damage': 15, 'base_max_physical_damage': 23, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 48, 'base_gold': 36, 'rank': 'D', 'description': 'Мощное лесное существо с регенерацией.', 'image': 'https://img.freepik.com/free-photo/troll_23-2150911292.jpg', 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'regeneration', 'club_smash'], 'damage_type': 'physical', 'dodge_chance': 0.12, 'physical_resistance': 0.35, 'magic_resistance': 0.15, 'special_chance': 0.35, 'mini_boss_bonus': 1.9, 'attack_range': 'melee'},
+    'forest_guardian': {'name': '🌳 Хранитель Леса', 'base_health': 150, 'base_min_physical_damage': 13, 'base_max_physical_damage': 25, 'base_min_magic_damage': 7, 'base_max_magic_damage': 13, 'base_exp': 80, 'base_gold': 64, 'rank': 'D', 'description': 'Древнее дерево, пробужденное магией леса.', 'image': 'https://img.freepik.com/free-photo/treant_23-2150911290.jpg', 'difficulty': 'boss', 'abilities': ['basic_attack', 'root_grab', 'healing_leaves', 'forest_rage'], 'damage_type': 'mixed', 'dodge_chance': 0.08, 'physical_resistance': 0.45, 'magic_resistance': 0.35, 'special_chance': 0.40, 'boss_bonus': 2.7, 'heal_chance': 0.25, 'attack_range': 'mixed'},
+    'skeleton_warrior': {'name': '💀 Скелет-воин', 'base_health': 100, 'base_min_physical_damage': 13, 'base_max_physical_damage': 23, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 48, 'base_gold': 32, 'rank': 'C', 'description': 'Оживленные кости с ржавым мечом и щитом.', 'image': IMAGE_URLS['skeleton'], 'difficulty': 'hard', 'abilities': ['basic_attack', 'shield_bash', 'bone_armor'], 'damage_type': 'physical', 'dodge_chance': 0.12, 'physical_resistance': 0.35, 'magic_resistance': 0.15, 'special_chance': 0.30, 'block_chance': 0.35, 'attack_range': 'melee'},
+    'ghoul': {'name': '🧟 Гуль', 'base_health': 115, 'base_min_physical_damage': 12, 'base_max_physical_damage': 22, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 52, 'base_gold': 36, 'rank': 'C', 'description': 'Ненасытная нежить, питающаяся плотью.', 'image': IMAGE_URLS['zombie'], 'difficulty': 'hard', 'abilities': ['basic_attack', 'life_drain', 'frenzy'], 'damage_type': 'physical', 'dodge_chance': 0.10, 'physical_resistance': 0.25, 'magic_resistance': 0.05, 'special_chance': 0.35, 'drain_chance': 0.30, 'attack_range': 'melee'},
+    'dark_priest': {'name': '🕯️ Темный Жрец', 'base_health': 90, 'base_min_physical_damage': 7, 'base_max_physical_damage': 13, 'base_min_magic_damage': 15, 'base_max_magic_damage': 28, 'base_exp': 60, 'base_gold': 44, 'rank': 'C', 'description': 'Служитель темных богов, владеющий запретной магией.', 'image': IMAGE_URLS['mage'], 'difficulty': 'hard', 'abilities': ['basic_attack', 'dark_bolt', 'curse', 'sacrifice'], 'damage_type': 'magic', 'dodge_chance': 0.15, 'physical_resistance': 0.15, 'magic_resistance': 0.30, 'special_chance': 0.40, 'spell_chance': 0.45, 'attack_range': 'ranged'},
+    'crypt_keeper': {'name': '💀 Хранитель склепа', 'base_health': 140, 'base_min_physical_damage': 15, 'base_max_physical_damage': 25, 'base_min_magic_damage': 10, 'base_max_magic_damage': 19, 'base_exp': 72, 'base_gold': 56, 'rank': 'C', 'description': 'Древний некромант, охраняющий катакомбы.', 'image': 'https://img.freepik.com/free-photo/necromancer_23-2150911284.jpg', 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'raise_dead', 'death_bolt', 'bone_shield'], 'damage_type': 'mixed', 'dodge_chance': 0.18, 'physical_resistance': 0.25, 'magic_resistance': 0.40, 'special_chance': 0.40, 'mini_boss_bonus': 2.0, 'attack_range': 'ranged'},
+    'catacomb_lord': {'name': '👑 Повелитель Катакомб', 'base_health': 225, 'base_min_physical_damage': 19, 'base_max_physical_damage': 32, 'base_min_magic_damage': 13, 'base_max_magic_damage': 23, 'base_exp': 160, 'base_gold': 120, 'rank': 'C', 'description': 'Древний король, проклятый вечно охранять свои владения.', 'image': 'https://img.freepik.com/free-photo/skeleton-king_23-2150911291.jpg', 'difficulty': 'boss', 'abilities': ['basic_attack', 'royal_decree', 'summon_skeletons', 'kings_wrath'], 'damage_type': 'mixed', 'dodge_chance': 0.15, 'physical_resistance': 0.40, 'magic_resistance': 0.30, 'special_chance': 0.45, 'boss_bonus': 3.0, 'summon_chance': 0.35, 'attack_range': 'mixed'},
+    'knight': {'name': '⚔️ Проклятый рыцарь', 'base_health': 150, 'base_min_physical_damage': 19, 'base_max_physical_damage': 32, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 80, 'base_gold': 64, 'rank': 'B', 'description': 'Броня сияет темной энергией, а меч жаждет крови.', 'image': IMAGE_URLS['knight'], 'difficulty': 'very_hard', 'abilities': ['basic_attack', 'shield_wall', 'vengeful_strike', 'dark_aura'], 'damage_type': 'physical', 'dodge_chance': 0.20, 'physical_resistance': 0.45, 'magic_resistance': 0.25, 'special_chance': 0.35, 'defense_bonus': 0.45, 'attack_range': 'melee'},
+    'vampire': {'name': '🦇 Молодой вампир', 'base_health': 125, 'base_min_physical_damage': 23, 'base_max_physical_damage': 35, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 96, 'base_gold': 80, 'rank': 'B', 'description': 'Аристократ ночи, пьющий кровь жертв.', 'image': IMAGE_URLS['vampire'], 'difficulty': 'very_hard', 'abilities': ['basic_attack', 'blood_drain', 'bat_swarm', 'hypnosis'], 'damage_type': 'physical', 'dodge_chance': 0.25, 'physical_resistance': 0.30, 'magic_resistance': 0.20, 'special_chance': 0.40, 'heal_from_damage': 0.35, 'attack_range': 'melee'},
+    'warlock': {'name': '🔮 Чернокнижник', 'base_health': 115, 'base_min_physical_damage': 7, 'base_max_physical_damage': 13, 'base_min_magic_damage': 25, 'base_max_magic_damage': 40, 'base_exp': 104, 'base_gold': 88, 'rank': 'B', 'description': 'Маг, заключивший договор с демонами.', 'image': IMAGE_URLS['mage'], 'difficulty': 'very_hard', 'abilities': ['basic_attack', 'shadow_bolt', 'demon_summon', 'soul_burn'], 'damage_type': 'magic', 'dodge_chance': 0.18, 'physical_resistance': 0.15, 'magic_resistance': 0.45, 'special_chance': 0.45, 'summon_chance': 0.30, 'attack_range': 'ranged'},
+    'death_knight': {'name': '💀 Рыцарь смерти', 'base_health': 190, 'base_min_physical_damage': 25, 'base_max_physical_damage': 38, 'base_min_magic_damage': 13, 'base_max_magic_damage': 23, 'base_exp': 144, 'base_gold': 112, 'rank': 'B', 'description': 'Бывший паладин, павший во тьму и получивший нежить.', 'image': 'https://img.freepik.com/free-photo/death-knight_23-2150911264.jpg', 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'death_coil', 'anti_magic_shell', 'army_of_the_dead'], 'damage_type': 'mixed', 'dodge_chance': 0.23, 'physical_resistance': 0.50, 'magic_resistance': 0.40, 'special_chance': 0.45, 'mini_boss_bonus': 2.1, 'attack_range': 'melee'},
+    'castle_overlord': {'name': '🏰 Владыка Замка', 'base_health': 315, 'base_min_physical_damage': 25, 'base_max_physical_damage': 44, 'base_min_magic_damage': 19, 'base_max_magic_damage': 32, 'base_exp': 280, 'base_gold': 200, 'rank': 'B', 'description': 'Бывший король, павший во тьму и превративший свой замок в обитель зла.', 'image': 'https://img.freepik.com/free-photo/dark-king_23-2150911261.jpg', 'difficulty': 'boss', 'abilities': ['basic_attack', 'royal_command', 'castle_defense', 'tyrants_wrath'], 'damage_type': 'mixed', 'dodge_chance': 0.20, 'physical_resistance': 0.55, 'magic_resistance': 0.35, 'special_chance': 0.50, 'boss_bonus': 3.3, 'defense_bonus': 0.55, 'attack_range': 'mixed'},
+    'demon': {'name': '😈 Младший демон', 'base_health': 190, 'base_min_physical_damage': 32, 'base_max_physical_damage': 50, 'base_min_magic_damage': 13, 'base_max_magic_damage': 25, 'base_exp': 160, 'base_gold': 120, 'rank': 'A', 'description': 'Призван из бездны, жаждет разрушения.', 'image': IMAGE_URLS['demon'], 'difficulty': 'extreme', 'abilities': ['basic_attack', 'hellfire', 'demonic_claws', 'fear_aura'], 'damage_type': 'mixed', 'dodge_chance': 0.25, 'physical_resistance': 0.35, 'magic_resistance': 0.45, 'special_chance': 0.40, 'fire_chance': 0.35, 'attack_range': 'mixed'},
+    'hellhound': {'name': '🔥 Адская Гончая', 'base_health': 225, 'base_min_physical_damage': 28, 'base_max_physical_damage': 48, 'base_min_magic_damage': 7, 'base_max_magic_damage': 13, 'base_exp': 144, 'base_gold': 112, 'rank': 'A', 'description': 'Пес из преисподней с горящей шерстью.', 'image': 'https://img.freepik.com/free-photo/hellhound_23-2150911276.jpg', 'difficulty': 'extreme', 'abilities': ['basic_attack', 'fire_breath', 'pack_hunt', 'hellish_howl'], 'damage_type': 'mixed', 'dodge_chance': 0.30, 'physical_resistance': 0.30, 'magic_resistance': 0.40, 'special_chance': 0.35, 'burn_chance': 0.30, 'attack_range': 'melee'},
+    'infernal_mage': {'name': '🔥 Инфернальный Маг', 'base_health': 165, 'base_min_physical_damage': 13, 'base_max_physical_damage': 23, 'base_min_magic_damage': 35, 'base_max_magic_damage': 56, 'base_exp': 176, 'base_gold': 136, 'rank': 'A', 'description': 'Мастер огненной и демонической магии.', 'image': 'https://img.freepik.com/free-photo/fire-mage_23-2150911269.jpg', 'difficulty': 'extreme', 'abilities': ['basic_attack', 'meteor_shower', 'demonic_gate', 'inferno'], 'damage_type': 'magic', 'dodge_chance': 0.20, 'physical_resistance': 0.20, 'magic_resistance': 0.55, 'special_chance': 0.45, 'aoe_chance': 0.40, 'attack_range': 'ranged'},
+    'pit_fiend': {'name': '😈 Повелитель бездны', 'base_health': 275, 'base_min_physical_damage': 35, 'base_max_physical_damage': 53, 'base_min_magic_damage': 25, 'base_max_magic_damage': 40, 'base_exp': 240, 'base_gold': 176, 'rank': 'A', 'description': 'Высший демон, командующий легионами преисподней.', 'image': 'https://img.freepik.com/free-photo/pit-fiend_23-2150911286.jpg', 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'summon_demons', 'infernal_rage', 'dimensional_rip'], 'damage_type': 'mixed', 'dodge_chance': 0.28, 'physical_resistance': 0.45, 'magic_resistance': 0.50, 'special_chance': 0.50, 'mini_boss_bonus': 2.2, 'attack_range': 'mixed'},
+    'demon_general': {'name': '😈 Генерал Преисподней', 'base_health': 440, 'base_min_physical_damage': 38, 'base_max_physical_damage': 63, 'base_min_magic_damage': 32, 'base_max_magic_damage': 50, 'base_exp': 400, 'base_gold': 280, 'rank': 'A', 'description': 'Командующий армиями ада. Его появление предвещает конец света.', 'image': 'https://img.freepik.com/free-photo/demon-general_23-2150911263.jpg', 'difficulty': 'boss', 'abilities': ['basic_attack', 'army_command', 'apocalypse', 'final_judgment'], 'damage_type': 'mixed', 'dodge_chance': 0.25, 'physical_resistance': 0.50, 'magic_resistance': 0.45, 'special_chance': 0.55, 'boss_bonus': 3.5, 'army_bonus': 1.6, 'attack_range': 'mixed'},
+    'dragon_ancient': {'name': '🐉 Древний Дракон', 'base_health': 500, 'base_min_physical_damage': 44, 'base_max_physical_damage': 69, 'base_min_magic_damage': 32, 'base_max_magic_damage': 50, 'base_exp': 480, 'base_gold': 320, 'rank': 'S', 'description': 'Владыка небес. Его пламя сжигает все живое.', 'image': IMAGE_URLS['dragon_ancient'], 'difficulty': 'legendary', 'abilities': ['basic_attack', 'dragon_breath', 'wing_gust', 'ancient_roar'], 'damage_type': 'mixed', 'dodge_chance': 0.30, 'physical_resistance': 0.55, 'magic_resistance': 0.55, 'special_chance': 0.45, 'breath_chance': 0.40, 'attack_range': 'mixed'},
+    'titan': {'name': '🏔️ Титан', 'base_health': 625, 'base_min_physical_damage': 50, 'base_max_physical_damage': 75, 'base_min_magic_damage': 19, 'base_max_magic_damage': 32, 'base_exp': 560, 'base_gold': 360, 'rank': 'S', 'description': 'Ходячая гора из плоти и камня.', 'image': IMAGE_URLS['titan'], 'difficulty': 'legendary', 'abilities': ['basic_attack', 'earthquake', 'mountain_slam', 'titanic_rage'], 'damage_type': 'physical', 'dodge_chance': 0.15, 'physical_resistance': 0.65, 'magic_resistance': 0.35, 'special_chance': 0.40, 'stun_chance': 0.35, 'attack_range': 'melee'},
+    'fallen_angel': {'name': '😇 Падший Ангел', 'base_health': 565, 'base_min_physical_damage': 48, 'base_max_physical_damage': 73, 'base_min_magic_damage': 38, 'base_max_magic_damage': 56, 'base_exp': 520, 'base_gold': 336, 'rank': 'S', 'description': 'Бывший слуга небес, изгнанный за гордыню.', 'image': 'https://img.freepik.com/free-photo/fallen-angel_23-2150911260.jpg', 'difficulty': 'legendary', 'abilities': ['basic_attack', 'heavenly_light', 'fallen_wings', 'judgment_sword'], 'damage_type': 'mixed', 'dodge_chance': 0.35, 'physical_resistance': 0.45, 'magic_resistance': 0.65, 'special_chance': 0.50, 'heal_chance': 0.30, 'attack_range': 'mixed'},
+    'archangel': {'name': '😇 Архангел', 'base_health': 475, 'base_min_physical_damage': 40, 'base_max_physical_damage': 60, 'base_min_magic_damage': 44, 'base_max_magic_damage': 65, 'base_exp': 440, 'base_gold': 304, 'rank': 'S', 'description': 'Верховный ангел, защитник небесного трона.', 'image': 'https://img.freepik.com/free-photo/archangel_23-2150911259.jpg', 'difficulty': 'mini_boss', 'abilities': ['basic_attack', 'divine_smite', 'angelic_shield', 'holy_aura'], 'damage_type': 'mixed', 'dodge_chance': 0.40, 'physical_resistance': 0.40, 'magic_resistance': 0.60, 'special_chance': 0.55, 'mini_boss_bonus': 2.3, 'attack_range': 'mixed'},
+    'final_god': {'name': '⚡ Верховный Бог', 'base_health': 1250, 'base_min_physical_damage': 63, 'base_max_physical_damage': 100, 'base_min_magic_damage': 50, 'base_max_magic_damage': 88, 'base_exp': 1200, 'base_gold': 800, 'rank': 'S', 'description': 'Верховное божество этого мира. Победа над ним сделает тебя легендой.', 'image': IMAGE_URLS['fallen_god'], 'difficulty': 'boss', 'abilities': ['basic_attack', 'divine_judgment', 'creation', 'annihilation', 'omnipotence'], 'damage_type': 'mixed', 'dodge_chance': 0.45, 'physical_resistance': 0.65, 'magic_resistance': 0.65, 'special_chance': 0.65, 'boss_bonus': 4.5, 'god_powers': True, 'attack_range': 'mixed'}
+}
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+# Локации
+LOCATIONS = {
+    'E': {'name': '🎪 Тренировочный лагерь', 'description': 'Начинай свой путь здесь. Враги слабые, но хороши для тренировки.', 'enemies': ['wolf', 'goblin', 'slime', 'goblin_elite', 'training_master'], 'mini_boss': 'goblin_elite', 'boss': 'training_master', 'image': IMAGE_URLS['training_camp'], 'min_level': 1, 'max_level': 15, 'difficulty': 'easy'},
+    'D': {'name': '🌲 Лес призраков', 'description': 'Лес наполнен низкоуровневыми монстрами. Подходит для охотников D-ранга.', 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_troll', 'forest_guardian'], 'mini_boss': 'forest_troll', 'boss': 'forest_guardian', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'max_level': 25, 'difficulty': 'medium'},
+    'C': {'name': '🪦 Заброшенные катакомбы', 'description': 'Катакомбы наполнены опасными существами. Требует навыков C-ранга.', 'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord'], 'mini_boss': 'crypt_keeper', 'boss': 'catacomb_lord', 'image': IMAGE_URLS['dungeon'], 'min_level': 20, 'max_level': 35, 'difficulty': 'hard'},
+    'B': {'name': '🏰 Руины древнего замка', 'description': 'Замок охраняют могущественные существа. Только для охотников B-ранга.', 'enemies': ['knight', 'vampire', 'warlock', 'death_knight', 'castle_overlord'], 'mini_boss': 'death_knight', 'boss': 'castle_overlord', 'image': IMAGE_URLS['castle'], 'min_level': 30, 'max_level': 45, 'difficulty': 'very_hard'},
+    'A': {'name': '🌋 Врата в преисподнюю', 'description': 'Портал в мир демонов. Только сильнейшие A-ранга могут здесь выжить.', 'enemies': ['demon', 'hellhound', 'infernal_mage', 'pit_fiend', 'demon_general'], 'mini_boss': 'pit_fiend', 'boss': 'demon_general', 'image': IMAGE_URLS['hell_gate'], 'min_level': 40, 'max_level': 55, 'difficulty': 'extreme'},
+    'S': {'name': '⚡ Трон божества', 'description': 'Последнее испытание. Только S-ранг может бросить вызов богу.', 'enemies': ['dragon_ancient', 'titan', 'fallen_angel', 'archangel', 'final_god'], 'mini_boss': 'archangel', 'boss': 'final_god', 'image': IMAGE_URLS['throne_god'], 'min_level': 50, 'max_level': 70, 'difficulty': 'legendary'}
+}
 
-def calculate_attack(attacker_str, attacker_agi, defender_agi, is_magic=False):
-    """Считает урон с шансом попадания и крита"""
-    # Шанс попасть: База 90% + разница в ловкости
-    hit_chance = 0.90 + ((attacker_agi - defender_agi) * 0.02)
-    hit_chance = max(0.40, min(1.0, hit_chance))
+# --- ФУНКЦИИ БОТА (ОБЕРТКИ) ---
+
+def create_enemy(enemy_key, player_level):
+    if enemy_key not in BASE_ENEMIES: return None
+    base_enemy = BASE_ENEMIES[enemy_key].copy()
     
-    if random.random() > hit_chance and not is_magic:
-        return 0, "💨 *ПРОМАХ!* (Уклонение)"
-
-    # Шанс крита
-    crit_chance = attacker_agi * 0.02
-    is_crit = random.random() < crit_chance
-
-    # Урон
-    base = attacker_str * (1.5 if is_magic else 0.5)
-    dmg = int(base * random.uniform(0.85, 1.15))
+    level_multiplier = 1.0 + (player_level - 1) * 0.15
+    bonus = 1.0
+    if base_enemy.get('difficulty') == 'mini_boss': bonus = 1.8
+    elif base_enemy.get('difficulty') == 'boss': bonus = 2.5
     
-    status = ""
-    if is_crit:
-        dmg = int(dmg * 1.5)
-        status = "💥 *КРИТ!*"
+    final_multiplier = level_multiplier * bonus
+    
+    enemy = base_enemy.copy()
+    enemy['health'] = int(base_enemy['base_health'] * final_multiplier)
+    enemy['max_health'] = int(base_enemy['base_health'] * final_multiplier)
+    enemy['min_physical_damage'] = int(base_enemy['base_min_physical_damage'] * level_multiplier)
+    enemy['max_physical_damage'] = int(base_enemy['base_max_physical_damage'] * level_multiplier)
+    enemy['min_magic_damage'] = int(base_enemy['base_min_magic_damage'] * level_multiplier)
+    enemy['max_magic_damage'] = int(base_enemy['base_max_magic_damage'] * level_multiplier)
+    enemy['exp'] = int(base_enemy['base_exp'] * final_multiplier * 0.8)
+    enemy['gold'] = int(base_enemy['base_gold'] * final_multiplier * 0.8)
+    enemy['level_multiplier'] = round(level_multiplier, 2)
+    
+    if enemy['difficulty'] == 'boss': enemy['is_boss'] = True
+    elif enemy['difficulty'] == 'mini_boss': enemy['is_mini_boss'] = True
+    
+    return enemy
+
+def get_rank_icon(rank):
+    return {'E': '🆕', 'D': '🟢', 'C': '🔵', 'B': '🟣', 'A': '🟠', 'S': '⚡'}.get(rank, '🆕')
+
+def get_difficulty_icon(difficulty):
+    return {'easy': '🟢', 'medium': '🟡', 'hard': '🟠', 'very_hard': '🔴', 'extreme': '💀', 'legendary': '👑', 'boss': '👑', 'mini_boss': '⭐'}.get(difficulty, '⚪')
+
+def get_xp_bar(level, exp, length=10):
+    # Упрощенная логика для визуала
+    needed = (level + 1) * 150
+    percent = min(1.0, exp / needed) if needed > 0 else 0
+    filled = int(length * percent)
+    return "█" * filled + "░" * (length - filled) + f" {exp}/{needed}"
+
+def get_health_bar(current, maximum, length=15):
+    percent = current / maximum if maximum > 0 else 0
+    filled = int(length * percent)
+    empty = length - filled
+    bar = "🟩" * filled + "⬜" * empty if percent > 0.5 else "🟥" * filled + "⬜" * empty
+    return f"{bar} {current}/{maximum}"
+
+def get_mana_bar(current, maximum, length=10):
+    percent = current / maximum if maximum > 0 else 0
+    filled = int(length * percent)
+    empty = length - filled
+    return "🟦" * filled + "⬜" * empty + f" {current}/{maximum}"
+
+def calculate_player_dodge_chance(agility):
+    return min(0.03 + (agility * 0.003), 0.25)
+
+def calculate_crit_chance(agility):
+    return min(0.03 + (agility * 0.002), 0.15)
+
+def calculate_damage(character, enemy, damage_type='physical'):
+    base_damage = max(1, character['strength' if damage_type == 'physical' else 'intelligence'] // 3)
+    res = enemy.get('physical_resistance' if damage_type == 'physical' else 'magic_resistance', 0.0)
+    
+    damage = random.randint(int(base_damage*0.8), int(base_damage*1.2))
+    damage = max(1, int(damage * (1 - res)))
+    
+    is_crit = random.random() < calculate_crit_chance(character.get('agility', 8))
+    if is_crit: damage = int(damage * 1.5)
+    
+    return damage, is_crit
+
+def calculate_enemy_damage(enemy, character):
+    if enemy['damage_type'] == 'physical':
+        min_d, max_d = enemy['min_physical_damage'], enemy['max_physical_damage']
+        res = character.get('physical_resistance', 0.0)
+    elif enemy['damage_type'] == 'magic':
+        min_d, max_d = enemy['min_magic_damage'], enemy['max_magic_damage']
+        res = character.get('magic_resistance', 0.0)
+    else:
+        # Mixed
+        if random.random() < 0.5:
+            min_d, max_d = enemy['min_physical_damage'], enemy['max_physical_damage']
+            res = character.get('physical_resistance', 0.0)
+        else:
+            min_d, max_d = enemy['min_magic_damage'], enemy['max_magic_damage']
+            res = character.get('magic_resistance', 0.0)
+            
+    damage = random.randint(min_d, max_d)
+    damage = int(damage * (1 - res))
+    
+    is_dodged = random.random() < calculate_player_dodge_chance(character.get('agility', 8))
+    return max(1, damage), is_dodged
+
+def process_enemy_special_attack(enemy, character, log):
+    dmg = 0
+    effect = ""
+    status = None
+    
+    if random.random() < enemy.get('special_chance', 0.15):
+        ability = random.choice(enemy['abilities'])
+        if ability == 'poison_spit':
+            dmg = random.randint(5, 10)
+            effect = f"Яд нанес {dmg} урона!"
+            status = 'poisoned'
+        # ... можно добавить другие способности
+        log.append(f"⚠️ {enemy['name']} использует {ability}! {effect}")
         
-    return max(1, dmg), status
+    return dmg, effect, status
 
-def create_mob(key, player_lvl):
-    base = MOBS[key].copy()
-    scale = 1 + (player_lvl * 0.05) # +5% статов за уровень игрока
-    
-    mob = base.copy()
-    mob['hp'] = int(base['hp'] * scale)
-    mob['max_hp'] = mob['hp']
-    mob['str'] = int(base['str'] * scale)
-    mob['agi'] = int(base['agi'] * scale)
-    mob['exp'] = int(base['xp'] * scale)
-    mob['gold'] = int(base['gold'] * scale)
-    return mob
-
-async def safe_edit_media(query, media, keyboard):
-    """Безопасно меняет картинку. Если старое сообщение было текстом - удаляет и шлет новое."""
+def get_available_locations(rank, level):
+    ranks = ['E', 'D', 'C', 'B', 'A', 'S']
     try:
-        await query.edit_message_media(media=media, reply_markup=keyboard)
-    except Exception:
-        # Если старое сообщение не было медиа или устарело
-        try:
-            await query.delete_message()
-        except:
-            pass
-        await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
+        p_idx = ranks.index(rank)
+    except:
+        p_idx = 0
+        
+    avail = []
+    for k, v in LOCATIONS.items():
+        if ranks.index(k) <= p_idx and level >= v['min_level']:
+            avail.append((k, v))
+    return avail
 
 # --- КЛАВИАТУРЫ ---
-def kb_main():
+
+def get_main_menu_keyboard(user_id):
+    # При создании клавиатуры запрашиваем персонажа, что триггерит регенерацию в базе
+    char = database.get_character(user_id)
+    kb = [
+        [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
+        [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
+        [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
+        [InlineKeyboardButton("🔄 Обновить (Реген)", callback_data='refresh')]
+    ]
+    if char and char['stat_points'] > 0:
+        kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
+    return InlineKeyboardMarkup(kb)
+
+def get_shop_keyboard(char):
+    kb = []
+    for k, v in SHOP_ITEMS.items():
+        kb.append([InlineKeyboardButton(f"{v['name']} - {v['price']}💰", callback_data=f"buy_{k}")])
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    return InlineKeyboardMarkup(kb)
+
+def get_battle_menu_keyboard(char):
+    kb = []
+    avail = get_available_locations(char['rank'], char['level'])
+    for k, v in avail:
+        kb.append([InlineKeyboardButton(f"{v['name']} (Ранг {k})", callback_data=f"location_{k}")])
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    return InlineKeyboardMarkup(kb)
+
+def get_location_enemies_keyboard(rank, level):
+    loc = LOCATIONS[rank]
+    kb = []
+    for e in loc['enemies']:
+        # Проверяем, есть ли враг в базе
+        if e in BASE_ENEMIES:
+            name = BASE_ENEMIES[e]['name']
+            kb.append([InlineKeyboardButton(f"⚔️ {name}", callback_data=f"battle_{e}")])
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_battle_menu')])
+    return InlineKeyboardMarkup(kb)
+
+def get_battle_action_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📜 Профиль", callback_data="profile"), InlineKeyboardButton("🎒 Мешок", callback_data="inv")],
-        [InlineKeyboardButton("🗺 КАРТА МИРА (БОЙ)", callback_data="map")],
-        [InlineKeyboardButton("🛖 Торговец", callback_data="shop"), InlineKeyboardButton("🏆 Топ", callback_data="top")],
-        [InlineKeyboardButton("💤 Отдых (Реген)", callback_data="refresh")]
+        [InlineKeyboardButton("⚔️ Атака", callback_data='attack_physical'), InlineKeyboardButton("🔮 Магия", callback_data='attack_magic')],
+        [InlineKeyboardButton("🛡 Блок", callback_data='defend'), InlineKeyboardButton("🏃 Сбежать", callback_data='flee')]
     ])
 
-def kb_battle(race_ability):
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚔️ Удар", callback_data="atk"), InlineKeyboardButton("🔥 Магия (15 MP)", callback_data="mag")],
-        [InlineKeyboardButton("🛡 Блок", callback_data="def"), InlineKeyboardButton(f"✨ {race_ability}", callback_data="ult")],
-        [InlineKeyboardButton("🏃 Бежать", callback_data="run")]
-    ])
+def get_inventory_keyboard(items, page):
+    kb = []
+    for i in items:
+        kb.append([InlineKeyboardButton(f"Использовать {i['item_name']} (x{i['quantity']})", callback_data=f"use_{i['item_key']}")])
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    return InlineKeyboardMarkup(kb)
 
-# --- ОБРАБОТЧИКИ ---
+def get_level_up_keyboard(char, points):
+    kb = [
+        [InlineKeyboardButton("Сила", callback_data='levelup_strength'), InlineKeyboardButton("Ловкость", callback_data='levelup_agility')],
+        [InlineKeyboardButton("Интеллект", callback_data='levelup_intelligence'), InlineKeyboardButton("Живучесть", callback_data='levelup_vitality')],
+        [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
+    ]
+    return InlineKeyboardMarkup(kb)
+
+def get_race_selection_keyboard():
+    kb = [[InlineKeyboardButton(v['name'], callback_data=f"race_{k}")] for k, v in database.RACES.items()]
+    return InlineKeyboardMarkup(kb)
+
+# --- HANDLERS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     char = database.get_character(user.id)
     if char:
-        await update.message.reply_photo(IMAGES['start'], caption=f"🍺 Таверна\n\nС возвращением, {char['character_name']}!", reply_markup=kb_main())
+        await update.message.reply_photo(IMAGE_URLS['village'], caption=f"С возвращением, {char['character_name']}!", reply_markup=get_main_menu_keyboard(user.id))
         return MAIN_MENU
-    
-    kb = [[InlineKeyboardButton(r['name'], callback_data=f"race_{k}")] for k, r in database.RACES.items()]
-    await update.message.reply_photo(IMAGES['start'], caption="🌑 *НАЧАЛО ПУТИ*\n\nВыбери свое происхождение:", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
-    return CHOOSE_RACE
+    else:
+        await update.message.reply_text("Выберите расу:", reply_markup=get_race_selection_keyboard())
+        return CHOOSE_RACE
 
 async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    race = query.data.split('_')[1]
-    context.user_data['race'] = race
-    await query.edit_message_caption(caption=f"Раса: {database.RACES[race]['name']}\n\nКак тебя зовут?", parse_mode='Markdown')
+    context.user_data['race'] = query.data.split('_')[1]
+    await query.message.reply_text("Как зовут героя?")
     return ENTER_NAME
 
 async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.message.text[:20]
+    name = update.message.text
     user = update.effective_user
     database.create_character(user.id, user.username, name, context.user_data['race'])
-    await update.message.reply_photo(IMAGES['start'], caption="✅ Герой создан! Вперед, к приключениям.", reply_markup=kb_main())
+    await update.message.reply_photo(IMAGE_URLS['village'], caption="Герой создан!", reply_markup=get_main_menu_keyboard(user.id))
     return MAIN_MENU
 
-# --- ОСНОВНЫЕ МЕНЮ ---
-
-async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await safe_edit_media(query, InputMediaPhoto(IMAGES['start'], caption="🍺 Главное меню"), kb_main())
-    return MAIN_MENU
-
-async def show_map(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    char = database.get_character(query.from_user.id)
+    data = query.data
+    user_id = query.from_user.id
     
-    kb = []
-    # Порядок рангов
-    ranks = ['E', 'D', 'C', 'B', 'A', 'S']
-    p_rank_idx = ranks.index(char['rank'])
-    
-    for key, loc in LOCATIONS.items():
-        loc_rank_idx = ranks.index(loc['rank'])
-        status = "🔓" if loc_rank_idx <= p_rank_idx else "🔒"
+    if data == 'profile':
+        char = database.get_character(user_id) # Реген тут
+        txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
+               f"HP: {char['health']}/{char['max_health']} | MP: {char['mana']}/{char['max_mana']}\n"
+               f"Золото: {char['gold']}")
+        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+    elif data == 'inventory':
+        await show_inventory_menu(update, context)
+        return INVENTORY_MENU
+    elif data == 'battle_menu':
+        char = database.get_character(user_id)
+        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['forest'], caption="Выбор локации:"), reply_markup=get_battle_menu_keyboard(char))
+        return BATTLE_MENU
+    elif data == 'shop':
+        char = database.get_character(user_id)
+        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['shop'], caption=f"Магазин. Золото: {char['gold']}"), reply_markup=get_shop_keyboard(char))
+        return SHOP_MENU
+    elif data == 'stats':
+        top = database.get_top_players()
+        txt = "🏆 *ТОП ИГРОКОВ*\n" + "\n".join([f"{i+1}. {p['character_name']} (Ур.{p['level']})" for i, p in enumerate(top)])
+        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+    elif data == 'refresh':
+        # Просто обновляем меню, регенерация сработает внутри get_main_menu_keyboard -> get_character
+        await query.edit_message_reply_markup(reply_markup=get_main_menu_keyboard(user_id))
+    elif data == 'level_up_menu':
+        char = database.get_character(user_id)
+        await query.edit_message_caption("Выберите стат:", reply_markup=get_level_up_keyboard(char, char['stat_points']))
+        return LEVEL_UP
         
-        if loc_rank_idx <= p_rank_idx:
-            kb.append([InlineKeyboardButton(f"{status} {loc['name']}", callback_data=f"go_{key}")])
-        else:
-            kb.append([InlineKeyboardButton(f"{status} {loc['name']} (Нужен {loc['rank']})", callback_data="locked")])
+    return MAIN_MENU
+
+async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == 'back_to_main':
+        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне"), reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    elif data.startswith('location_'):
+        rank = data.split('_')[1]
+        char = database.get_character(user_id)
+        await query.edit_message_caption(caption=f"Локация {rank}. Выберите врага:", reply_markup=get_location_enemies_keyboard(rank, char['level']))
+    elif data.startswith('battle_'):
+        enemy_key = data.split('_')[1]
+        char = database.get_character(user_id)
+        if char['health'] < 10:
+            await query.answer("Слишком мало здоровья!", show_alert=True)
+            return BATTLE_MENU
             
-    kb.append([InlineKeyboardButton("🔙 Назад", callback_data="main")])
-    
-    await safe_edit_media(query, 
-        InputMediaPhoto(IMAGES['map'], caption=f"🗺 *КАРТА КОРОЛЕВСТВА*\nТвой ранг: {char['rank']}\n\nВыбери локацию:", parse_mode='Markdown'), 
-        InlineKeyboardMarkup(kb))
-    return LOCATION_MENU
-
-async def show_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    loc_key = query.data.split('_')[1]
-    loc = LOCATIONS[loc_key]
-    
-    kb = []
-    for mob_key in loc['mobs']:
-        mob = MOBS[mob_key]
-        kb.append([InlineKeyboardButton(f"{mob['name']} (Ур.{mob['lvl']})", callback_data=f"fight_{mob_key}")])
-    
-    kb.append([InlineKeyboardButton("🔙 На карту", callback_data="map")])
-    
-    await safe_edit_media(query,
-        InputMediaPhoto(loc['img'], caption=f"📍 *{loc['name']}*\n_{loc['desc']}_\n\nКого атакуем?", parse_mode='Markdown'),
-        InlineKeyboardMarkup(kb))
-    return MOB_MENU
-
-# --- БОЕВАЯ СИСТЕМА ---
-
-async def start_fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    mob_key = query.data.split('_')[1]
-    char = database.get_character(query.from_user.id)
-    
-    if char['health'] < 10:
-        await query.answer("⚠️ Слишком мало здоровья! Иди спать.", show_alert=True)
-        return MOB_MENU
+        enemy = create_enemy(enemy_key, char['level'])
+        battle_sessions[user_id] = {
+            'char': char, 'enemy': enemy, 'log': [f"⚔️ Вы напали на {enemy['name']}!"], 'turn': 1
+        }
+        await render_battle(query, user_id)
+        return IN_BATTLE
+    elif data == 'back_to_battle_menu':
+        char = database.get_character(user_id)
+        await query.edit_message_caption(caption="Выбор локации:", reply_markup=get_battle_menu_keyboard(char))
         
-    mob = create_mob(mob_key, char['level'])
-    
-    battle_sessions[query.from_user.id] = {
-        'char': char, 'mob': mob, 'log': [f"⚔️ *{mob['name']}* заметил вас!"], 'turn': 1
-    }
-    
-    await render_battle(query, query.from_user.id)
-    return IN_BATTLE
+    return BATTLE_MENU
 
 async def render_battle(query, user_id):
     s = battle_sessions[user_id]
-    c, m = s['char'], s['mob']
-    
-    # Визуализация HP
-    c_hp = "🟩" * int((c['health']/c['max_health'])*10) + "⬜" * (10 - int((c['health']/c['max_health'])*10))
-    m_hp = "🟥" * int((m['hp']/m['max_hp'])*10) + "⬜" * (10 - int((m['hp']/m['max_hp'])*10))
-    
-    log = "\n".join(s['log'][-4:])
-    
-    txt = (f"🔥 *БОЙ - Ход {s['turn']}*\n\n"
-           f"👤 *{c['character_name']}* {c['health']} HP\n{c_hp}\n\n"
-           f"👺 *{m['name']}* {m['hp']} HP\n{m_hp}\n\n"
-           f"📜 {log}")
-           
-    race_abi = database.RACES[c['race']]['ability'].split(' ')[0]
-    
-    await safe_edit_media(query, InputMediaPhoto(m['img'], caption=txt, parse_mode='Markdown'), kb_battle(race_abi))
+    c, e = s['char'], s['enemy']
+    log = "\n".join(s['log'][-3:])
+    txt = (f"🆚 *БОЙ*\n👤 {c['character_name']}: {c['health']}/{c['max_health']} HP\n"
+           f"👺 {e['name']}: {e['health']}/{e['max_health']} HP\n\n{log}")
+    try:
+        await query.edit_message_media(media=telegram.InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown'), reply_markup=get_battle_action_keyboard())
+    except:
+        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_battle_action_keyboard())
 
-async def battle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    uid = query.from_user.id
-    act = query.data
+    user_id = query.from_user.id
+    action = query.data
+    s = battle_sessions.get(user_id)
+    if not s: return MAIN_MENU
     
-    if uid not in battle_sessions:
-        await query.message.reply_text("Бой не найден.")
-        return MAIN_MENU
-        
-    s = battle_sessions[uid]
-    c, m = s['char'], s['mob']
-    log = s['log']
+    c, e, log = s['char'], s['enemy'], s['log']
     
-    player_turn_done = False
-    player_def = False
-    
-    # --- ХОД ИГРОКА ---
-    if act == "run":
-        chance = 0.5 + ((c['agility'] - m['agi']) * 0.02)
-        if random.random() < chance:
-            del battle_sessions[uid]
-            await safe_edit_media(query, InputMediaPhoto(IMAGES['start'], caption="🏃‍♂️ *Успешный побег!*"), kb_main())
+    # Ход игрока
+    if action == 'flee':
+        if random.random() < 0.5:
+            del battle_sessions[user_id]
+            await query.edit_message_caption("🏃 Вы сбежали!", reply_markup=get_main_menu_keyboard(user_id))
             return MAIN_MENU
+        log.append("🚫 Побег не удался!")
+    elif 'attack' in action:
+        dmg, crit = calculate_damage(c, e, 'magic' if 'magic' in action else 'physical')
+        if 'magic' in action:
+             if c['mana'] >= 10:
+                 c['mana'] -= 10
+                 e['health'] -= dmg
+                 log.append(f"🔮 Магия нанесла {dmg}")
+             else:
+                 log.append("❌ Нет маны!")
         else:
-            log.append("🚫 Побег не удался!")
-            player_turn_done = True
-            
-    elif act == "atk":
-        dmg, stat = calculate_attack(c['strength'], c['agility'], m['agi'])
-        if dmg > 0:
-            m['hp'] -= dmg
-            log.append(f"⚔️ Удар на *{dmg}*. {stat}")
-        else:
-            log.append(stat)
-        player_turn_done = True
-        
-    elif act == "mag":
-        if c['mana'] >= 15:
-            c['mana'] -= 15
-            dmg, stat = calculate_attack(c['intelligence'], c['agility'], m['agi']//2, is_magic=True)
-            m['hp'] -= dmg
-            log.append(f"🔥 Магия на *{dmg}*! {stat}")
-            player_turn_done = True
-        else:
-            log.append("❌ Нет маны!")
-            
-    elif act == "def":
-        player_def = True
-        log.append("🛡 Защитная стойка.")
-        player_turn_done = True
-        
-    elif act == "ult":
-        if c['mana'] >= 30:
-            c['mana'] -= 30
-            # Упрощенная логика ульты
-            m['hp'] -= c['strength'] * 2
-            log.append("✨ *СУПЕРУДАР!*")
-            player_turn_done = True
-        else:
-            log.append("❌ Нужно 30 MP!")
+            e['health'] -= dmg
+            log.append(f"⚔️ Удар нанес {dmg}")
 
-    # --- ПРОВЕРКА ПОБЕДЫ ---
-    if m['hp'] <= 0:
-        lvl, new_rank = database.add_rewards(uid, m['exp'], m['gold'])
-        database.update_hp_mp(uid, c['health'], c['mana'])
-        del battle_sessions[uid]
-        
-        txt = f"🏆 *ПОБЕДА!*\n\n💰 +{m['gold']} золота\n✨ +{m['exp']} опыта"
-        if lvl: txt += "\n\n🆙 *НОВЫЙ УРОВЕНЬ!*"
-        
-        await safe_edit_media(query, InputMediaPhoto(IMAGES['start'], caption=txt, parse_mode='Markdown'), kb_main())
+    # Победа
+    if e['health'] <= 0:
+        database.add_experience(user_id, e['exp'])
+        database.add_gold(user_id, e['gold'])
+        # Обновляем состояние героя в БД (сохраняем оставшееся хп/мп)
+        database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
+        del battle_sessions[user_id]
+        await query.edit_message_caption(f"🏆 Победа! +{e['gold']}g +{e['exp']}xp", reply_markup=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # --- ХОД ВРАГА ---
-    if player_turn_done:
-        dmg, stat = calculate_attack(m['str'], m['agi'], c['agility'])
-        if dmg > 0:
-            if player_def: dmg //= 2
+    # Ход врага
+    if action != 'flee':
+        dmg, dodge = calculate_enemy_damage(e, c)
+        if not dodge:
+            if action == 'defend': dmg //= 2
             c['health'] -= dmg
-            log.append(f"💔 Враг нанес *{dmg}*. {stat}")
+            log.append(f"💔 Враг нанес {dmg}")
         else:
-            log.append("💨 Враг промахнулся!")
-        s['turn'] += 1
+            log.append("💨 Вы увернулись!")
 
-    # --- ПРОВЕРКА ПОРАЖЕНИЯ ---
+    # Поражение
     if c['health'] <= 0:
-        database.update_hp_mp(uid, 1, c['mana'])
-        del battle_sessions[uid]
-        await safe_edit_media(query, InputMediaPhoto(IMAGES['start'], caption="☠️ *ВЫ ПОГИБЛИ...*"), kb_main())
+        database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
+        del battle_sessions[user_id]
+        await query.edit_message_caption("💀 Вы погибли...", reply_markup=get_main_menu_keyboard(user_id))
         return MAIN_MENU
-
-    database.update_hp_mp(uid, c['health'], c['mana'])
-    await render_battle(query, uid)
+        
+    await render_battle(query, user_id)
     return IN_BATTLE
 
-# --- ПРОФИЛЬ, МАГАЗИН, ТОП ---
-
-async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    char = database.get_character(query.from_user.id)
+    data = query.data
+    user_id = query.from_user.id
     
-    txt = (f"👤 *{char['character_name']}* | {char['rank']}-ранг\n"
-           f"❤️ {char['health']}/{char['max_health']}  🧿 {char['mana']}/{char['max_mana']}\n"
-           f"💰 {char['gold']}g  ⭐ Ур.{char['level']}\n\n"
-           f"💪 {char['strength']} 🦶 {char['agility']} 🧠 {char['intelligence']} 🛡 {char['vitality']}")
-           
-    kb = kb_main().inline_keyboard
-    if char['stat_points'] > 0: kb.insert(0, [InlineKeyboardButton(f"🌟 Прокачать ({char['stat_points']})", callback_data="levelup")])
-    
-    await safe_edit_media(query, InputMediaPhoto(IMAGES['profile'], caption=txt, parse_mode='Markdown'), InlineKeyboardMarkup(kb))
-    return MAIN_MENU
-
-async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    kb = [[InlineKeyboardButton(f"{v['name']} ({v['price']}g)", callback_data=f"buy_{k}")] for k, v in SHOP_ITEMS.items()]
-    kb.append([InlineKeyboardButton("🔙 Назад", callback_data="main")])
-    await safe_edit_media(query, InputMediaPhoto(IMAGES['shop'], caption="🛒 *Лавка*", parse_mode='Markdown'), InlineKeyboardMarkup(kb))
+    if data == 'back_to_main':
+        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне"), reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    elif data.startswith('buy_'):
+        item_key = data.split('_', 1)[1]
+        item = SHOP_ITEMS.get(item_key)
+        if item:
+            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item['effect'])
+            await query.answer(msg, show_alert=True)
+            # Обновляем клавиатуру с новым балансом
+            char = database.get_character(user_id)
+            await query.edit_message_caption(caption=f"Магазин. Золото: {char['gold']}", reply_markup=get_shop_keyboard(char))
     return SHOP_MENU
 
-async def buy_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    key = query.data.split('_')[1]
-    item = SHOP_ITEMS[key]
-    res, msg = database.buy_item(query.from_user.id, key, item['name'], item['price'], item['effect'])
-    await query.answer(msg, show_alert=not res)
-    return SHOP_MENU
-
-async def level_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    kb = [
-        [InlineKeyboardButton("💪 Сила", callback_data="up_strength"), InlineKeyboardButton("🦶 Ловкость", callback_data="up_agility")],
-        [InlineKeyboardButton("🧠 Интеллект", callback_data="up_intelligence"), InlineKeyboardButton("🛡 Живучесть", callback_data="up_vitality")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="profile")]
-    ]
-    await query.edit_message_caption("Что улучшаем?", reply_markup=InlineKeyboardMarkup(kb))
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == 'back_to_main':
+        await query.edit_message_caption("Главное меню", reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    elif data.startswith('levelup_'):
+        stat = data.split('_')[1]
+        res, msg = database.add_stat_point(user_id, stat)
+        await query.answer(msg)
+        char = database.get_character(user_id)
+        if char['stat_points'] > 0:
+             await query.edit_message_reply_markup(reply_markup=get_level_up_keyboard(char, char['stat_points']))
+        else:
+             await query.edit_message_caption("Все очки распределены.", reply_markup=get_main_menu_keyboard(user_id))
+             return MAIN_MENU
     return LEVEL_UP
 
-async def stat_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    stat = query.data.split('_')[1]
-    database.add_stat_point(query.from_user.id, stat)
-    await query.answer("Готово!")
-    await profile(update, context)
-    return MAIN_MENU
+async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Эта функция должна быть вызвана из main_menu_handler
+    # Но так как она async, её нужно просто вызывать
+    pass # Реализована внутри inventory_menu_handler ниже для простоты
 
-async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    items = database.get_inventory(query.from_user.id)
-    txt = "🎒 *Рюкзак:*\n" + ("_Пусто_" if not items else "")
-    kb = []
-    for i in items:
-        txt += f"\n📦 {i['item_name']} (x{i['quantity']})"
-        kb.append([InlineKeyboardButton(f"Юз {i['item_name']}", callback_data=f"use_{i['id']}")])
-    kb.append([InlineKeyboardButton("🔙 Назад", callback_data="main")])
-    await safe_edit_media(query, InputMediaPhoto(IMAGES['profile'], caption=txt, parse_mode='Markdown'), InlineKeyboardMarkup(kb))
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == 'back_to_main':
+        await query.edit_message_caption("Главное меню", reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    elif data.startswith('use_'):
+        key = data.split('_', 1)[1]
+        # Получаем тип предмета из констант (упрощение)
+        item_type = 'potion' # В реальной DB надо брать тип
+        # Но у нас упрощенная функция use_item, она сама найдет
+        res, msg = database.use_item(user_id, key, 'potion', 'Potion', 0) 
+        await query.answer(msg, show_alert=True)
+        # Обновляем инвентарь
+        items = database.get_inventory(user_id)
+        if items:
+            await query.edit_message_reply_markup(reply_markup=get_inventory_keyboard(items, 0))
+        else:
+            await query.edit_message_caption("Пусто", reply_markup=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
     return INVENTORY_MENU
 
-async def use_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    item_id = query.data.split('_')[1]
-    res, msg = database.use_inventory_item(query.from_user.id, item_id)
-    await query.answer(msg)
-    await inventory(update, context)
+async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query if update.callback_query else update
+    user_id = query.from_user.id
+    items = database.get_inventory(user_id)
+    if not items:
+        await query.edit_message_caption("Инвентарь пуст", reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    await query.edit_message_caption("Инвентарь:", reply_markup=get_inventory_keyboard(items, 0))
     return INVENTORY_MENU
-
-async def show_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    top = database.get_top_players()
-    txt = "🏆 *ТОП ИГРОКОВ*\n\n"
-    for i, p in enumerate(top, 1):
-        txt += f"{i}. {p['character_name']} (Ранг {p['rank']}) - {p['gold']}g\n"
-    kb = [[InlineKeyboardButton("🔙 Назад", callback_data="main")]]
-    await safe_edit_media(query, InputMediaPhoto(IMAGES['start'], caption=txt, parse_mode='Markdown'), InlineKeyboardMarkup(kb))
-    return MAIN_MENU
+    
+# Необходим импорт telegram для InputMediaPhoto
+import telegram 
 
 def main():
     database.init_db()
@@ -440,26 +572,13 @@ def main():
             CHOOSE_RACE: [CallbackQueryHandler(choose_race, pattern='^race_')],
             ENTER_NAME: [MessageHandler(filters.TEXT, enter_name)],
             MAIN_MENU: [
-                CallbackQueryHandler(profile, pattern='^profile$'),
-                CallbackQueryHandler(show_map, pattern='^map$'),
-                CallbackQueryHandler(shop, pattern='^shop$'),
-                CallbackQueryHandler(inventory, pattern='^inv$'),
-                CallbackQueryHandler(show_top, pattern='^top$'),
-                CallbackQueryHandler(profile, pattern='^refresh$')
+                CallbackQueryHandler(main_menu_handler)
             ],
-            LOCATION_MENU: [
-                CallbackQueryHandler(show_location, pattern='^go_'),
-                CallbackQueryHandler(back_to_main, pattern='^main$'),
-                CallbackQueryHandler(lambda u,c: u.callback_query.answer("🔒 Ранг мал!", show_alert=True), pattern='^locked$')
-            ],
-            MOB_MENU: [
-                CallbackQueryHandler(start_fight, pattern='^fight_'),
-                CallbackQueryHandler(show_map, pattern='^map$')
-            ],
-            IN_BATTLE: [CallbackQueryHandler(battle_action, pattern='^(atk|mag|def|run|ult)')],
-            SHOP_MENU: [CallbackQueryHandler(buy_item, pattern='^buy_'), CallbackQueryHandler(back_to_main, pattern='^main$')],
-            INVENTORY_MENU: [CallbackQueryHandler(use_item, pattern='^use_'), CallbackQueryHandler(back_to_main, pattern='^main$')],
-            LEVEL_UP: [CallbackQueryHandler(stat_up, pattern='^up_'), CallbackQueryHandler(profile, pattern='^profile$')]
+            BATTLE_MENU: [CallbackQueryHandler(battle_menu_handler)],
+            IN_BATTLE: [CallbackQueryHandler(battle_action_handler)],
+            SHOP_MENU: [CallbackQueryHandler(shop_handler)],
+            LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
+            INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)]
         },
         fallbacks=[CommandHandler('start', start)]
     )
