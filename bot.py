@@ -2,37 +2,24 @@ import os
 import logging
 import random
 import html
+import telegram
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    ContextTypes, 
-    ConversationHandler, 
-    MessageHandler, 
-    filters
+    Application, CommandHandler, CallbackQueryHandler, 
+    ContextTypes, ConversationHandler, MessageHandler, filters
 )
-# Импортируем модуль базы данных
+# Импортируем нашу обновленную базу данных
 import database
 
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Состояния для ConversationHandler
 CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU = range(8)
-
-# Получение токена из переменных окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-# Глобальная переменная для хранения данных о боях
 battle_sessions = {}
 
-# Константы (для отображения в боте)
+# --- КОНТЕНТ (ПОЛНЫЙ) ---
 IMAGE_URLS = {
     'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
     'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
@@ -66,7 +53,6 @@ IMAGE_URLS = {
     'inventory': 'https://i.imgur.com/6QyTK2F.jpeg'
 }
 
-# Магазин
 SHOP_ITEMS = {
     'small_health_potion': {'name': '💊 Малое зелье здоровья', 'description': 'Восстанавливает 20 HP', 'price': 40, 'type': 'potion', 'effect': 20, 'available': True},
     'large_health_potion': {'name': '💊 Большое зелье здоровья', 'description': 'Восстанавливает 40 HP', 'price': 75, 'type': 'potion', 'effect': 40, 'available': True},
@@ -78,7 +64,6 @@ SHOP_ITEMS = {
     'ring_of_agility': {'name': '💍 Кольцо ловкости', 'description': '+5 к ловкости', 'price': 450, 'type': 'artifact', 'effect': 5, 'available': True, 'required_rank': 'C'}
 }
 
-# Враги (ПОЛНЫЙ СПИСОК)
 BASE_ENEMIES = {
     'wolf': {'name': '🐺 Бешеный Волк', 'base_health': 35, 'base_min_physical_damage': 5, 'base_max_physical_damage': 8, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 12, 'base_gold': 8, 'rank': 'E', 'description': 'Его глаза горят голодом, а клыки обнажены.', 'image': IMAGE_URLS['wolf'], 'difficulty': 'easy', 'abilities': ['basic_attack'], 'damage_type': 'physical', 'dodge_chance': 0.08, 'physical_resistance': 0.15, 'magic_resistance': 0.0, 'special_chance': 0.15, 'attack_range': 'melee'},
     'goblin': {'name': '👹 Гоблин-разведчик', 'base_health': 40, 'base_min_physical_damage': 6, 'base_max_physical_damage': 10, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 'base_exp': 16, 'base_gold': 12, 'rank': 'E', 'description': 'Мелкий и трусливый, но опасный в стае.', 'image': IMAGE_URLS['goblin'], 'difficulty': 'easy', 'abilities': ['basic_attack', 'dirty_trick'], 'damage_type': 'physical', 'dodge_chance': 0.12, 'physical_resistance': 0.05, 'magic_resistance': 0.0, 'special_chance': 0.20, 'attack_range': 'melee'},
@@ -112,7 +97,6 @@ BASE_ENEMIES = {
     'final_god': {'name': '⚡ Верховный Бог', 'base_health': 1250, 'base_min_physical_damage': 63, 'base_max_physical_damage': 100, 'base_min_magic_damage': 50, 'base_max_magic_damage': 88, 'base_exp': 1200, 'base_gold': 800, 'rank': 'S', 'description': 'Верховное божество этого мира. Победа над ним сделает тебя легендой.', 'image': IMAGE_URLS['fallen_god'], 'difficulty': 'boss', 'abilities': ['basic_attack', 'divine_judgment', 'creation', 'annihilation', 'omnipotence'], 'damage_type': 'mixed', 'dodge_chance': 0.45, 'physical_resistance': 0.65, 'magic_resistance': 0.65, 'special_chance': 0.65, 'boss_bonus': 4.5, 'god_powers': True, 'attack_range': 'mixed'}
 }
 
-# Локации
 LOCATIONS = {
     'E': {'name': '🎪 Тренировочный лагерь', 'description': 'Начинай свой путь здесь. Враги слабые, но хороши для тренировки.', 'enemies': ['wolf', 'goblin', 'slime', 'goblin_elite', 'training_master'], 'mini_boss': 'goblin_elite', 'boss': 'training_master', 'image': IMAGE_URLS['training_camp'], 'min_level': 1, 'max_level': 15, 'difficulty': 'easy'},
     'D': {'name': '🌲 Лес призраков', 'description': 'Лес наполнен низкоуровневыми монстрами. Подходит для охотников D-ранга.', 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_troll', 'forest_guardian'], 'mini_boss': 'forest_troll', 'boss': 'forest_guardian', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'max_level': 25, 'difficulty': 'medium'},
@@ -125,10 +109,13 @@ LOCATIONS = {
 # --- ФУНКЦИИ БОТА (ОБЕРТКИ) ---
 
 def create_enemy(enemy_key, player_level):
-    if enemy_key not in BASE_ENEMIES: return None
-    base_enemy = BASE_ENEMIES[enemy_key].copy()
+    if enemy_key not in BASE_ENEMIES: 
+        if 'wolf' in BASE_ENEMIES: return create_enemy('wolf', player_level)
+        return None
     
+    base_enemy = BASE_ENEMIES[enemy_key].copy()
     level_multiplier = 1.0 + (player_level - 1) * 0.15
+    
     bonus = 1.0
     if base_enemy.get('difficulty') == 'mini_boss': bonus = 1.8
     elif base_enemy.get('difficulty') == 'boss': bonus = 2.5
@@ -137,7 +124,7 @@ def create_enemy(enemy_key, player_level):
     
     enemy = base_enemy.copy()
     enemy['health'] = int(base_enemy['base_health'] * final_multiplier)
-    enemy['max_health'] = int(base_enemy['base_health'] * final_multiplier)
+    enemy['max_health'] = enemy['health']
     enemy['min_physical_damage'] = int(base_enemy['base_min_physical_damage'] * level_multiplier)
     enemy['max_physical_damage'] = int(base_enemy['base_max_physical_damage'] * level_multiplier)
     enemy['min_magic_damage'] = int(base_enemy['base_min_magic_damage'] * level_multiplier)
@@ -146,8 +133,8 @@ def create_enemy(enemy_key, player_level):
     enemy['gold'] = int(base_enemy['base_gold'] * final_multiplier * 0.8)
     enemy['level_multiplier'] = round(level_multiplier, 2)
     
-    if enemy['difficulty'] == 'boss': enemy['is_boss'] = True
-    elif enemy['difficulty'] == 'mini_boss': enemy['is_mini_boss'] = True
+    if enemy.get('difficulty') == 'boss': enemy['is_boss'] = True
+    elif enemy.get('difficulty') == 'mini_boss': enemy['is_mini_boss'] = True
     
     return enemy
 
@@ -158,21 +145,30 @@ def get_difficulty_icon(difficulty):
     return {'easy': '🟢', 'medium': '🟡', 'hard': '🟠', 'very_hard': '🔴', 'extreme': '💀', 'legendary': '👑', 'boss': '👑', 'mini_boss': '⭐'}.get(difficulty, '⚪')
 
 def get_xp_bar(level, exp, length=10):
-    # Упрощенная логика для визуала
-    needed = (level + 1) * 150
-    percent = min(1.0, exp / needed) if needed > 0 else 0
+    # Накопительный опыт: уровень * 150
+    needed = (level * (level + 1) * 150) // 2
+    prev_needed = ((level - 1) * level * 150) // 2
+    
+    current_level_exp = exp - prev_needed
+    level_diff = needed - prev_needed
+    
+    if level_diff <= 0: return "█" * length
+    
+    percent = min(1.0, max(0.0, current_level_exp / level_diff))
     filled = int(length * percent)
     return "█" * filled + "░" * (length - filled) + f" {exp}/{needed}"
 
 def get_health_bar(current, maximum, length=15):
-    percent = current / maximum if maximum > 0 else 0
+    if maximum <= 0: return "💀"
+    percent = current / maximum
     filled = int(length * percent)
     empty = length - filled
-    bar = "🟩" * filled + "⬜" * empty if percent > 0.5 else "🟥" * filled + "⬜" * empty
+    bar = "🟩" * filled + "⬜" * empty if percent > 0.3 else "🟥" * filled + "⬜" * empty
     return f"{bar} {current}/{maximum}"
 
 def get_mana_bar(current, maximum, length=10):
-    percent = current / maximum if maximum > 0 else 0
+    if maximum <= 0: return "⚪"
+    percent = current / maximum
     filled = int(length * percent)
     empty = length - filled
     return "🟦" * filled + "⬜" * empty + f" {current}/{maximum}"
@@ -212,7 +208,7 @@ def calculate_enemy_damage(enemy, character):
             res = character.get('magic_resistance', 0.0)
             
     damage = random.randint(min_d, max_d)
-    damage = int(damage * (1 - res))
+    damage = int(damage * (1 - float(res)))
     
     is_dodged = random.random() < calculate_player_dodge_chance(character.get('agility', 8))
     return max(1, damage), is_dodged
@@ -246,19 +242,32 @@ def get_available_locations(rank, level):
             avail.append((k, v))
     return avail
 
+async def safe_edit_media(query, media, keyboard):
+    """Безопасно меняет картинку. Если старое сообщение было текстом - удаляет и шлет новое."""
+    try:
+        await query.edit_message_media(media=media, reply_markup=keyboard)
+    except Exception:
+        # Если старое сообщение не было медиа или устарело
+        try:
+            await query.delete_message()
+        except:
+            pass
+        await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
+
 # --- КЛАВИАТУРЫ ---
 
 def get_main_menu_keyboard(user_id):
     # При создании клавиатуры запрашиваем персонажа, что триггерит регенерацию в базе
     char = database.get_character(user_id)
     kb = [
+        [InlineKeyboardButton(f"{get_rank_icon(char['rank'])} {char['rank']}-ранг", callback_data='rank_info')],
         [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🏆 Зал славы", callback_data='stats')],
-        [InlineKeyboardButton("🔄 Обновить (Реген)", callback_data='refresh')]
+        [InlineKeyboardButton("👑 Топ игроков", callback_data='top_players'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
     ]
     if char and char['stat_points'] > 0:
-        kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
+        kb.insert(3, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
     return InlineKeyboardMarkup(kb)
 
 def get_shop_keyboard(char):
@@ -347,27 +356,40 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'profile':
         char = database.get_character(user_id) # Реген тут
         txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
-               f"HP: {char['health']}/{char['max_health']} | MP: {char['mana']}/{char['max_mana']}\n"
-               f"Золото: {char['gold']}")
-        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+               f"HP: {get_health_bar(char['health'], char['max_health'])} | MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
+               f"Золото: {char['gold']}\n"
+               f"Опыт: {get_xp_bar(char['level'], char['experience'])}")
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), get_main_menu_keyboard(user_id))
     elif data == 'inventory':
         await show_inventory_menu(update, context)
         return INVENTORY_MENU
     elif data == 'battle_menu':
         char = database.get_character(user_id)
-        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['forest'], caption="Выбор локации:"), reply_markup=get_battle_menu_keyboard(char))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['forest'], caption="Выбор локации:", parse_mode='Markdown'), get_battle_menu_keyboard(char))
         return BATTLE_MENU
     elif data == 'shop':
         char = database.get_character(user_id)
-        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['shop'], caption=f"Магазин. Золото: {char['gold']}"), reply_markup=get_shop_keyboard(char))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['shop'], caption=f"Магазин. Золото: {char['gold']}", parse_mode='Markdown'), get_shop_keyboard(char))
         return SHOP_MENU
     elif data == 'stats':
+        char = database.get_character(user_id)
         top = database.get_top_players()
         txt = "🏆 *ТОП ИГРОКОВ*\n" + "\n".join([f"{i+1}. {p['character_name']} (Ур.{p['level']})" for i, p in enumerate(top)])
-        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), get_main_menu_keyboard(user_id))
+    elif data == 'top_players':
+        # То же самое что и stats
+        top = database.get_top_players()
+        txt = "🏆 *ТОП ИГРОКОВ*\n" + "\n".join([f"{i+1}. {p['character_name']} (Ур.{p['level']})" for i, p in enumerate(top)])
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), get_main_menu_keyboard(user_id))
     elif data == 'refresh':
         # Просто обновляем меню, регенерация сработает внутри get_main_menu_keyboard -> get_character
-        await query.edit_message_reply_markup(reply_markup=get_main_menu_keyboard(user_id))
+        # Чтобы пользователь увидел эффект, перерисовываем профиль
+        char = database.get_character(user_id)
+        txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
+               f"HP: {get_health_bar(char['health'], char['max_health'])} | MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
+               f"Золото: {char['gold']}\n"
+               f"Опыт: {get_xp_bar(char['level'], char['experience'])}")
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), get_main_menu_keyboard(user_id))
     elif data == 'level_up_menu':
         char = database.get_character(user_id)
         await query.edit_message_caption("Выберите стат:", reply_markup=get_level_up_keyboard(char, char['stat_points']))
@@ -382,12 +404,13 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = query.from_user.id
     
     if data == 'back_to_main':
-        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне"), reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('location_'):
         rank = data.split('_')[1]
         char = database.get_character(user_id)
-        await query.edit_message_caption(caption=f"Локация {rank}. Выберите врага:", reply_markup=get_location_enemies_keyboard(rank, char['level']))
+        loc = LOCATIONS[rank]
+        await safe_edit_media(query, InputMediaPhoto(loc['image'], caption=f"Локация {loc['name']}. Выберите врага:", parse_mode='Markdown'), get_location_enemies_keyboard(rank, char['level']))
     elif data.startswith('battle_'):
         enemy_key = data.split('_')[1]
         char = database.get_character(user_id)
@@ -403,7 +426,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return IN_BATTLE
     elif data == 'back_to_battle_menu':
         char = database.get_character(user_id)
-        await query.edit_message_caption(caption="Выбор локации:", reply_markup=get_battle_menu_keyboard(char))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['forest'], caption="Выбор локации:", parse_mode='Markdown'), get_battle_menu_keyboard(char))
         
     return BATTLE_MENU
 
@@ -411,12 +434,11 @@ async def render_battle(query, user_id):
     s = battle_sessions[user_id]
     c, e = s['char'], s['enemy']
     log = "\n".join(s['log'][-3:])
-    txt = (f"🆚 *БОЙ*\n👤 {c['character_name']}: {c['health']}/{c['max_health']} HP\n"
-           f"👺 {e['name']}: {e['health']}/{e['max_health']} HP\n\n{log}")
-    try:
-        await query.edit_message_media(media=telegram.InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown'), reply_markup=get_battle_action_keyboard())
-    except:
-        await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=get_battle_action_keyboard())
+    txt = (f"🆚 *БОЙ*\n👤 {c['character_name']}: {get_health_bar(c['health'], c['max_health'])}\n"
+           f"👺 {e['name']}: {get_health_bar(e['health'], e['max_health'])}\n\n{log}")
+    
+    # Используем безопасное обновление с картинкой врага
+    await safe_edit_media(query, InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown'), get_battle_action_keyboard())
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -432,30 +454,30 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if action == 'flee':
         if random.random() < 0.5:
             del battle_sessions[user_id]
-            await query.edit_message_caption("🏃 Вы сбежали!", reply_markup=get_main_menu_keyboard(user_id))
+            await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="🏃 Вы сбежали!", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
             return MAIN_MENU
         log.append("🚫 Побег не удался!")
     elif 'attack' in action:
         dmg, crit = calculate_damage(c, e, 'magic' if 'magic' in action else 'physical')
+        status = " (КРИТ!)" if crit else ""
         if 'magic' in action:
              if c['mana'] >= 10:
                  c['mana'] -= 10
                  e['health'] -= dmg
-                 log.append(f"🔮 Магия нанесла {dmg}")
+                 log.append(f"🔮 Магия нанесла {dmg}{status}")
              else:
                  log.append("❌ Нет маны!")
         else:
             e['health'] -= dmg
-            log.append(f"⚔️ Удар нанес {dmg}")
+            log.append(f"⚔️ Удар нанес {dmg}{status}")
 
     # Победа
     if e['health'] <= 0:
         database.add_experience(user_id, e['exp'])
         database.add_gold(user_id, e['gold'])
-        # Обновляем состояние героя в БД (сохраняем оставшееся хп/мп)
         database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
         del battle_sessions[user_id]
-        await query.edit_message_caption(f"🏆 Победа! +{e['gold']}g +{e['exp']}xp", reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption=f"🏆 Победа! +{e['gold']}g +{e['exp']}xp", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
     # Ход врага
@@ -472,7 +494,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if c['health'] <= 0:
         database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
         del battle_sessions[user_id]
-        await query.edit_message_caption("💀 Вы погибли...", reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="💀 Вы погибли...", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
         
     await render_battle(query, user_id)
@@ -485,7 +507,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     
     if data == 'back_to_main':
-        await query.edit_message_media(media=telegram.InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне"), reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('buy_'):
         item_key = data.split('_', 1)[1]
@@ -493,7 +515,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if item:
             res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item['effect'])
             await query.answer(msg, show_alert=True)
-            # Обновляем клавиатуру с новым балансом
             char = database.get_character(user_id)
             await query.edit_message_caption(caption=f"Магазин. Золото: {char['gold']}", reply_markup=get_shop_keyboard(char))
     return SHOP_MENU
@@ -505,7 +526,7 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     
     if data == 'back_to_main':
-        await query.edit_message_caption("Главное меню", reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('levelup_'):
         stat = data.split('_')[1]
@@ -515,14 +536,9 @@ async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if char['stat_points'] > 0:
              await query.edit_message_reply_markup(reply_markup=get_level_up_keyboard(char, char['stat_points']))
         else:
-             await query.edit_message_caption("Все очки распределены.", reply_markup=get_main_menu_keyboard(user_id))
+             await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="Все очки распределены.", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
              return MAIN_MENU
     return LEVEL_UP
-
-async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Эта функция должна быть вызвана из main_menu_handler
-    # Но так как она async, её нужно просто вызывать
-    pass # Реализована внутри inventory_menu_handler ниже для простоты
 
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -531,21 +547,17 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     user_id = query.from_user.id
     
     if data == 'back_to_main':
-        await query.edit_message_caption("Главное меню", reply_markup=get_main_menu_keyboard(user_id))
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
         return MAIN_MENU
     elif data.startswith('use_'):
         key = data.split('_', 1)[1]
-        # Получаем тип предмета из констант (упрощение)
-        item_type = 'potion' # В реальной DB надо брать тип
-        # Но у нас упрощенная функция use_item, она сама найдет
         res, msg = database.use_item(user_id, key, 'potion', 'Potion', 0) 
         await query.answer(msg, show_alert=True)
-        # Обновляем инвентарь
         items = database.get_inventory(user_id)
         if items:
             await query.edit_message_reply_markup(reply_markup=get_inventory_keyboard(items, 0))
         else:
-            await query.edit_message_caption("Пусто", reply_markup=get_main_menu_keyboard(user_id))
+            await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['village'], caption="Пусто", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
             return MAIN_MENU
     return INVENTORY_MENU
 
@@ -553,15 +565,28 @@ async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query if update.callback_query else update
     user_id = query.from_user.id
     items = database.get_inventory(user_id)
-    if not items:
-        await query.edit_message_caption("Инвентарь пуст", reply_markup=get_main_menu_keyboard(user_id))
-        return MAIN_MENU
-    await query.edit_message_caption("Инвентарь:", reply_markup=get_inventory_keyboard(items, 0))
-    return INVENTORY_MENU
     
-# Необходим импорт telegram для InputMediaPhoto
-import telegram 
+    # Для инвентаря используем картинку рюкзака
+    if not items:
+        await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['inventory'], caption="Инвентарь пуст", parse_mode='Markdown'), get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    await safe_edit_media(query, InputMediaPhoto(IMAGE_URLS['inventory'], caption="Инвентарь:", parse_mode='Markdown'), get_inventory_keyboard(items, 0))
+    return INVENTORY_MENU
 
+async def rank_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    rank_info_text = """
+🏆 *УСЛОЖНЕННАЯ СИСТЕМА РАНГОВ ОХОТНИКОВ*
+🆕 *E-ранг* — Начинающие охотники (1-14 ур)
+🟢 *D-ранг* — Рядовые бойцы (15-24 ур)
+🔵 *C-ранг* — Средний уровень (25-34 ур)
+🟣 *B-ранг* — Сильные охотники (35-44 ур)
+🟠 *A-ранг* — Элита (45-54 ур)
+⚡ *S-ранг* — Высший ранг (55+ ур)
+"""
+    await query.edit_message_caption(caption=rank_info_text, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(query.from_user.id))
+    
 def main():
     database.init_db()
     app = Application.builder().token(TOKEN).build()
@@ -584,7 +609,8 @@ def main():
     )
     
     app.add_handler(conv)
-    print("Бот запущен...")
+    app.add_handler(CommandHandler('help', help_command)) # Добавил хендлер помощи
+    print("Бот запущен!")
     app.run_polling()
 
 if __name__ == '__main__':
