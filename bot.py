@@ -703,24 +703,49 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    # await query.answer() — убираем отсюда, будем вызывать позже с текстом
     data = query.data
     user_id = query.from_user.id
+
     if data == 'back_to_main':
-        await safe_edit(query, text="Главное меню", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        await query.answer()
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+
     elif data.startswith('levelup_'):
         stat = data.split('_')[1]
-        res, msg = database.add_stat_point(user_id, stat)
-        await query.answer(msg)
-        char = database.get_character(user_id)
-        if char['stat_points'] > 0:
-             await query.edit_message_reply_markup(reply_markup=get_level_up_keyboard(char, char['stat_points']))
-        else:
-             await safe_edit(query, text="Все очки распределены.", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Все очки распределены.", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-             return MAIN_MENU
-    return LEVEL_UP
 
+        # 1. Прокачиваем стат в базе
+        res, msg = database.add_stat_point(user_id, stat)
+        
+        # Показываем всплывающее уведомление (например: "Сила +1")
+        await query.answer(msg) 
+
+        # 2. Получаем обновленные данные героя
+        char = database.get_character(user_id)
+
+        # 3. Формируем новый текст со статами
+        # ВАЖНО: Текст должен меняться, чтобы Телеграм принял обновление!
+        txt = (f"🌟 *РАСПРЕДЕЛЕНИЕ ОЧКОВ*\n"
+               f"Очков доступно: *{char['stat_points']}*\n"
+               f"━━━━━━━━━━━━━━━━\n"
+               f"💪 Сила: *{char['strength']}*\n"
+               f"🏃 Ловкость: *{char['agility']}*\n"
+               f"🧠 Интеллект: *{char['intelligence']}*\n"
+               f"❤️ Живучесть: *{char['vitality']}*")
+
+        # 4. Если очки еще есть — обновляем меню
+        if char['stat_points'] > 0:
+             await safe_edit(query, text=txt, keyboard=get_level_up_keyboard(char, char['stat_points']))
+             return LEVEL_UP
+        else:
+             # 5. Если очки кончились — возвращаем в главное меню
+             final_txt = "✅ *Все очки распределены!* Герой стал сильнее."
+             await safe_edit(query, text=final_txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=final_txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+             return MAIN_MENU
+
+    return LEVEL_UP
+    
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
