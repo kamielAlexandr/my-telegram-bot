@@ -482,7 +482,8 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'log': [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"], 
             'turn': 1,
             'status_effects': [],
-            'last_image': None # ВАЖНО: Добавлено поле для отслеживания картинки
+            'last_image': None,
+            'processing': False # <--- ВАЖНО: Флаг защиты от спама
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -538,119 +539,133 @@ async def render_battle(query, user_id):
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     user_id = query.from_user.id
-    action = query.data
     
     s = battle_sessions.get(user_id)
     
-    # ЗАЩИТА ОТ ВЫЛЕТА ЕСЛИ СЕССИЯ ПОТЕРЯНА
+    # 1. Если сессии нет - выход
     if not s: 
+        await query.answer()
         await safe_edit(query, text="⌛ *Время вышло или бой завершен.*", keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
-    
-    c, e, log = s['char'], s['enemy'], s['log']
-    
-    # --- ХОД ИГРОКА ---
-    player_damage = 0
-    player_action_text = ""
-    
-    if action == 'flee':
-        if e.get('is_boss') or e.get('is_mini_boss'):
-             log.append("🚫 *ОТ БОССА НЕЛЬЗЯ СБЕЖАТЬ!*")
-        elif random.random() < 0.6: 
-            database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
-            del battle_sessions[user_id]
-            txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!*"
-            # При побеге картинка меняется на деревню -> media update
-            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-            return MAIN_MENU
-        else:
-            log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
-            
-    elif action == 'defend':
-        log.append("🛡 Вы ушли в глухую оборону.")
-        
-    elif action == 'attack_physical':
-        dmg, is_crit = calculate_damage(c, e, 'physical')
-        player_damage = dmg
-        verbs = ["рубанули", "пронзили", "ударили", "сокрушили"]
-        verb = random.choice(verbs)
-        crit_txt = "💥 *КРИТ!* " if is_crit else ""
-        player_action_text = f"{crit_txt}Вы {verb} врага на *{dmg}*!"
-            
-    elif action == 'attack_magic':
-        if c['mana'] >= 10:
-            c['mana'] -= 10
-            dmg, is_crit = calculate_damage(c, e, 'magic')
-            dmg = int(dmg * 1.2)
-            player_damage = dmg
-            spells = ["Огненная стрела", "Ледяной шип", "Разряд молнии"]
-            spell = random.choice(spells)
-            crit_txt = " (КРИТ!)" if is_crit else ""
-            player_action_text = f"🔮 {spell} нанес *{dmg}* урона{crit_txt}!"
-        else:
-            log.append("💧 *НЕТ МАНЫ!*")
-            player_damage = max(1, c['strength'] // 4)
-            player_action_text = f"👊 Удар рукой на {player_damage}."
 
-    if player_damage > 0:
-        e['health'] -= player_damage
-        log.append(player_action_text)
-
-    # --- ПОБЕДА ---
-    if e['health'] <= 0:
-        gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
-        xp_win = e['exp']
-        database.add_experience(user_id, xp_win)
-        database.add_gold(user_id, gold_win)
-        heal = int(c['max_health'] * 0.1)
-        final_hp = min(c['max_health'], c['health'] + heal)
-        database.update_character_stats(user_id, health=final_hp, mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
-        if e.get('is_boss'): database.increment_boss_kills(user_id, False)
-        if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
+    # 2. ЗАЩИТА ОТ СПАМА (АНТИ-ЛАГ)
+    # Если бот уже занят обработкой прошлого нажатия - игнорируем это
+    if s.get('processing'):
+        await query.answer("⏳ ...", show_alert=False)
+        return IN_BATTLE
+    
+    # Блокируем прием новых команд
+    s['processing'] = True
+    
+    try:
+        await query.answer() # Убираем часики загрузки
+        action = query.data
+        c, e, log = s['char'], s['enemy'], s['log']
         
-        del battle_sessions[user_id]
+        # --- ХОД ИГРОКА ---
+        player_damage = 0
+        player_action_text = ""
         
-        win_msg = (f"🏆 *ПОБЕДА!*\n\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp\n❤️ +{heal} HP")
-        # Победа -> смена картинки на деревню -> media update
-        await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-        return MAIN_MENU
-
-    # --- ХОД ВРАГА ---
-    if action != 'flee' or (action == 'flee' and "ПОБЕГ НЕ УДАЛСЯ" in log[-1]):
-        spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
-        if spec_dmg > 0:
-            enemy_dmg = spec_dmg
-            if action == 'defend': 
-                enemy_dmg = int(enemy_dmg * 0.6)
-                log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
-            c['health'] -= enemy_dmg
-        else:
-            base_dmg, is_dodged = calculate_enemy_damage(e, c)
-            if is_dodged:
-                log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
+        if action == 'flee':
+            if e.get('is_boss') or e.get('is_mini_boss'):
+                 log.append("🚫 *ОТ БОССА НЕЛЬЗЯ СБЕЖАТЬ!*")
+            elif random.random() < 0.6: 
+                database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
+                del battle_sessions[user_id]
+                txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!*"
+                await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
             else:
-                if action == 'defend':
-                    base_dmg //= 2
-                    log.append(f"🛡 Блок! Урон: *{base_dmg}*")
+                log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
+                
+        elif action == 'defend':
+            log.append("🛡 Вы ушли в глухую оборону.")
+            
+        elif action == 'attack_physical':
+            dmg, is_crit = calculate_damage(c, e, 'physical')
+            player_damage = dmg
+            verbs = ["рубанули", "пронзили", "ударили", "сокрушили"]
+            verb = random.choice(verbs)
+            crit_txt = "💥 *КРИТ!* " if is_crit else ""
+            player_action_text = f"{crit_txt}Вы {verb} врага на *{dmg}*!"
+                
+        elif action == 'attack_magic':
+            if c['mana'] >= 10:
+                c['mana'] -= 10
+                dmg, is_crit = calculate_damage(c, e, 'magic')
+                dmg = int(dmg * 1.2)
+                player_damage = dmg
+                spells = ["Огненная стрела", "Ледяной шип", "Разряд молнии"]
+                spell = random.choice(spells)
+                crit_txt = " (КРИТ!)" if is_crit else ""
+                player_action_text = f"🔮 {spell} нанес *{dmg}* урона{crit_txt}!"
+            else:
+                log.append("💧 *НЕТ МАНЫ!*")
+                player_damage = max(1, c['strength'] // 4)
+                player_action_text = f"👊 Удар рукой на {player_damage}."
+
+        if player_damage > 0:
+            e['health'] -= player_damage
+            log.append(player_action_text)
+
+        # --- ПОБЕДА ---
+        if e['health'] <= 0:
+            gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
+            xp_win = e['exp']
+            database.add_experience(user_id, xp_win)
+            database.add_gold(user_id, gold_win)
+            heal = int(c['max_health'] * 0.1)
+            final_hp = min(c['max_health'], c['health'] + heal)
+            database.update_character_stats(user_id, health=final_hp, mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
+            if e.get('is_boss'): database.increment_boss_kills(user_id, False)
+            if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
+            
+            del battle_sessions[user_id]
+            
+            win_msg = (f"🏆 *ПОБЕДА!*\n\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp\n❤️ +{heal} HP")
+            await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
+
+        # --- ХОД ВРАГА ---
+        if action != 'flee' or (action == 'flee' and "ПОБЕГ НЕ УДАЛСЯ" in log[-1]):
+            spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
+            if spec_dmg > 0:
+                enemy_dmg = spec_dmg
+                if action == 'defend': 
+                    enemy_dmg = int(enemy_dmg * 0.6)
+                    log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
+                c['health'] -= enemy_dmg
+            else:
+                base_dmg, is_dodged = calculate_enemy_damage(e, c)
+                if is_dodged:
+                    log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
                 else:
-                    log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
-                c['health'] -= base_dmg
+                    if action == 'defend':
+                        base_dmg //= 2
+                        log.append(f"🛡 Блок! Урон: *{base_dmg}*")
+                    else:
+                        log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
+                    c['health'] -= base_dmg
 
-    # --- ПОРАЖЕНИЕ ---
-    if c['health'] <= 0:
-        database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
-        del battle_sessions[user_id]
-        death_msg = "💀 *ВЫ ПОГИБЛИ...* Жрецы воскресили вас в деревне."
-        # Смерть -> смена картинки на кладбище -> media update
-        await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-        return MAIN_MENU
-    
-    s['turn'] += 1
-    await render_battle(query, user_id)
+        # --- ПОРАЖЕНИЕ ---
+        if c['health'] <= 0:
+            database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
+            del battle_sessions[user_id]
+            death_msg = "💀 *ВЫ ПОГИБЛИ...* Жрецы воскресили вас в деревне."
+            await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
+        
+        s['turn'] += 1
+        await render_battle(query, user_id)
+        
+    finally:
+        # ВАЖНО: Разблокируем бота после завершения всех действий
+        # Даже если произошла ошибка, бот снова сможет принимать команды
+        if user_id in battle_sessions:
+            battle_sessions[user_id]['processing'] = False
+            
     return IN_BATTLE
-
 
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
