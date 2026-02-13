@@ -1,9 +1,9 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# --- КОНСТАНТЫ РАС (ДУБЛИРУЕМ ДЛЯ БАЗОВЫХ СТАТОВ) ---
+# --- КОНСТАНТЫ РАС ---
 RACES = {
     "human": {
         "name": "Человек",
@@ -30,17 +30,15 @@ RACES = {
 def get_connection():
     """Создание подключения к PostgreSQL"""
     database_url = os.getenv('DATABASE_URL')
-    if not database_url: return None
+    if not database_url:
+        print("❌ Ошибка: Не задан DATABASE_URL")
+        return None
     try:
-        conn = psycopg2.connect(database_url, sslmode='require')
+        conn = psycopg2.connect(database_url)
         return conn
-    except:
-        try:
-            conn = psycopg2.connect(database_url)
-            return conn
-        except Exception as e:
-            print(f"❌ Ошибка подключения к БД: {e}")
-            return None
+    except Exception as e:
+        print(f"❌ Ошибка подключения к БД: {e}")
+        return None
 
 def init_db():
     conn = get_connection()
@@ -93,25 +91,11 @@ def init_db():
                 )
             """)
             
-            # 3. Таблица логов (опционально, для истории)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS battle_logs (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    enemy_name VARCHAR(100),
-                    result VARCHAR(50),
-                    gold_earned INTEGER DEFAULT 0,
-                    experience_earned INTEGER DEFAULT 0,
-                    is_boss BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Индексы для скорости
+            # Индексы
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON player_inventory (user_id, item_key)")
             
             conn.commit()
-            print("✅ База данных инициализирована и готова к Темному Фентези.")
+            print("✅ База данных инициализирована (Dark Fantasy RPG).")
     except Exception as e:
         print(f"❌ Ошибка init_db: {e}")
     finally:
@@ -120,10 +104,10 @@ def init_db():
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def apply_regeneration(character):
-    """Регенерация HP и MP со временем"""
+    """Регенерация HP и MP со временем (5% в минуту)"""
     try:
         last_regen = character.get('last_regeneration')
-        if not last_regen: return character # Если нет данных, пропускаем
+        if not last_regen: return character
 
         if isinstance(last_regen, str):
             last_regen = datetime.fromisoformat(last_regen)
@@ -133,16 +117,15 @@ def apply_regeneration(character):
 
         if minutes_passed < 1: return character
         
-        # Если полное здоровье, просто обновляем таймер
+        # Если здоровье полное, просто обновляем таймер
         if character['health'] >= character['max_health'] and character['mana'] >= character['max_mana']:
             update_character_stats(character['user_id'], last_regeneration=current_time)
             return character
 
-        # 5% регена в минуту
         hp_regen = int(character['max_health'] * 0.05 * minutes_passed)
         mp_regen = int(character['max_mana'] * 0.05 * minutes_passed)
         
-        # Минимум 1 ед. если прошло время
+        # Гарантированный минимум регена 1 ед, если прошло время
         if hp_regen == 0 and minutes_passed > 0: hp_regen = minutes_passed
         if mp_regen == 0 and minutes_passed > 0: mp_regen = minutes_passed
 
@@ -158,7 +141,7 @@ def apply_regeneration(character):
         print(f"Regen error: {e}")
         return character
 
-def calculate_rank(level, exp):
+def calculate_rank(level):
     if level >= 55: return 'S'
     elif level >= 45: return 'A'
     elif level >= 35: return 'B'
@@ -179,13 +162,15 @@ def get_character(user_id):
                 # Обновляем активность
                 cursor.execute("UPDATE player_characters SET last_active = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
                 conn.commit()
+                
                 # Применяем реген
                 char = apply_regeneration(char)
+                
                 # Проверяем ранг
-                actual_rank = calculate_rank(char['level'], char['experience'])
+                actual_rank = calculate_rank(char['level'])
                 if char['rank'] != actual_rank:
-                     update_character_stats(user_id, rank=actual_rank)
-                     char['rank'] = actual_rank
+                    update_character_stats(user_id, rank=actual_rank)
+                    char['rank'] = actual_rank
             return char
     finally:
         conn.close()
@@ -198,7 +183,6 @@ def create_character(user_id, username, char_name, race):
     hp = race_data['vitality'] * race_data['health_multiplier']
     mp = race_data['intelligence'] * race_data['mana_multiplier']
     
-    # Базовые резисты
     p_res = 0.05 if race == 'orc' else 0.0
     m_res = 0.10 if race == 'dwarf' else 0.0
     if race == 'elf': m_res = 0.05
@@ -242,29 +226,28 @@ def update_character_stats(user_id, **kwargs):
     finally:
         conn.close()
 
-# --- ИНВЕНТАРЬ И МАГАЗИН (САМАЯ ВАЖНАЯ ЧАСТЬ) ---
+# --- ИНВЕНТАРЬ И МАГАЗИН ---
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
     """
     Покупка предмета. 
-    ЕСЛИ item_type это оружие/броня/артефакт -> Сразу добавляем статы персонажу!
+    Экипировка (weapon, armor, artifact) сразу дает пассивный бонус к статам.
     """
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     
     try:
         with conn.cursor() as cursor:
-            # 1. Проверяем деньги (если цена > 0)
+            # 1. Проверяем деньги
             if price > 0:
                 cursor.execute("SELECT gold FROM player_characters WHERE user_id=%s", (user_id,))
                 res = cursor.fetchone()
                 if not res or res[0] < price:
                     return False, f"Не хватает золота! Нужно {price}"
                 
-                # Списываем золото
                 cursor.execute("UPDATE player_characters SET gold = gold - %s WHERE user_id=%s", (price, user_id))
 
-            # 2. Добавляем предмет в инвентарь
+            # 2. Добавляем в инвентарь
             cursor.execute("SELECT id FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
             exist = cursor.fetchone()
             if exist:
@@ -275,23 +258,17 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
                     VALUES (%s, %s, %s, %s, 1, %s)
                 """, (user_id, item_key, item_type, item_name, effect_amount))
 
-            # 3. ЛОГИКА ЭКИПИРОВКИ (Упрощенная RPG механика: купил = надел и получил бонус навсегда)
+            # 3. Применяем бонусы экипировки (навсегда)
             msg_extra = ""
-            
             if item_type == 'weapon':
-                # Оружие дает Силу
                 cursor.execute("UPDATE player_characters SET strength = strength + %s WHERE user_id=%s", (effect_amount, user_id))
                 msg_extra = f"\n💪 Сила +{effect_amount}"
-                
             elif item_type == 'armor':
-                # Броня дает Макс ХП и немного Живучести
                 hp_bonus = effect_amount
                 vit_bonus = max(1, int(effect_amount / 10))
                 cursor.execute("UPDATE player_characters SET max_health = max_health + %s, vitality = vitality + %s WHERE user_id=%s", (hp_bonus, vit_bonus, user_id))
                 msg_extra = f"\n🛡️ Макс. HP +{hp_bonus}"
-                
             elif item_type in ['artifact', 'acc']:
-                # Аксессуары дают Интеллект и Ману
                 int_bonus = effect_amount
                 mp_bonus = int_bonus * 5
                 cursor.execute("UPDATE player_characters SET intelligence = intelligence + %s, max_mana = max_mana + %s WHERE user_id=%s", (int_bonus, mp_bonus, user_id))
@@ -308,17 +285,12 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
         conn.close()
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
-    """
-    Использование предмета.
-    Еда/Зелья -> Лечат.
-    Материалы -> Просто тратятся (для крафта).
-    """
+    """Использование расходников (еда, зелья, материалы)"""
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     
     try:
         with conn.cursor() as cursor:
-            # Проверяем наличие
             cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s AND quantity > 0", (user_id, item_key))
             item = cursor.fetchone()
             if not item: return False, "Предмета нет в наличии"
@@ -326,7 +298,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
             item_id, qty = item
             msg_effect = ""
 
-            # Применяем эффект ТОЛЬКО для еды и зелий
+            # Эффекты только для еды и зелий
             if item_type in ['food', 'potion']:
                 if 'mana' in item_key or 'mp' in item_key:
                     cursor.execute("UPDATE player_characters SET mana = LEAST(max_mana, mana + %s) WHERE user_id=%s", (effect_amount, user_id))
@@ -335,7 +307,7 @@ def use_item(user_id, item_key, item_type, item_name, effect_amount):
                     cursor.execute("UPDATE player_characters SET health = LEAST(max_health, health + %s) WHERE user_id=%s", (effect_amount, user_id))
                     msg_effect = f"\n❤️ Здоровье +{effect_amount}"
             
-            # Списываем предмет (или удаляем строку, если 0)
+            # Списываем предмет
             if qty > 1:
                 cursor.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE id=%s", (item_id,))
             else:
@@ -355,10 +327,7 @@ def get_inventory(user_id):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("""
-                SELECT item_key, item_type, item_name, quantity, effect_amount 
-                FROM player_inventory WHERE user_id=%s ORDER BY item_type
-            """, (user_id,))
+            cursor.execute("SELECT item_key, item_type, item_name, quantity, effect_amount FROM player_inventory WHERE user_id=%s ORDER BY item_type", (user_id,))
             return cursor.fetchall()
     finally:
         conn.close()
@@ -377,19 +346,23 @@ def add_experience(user_id, exp_amount):
             cur_exp, cur_lvl, pts = data
             new_exp = cur_exp + exp_amount
             
-            # Простая формула уровня
-            needed = (cur_lvl * (cur_lvl + 1) * 150) // 2
+            # Цикл для повышения нескольких уровней сразу
+            leveled_up = False
+            while True:
+                needed = (cur_lvl * (cur_lvl + 1) * 150) // 2
+                if new_exp >= needed:
+                    cur_lvl += 1
+                    pts += 2
+                    leveled_up = True
+                else:
+                    break
             
-            if new_exp >= needed:
-                # LEVEL UP
-                new_lvl = cur_lvl + 1
-                pts += 2 # +2 очка за уровень
-                # Полный хил при левелапе
+            if leveled_up:
                 cursor.execute("""
                     UPDATE player_characters 
                     SET experience=%s, level=%s, stat_points=%s, health=max_health, mana=max_mana 
                     WHERE user_id=%s
-                """, (new_exp, new_lvl, pts, user_id))
+                """, (new_exp, cur_lvl, pts, user_id))
             else:
                 cursor.execute("UPDATE player_characters SET experience=%s WHERE user_id=%s", (new_exp, user_id))
             
@@ -398,7 +371,6 @@ def add_experience(user_id, exp_amount):
         conn.close()
 
 def add_stat_point(user_id, stat_type):
-    """Ручное распределение очков характеристик"""
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     try:
