@@ -3,6 +3,7 @@ import logging
 import random
 import html
 from datetime import datetime, time
+from telegram.error import BadRequest
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
@@ -128,6 +129,7 @@ LOCATIONS = {
 async def safe_edit(query, text=None, keyboard=None, media=None):
     try:
         if media:
+            # Пытаемся обновить медиа и текст
             await query.edit_message_media(media=media, reply_markup=keyboard)
         elif text:
             try:
@@ -136,16 +138,34 @@ async def safe_edit(query, text=None, keyboard=None, media=None):
                 await query.edit_message_text(text=text, parse_mode='Markdown', reply_markup=keyboard)
         elif keyboard:
              await query.edit_message_reply_markup(reply_markup=keyboard)
+             
+    except BadRequest as e:
+        # ГЛАВНОЕ ИСПРАВЛЕНИЕ:
+        # Если ошибка "Message is not modified", мы просто игнорируем её.
+        # Бот не удаляет сообщение, бой продолжается плавно.
+        if "Message is not modified" in str(e):
+            return 
+        
+        # Если ошибка другая (например, старая картинка протухла), тогда уже пересоздаем
+        logger.error(f"Ошибка BadRequest: {e}")
+        try: await query.delete_message()
+        except: pass
+        
+        if media:
+             await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
+        elif text:
+             await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
+             
     except Exception as e:
+        # Обработка остальных критических ошибок
+        logger.error(f"Критическая ошибка в safe_edit: {e}")
         try: await query.delete_message()
         except: pass
         if media:
              await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
         elif text:
              await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
-        elif keyboard and not text and not media:
-             await query.message.reply_text("Меню обновлено", reply_markup=keyboard)
-
+            
 async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔮 *Связь потеряна...*\nМир изменился. Напиши /start, чтобы вернуться.",
@@ -506,6 +526,9 @@ async def render_battle(query, user_id):
     enemy_rank = e.get('rank', '?')
     enemy_icon = "☠️" if e.get('is_boss') else "👺"
     
+    # Генерируем уникальный ID для обновления (защита от MessageNotModified)
+    unique_id = random.randint(1000, 9999)
+    
     txt = (
         f"{enemy_icon} *{e['name']}* `[Ранг {enemy_rank}]`\n"
         f"{enemy_hp}\n"
@@ -514,11 +537,15 @@ async def render_battle(query, user_id):
         f"{player_hp} | 🌀 MP: {c['mana']}/{c['max_mana']}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"{log_str}"
-        # Хак: добавляем невидимый символ времени, чтобы сообщение всегда менялось
-        f"\n`⏱ {datetime.now().strftime('%H:%M:%S')}`" 
+        f"\n`⏱ {datetime.now().strftime('%H:%M:%S')} | {unique_id}`" 
     )
     
-    await safe_edit(query, text=txt, media=InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown'), keyboard=get_battle_action_keyboard())
+    # Пытаемся использовать edit_caption если картинка не менялась (оптимизация)
+    # Но для надежности используем safe_edit с media, так как у нас есть защита выше
+    media_obj = InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown')
+    await safe_edit(query, text=txt, media=media_obj, keyboard=get_battle_action_keyboard())
+
+
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
