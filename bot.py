@@ -128,57 +128,42 @@ LOCATIONS = {
 
 async def safe_edit(query, text=None, keyboard=None, media=None):
     try:
+        # Если передано медиа, пытаемся обновить всё сразу
         if media:
-            # Пытаемся обновить медиа и текст
             await query.edit_message_media(media=media, reply_markup=keyboard)
+        # Если только текст (и клавиатура)
         elif text:
+            # Сначала пробуем edit_caption (для картинок)
             try:
                 await query.edit_message_caption(caption=text, parse_mode='Markdown', reply_markup=keyboard)
-            except:
-                await query.edit_message_text(text=text, parse_mode='Markdown', reply_markup=keyboard)
+            except BadRequest as e:
+                # Если сообщение не картинка, пробуем edit_text
+                if "There is no caption" in str(e) or "Message is not modified" not in str(e):
+                     await query.edit_message_text(text=text, parse_mode='Markdown', reply_markup=keyboard)
         elif keyboard:
              await query.edit_message_reply_markup(reply_markup=keyboard)
              
     except BadRequest as e:
-        # ГЛАВНОЕ ИСПРАВЛЕНИЕ:
-        # Если ошибка "Message is not modified", мы просто игнорируем её.
-        # Бот не удаляет сообщение, бой продолжается плавно.
+        # Игнорируем ошибку "ничего не изменилось" - это НЕ вылет, это норма
         if "Message is not modified" in str(e):
             return 
         
-        # Если ошибка другая (например, старая картинка протухла), тогда уже пересоздаем
-        logger.error(f"Ошибка BadRequest: {e}")
-        try: await query.delete_message()
-        except: pass
+        # Логируем реальные ошибки, но не удаляем сообщение сразу, чтобы не моргало
+        logger.error(f"Ошибка UI: {e}")
         
-        if media:
-             await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
-        elif text:
-             await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
-             
-    except Exception as e:
-        # Обработка остальных критических ошибок
-        logger.error(f"Критическая ошибка в safe_edit: {e}")
-        try: await query.delete_message()
-        except: pass
-        if media:
-             await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
-        elif text:
-             await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
+        # Если совсем всё плохо (например, картинка протухла), тогда шлем новое
+        if "Message to edit not found" in str(e) or "Media not found" in str(e):
+            try: await query.delete_message()
+            except: pass
             
-async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔮 *Связь потеряна...*\nМир изменился. Напиши /start, чтобы вернуться.",
-        parse_mode='Markdown'
-    )
+            if media:
+                 await query.message.reply_photo(photo=media.media, caption=media.caption, parse_mode='Markdown', reply_markup=keyboard)
+            elif text:
+                 await query.message.reply_text(text, parse_mode='Markdown', reply_markup=keyboard)
 
-async def unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.reply_text(
-        "⏳ *Заклинание рассеялось...*\nДействие недоступно. Начни заново: /start.",
-        parse_mode='Markdown'
-    )
-
+    except Exception as e:
+        logger.error(f"Критическая ошибка safe_edit: {e}")
+        
 def create_enemy(enemy_key, player_level):
     if enemy_key not in BASE_ENEMIES: 
         if 'wolf' in BASE_ENEMIES: return create_enemy('wolf', player_level)
@@ -473,23 +458,21 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif data.startswith('location_'):
         rank = data.split('_')[1]
         char = database.get_character(user_id)
-        loc = LOCATIONS.get(rank, LOCATIONS['E']) # Защита от неверного ранга
+        loc = LOCATIONS.get(rank, LOCATIONS['E'])
         txt = f"🌲 *{loc['name']}*\n\n{loc['description']}\n\n⚠️ _Будь осторожен, {char['character_name']}..._"
         await safe_edit(query, text=txt, media=InputMediaPhoto(loc['image'], caption=txt, parse_mode='Markdown'), keyboard=get_location_enemies_keyboard(rank, char['level']))
     
     elif data.startswith('battle_'):
-        # --- ИСПРАВЛЕНИЕ БОССОВ ЗДЕСЬ ---
-        # Было: enemy_key = data.split('_')[1] (делило goblin_elite на goblin и elite)
-        enemy_key = data.split('_', 1)[1] # Стало: берет все после первого подчеркивания
-        
+        enemy_key = data.split('_', 1)[1]
         char = database.get_character(user_id)
+        
         if char['health'] < 10:
-            await query.answer("🩸 Вы слишком ранены для битвы! Выпейте зелье.", show_alert=True)
+            await query.answer("🩸 Вы слишком ранены! Лечитесь.", show_alert=True)
             return BATTLE_MENU
             
         enemy = create_enemy(enemy_key, char['level'])
         if not enemy:
-            await query.answer("Тьма скрыла этого врага... (Ошибка базы)", show_alert=True)
+            await query.answer("Ошибка: враг не найден.", show_alert=True)
             return BATTLE_MENU
 
         # Инициализация боя
@@ -498,7 +481,8 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'enemy': enemy, 
             'log': [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"], 
             'turn': 1,
-            'status_effects': [] # Добавляем для яда/кровотечения
+            'status_effects': [],
+            'last_image': None # ВАЖНО: Добавлено поле для отслеживания картинки
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -515,19 +499,17 @@ async def render_battle(query, user_id):
     
     c, e = s['char'], s['enemy']
     
-    # Формируем красивый лог (последние 5 строк для динамики)
+    # Лог боя
     log_entries = s['log'][-5:]
     log_str = "\n".join(log_entries)
     
-    # Визуал здоровья
     player_hp = get_health_bar(c['health'], c['max_health'])
     enemy_hp = get_health_bar(e['health'], e['max_health'])
-    
     enemy_rank = e.get('rank', '?')
     enemy_icon = "☠️" if e.get('is_boss') else "👺"
     
-    # Генерируем уникальный ID для обновления (защита от MessageNotModified)
-    unique_id = random.randint(1000, 9999)
+    # Уникальный ID чтобы текст всегда отличался (защита от глюков ТГ)
+    unique_id = random.randint(100, 999)
     
     txt = (
         f"{enemy_icon} *{e['name']}* `[Ранг {enemy_rank}]`\n"
@@ -540,12 +522,19 @@ async def render_battle(query, user_id):
         f"\n`⏱ {datetime.now().strftime('%H:%M:%S')} | {unique_id}`" 
     )
     
-    # Пытаемся использовать edit_caption если картинка не менялась (оптимизация)
-    # Но для надежности используем safe_edit с media, так как у нас есть защита выше
-    media_obj = InputMediaPhoto(e['image'], caption=txt, parse_mode='Markdown')
-    await safe_edit(query, text=txt, media=media_obj, keyboard=get_battle_action_keyboard())
-
-
+    # --- УМНОЕ ОБНОВЛЕНИЕ ---
+    current_image = e['image']
+    last_image = s.get('last_image')
+    
+    # Если картинка та же самая - меняем ТОЛЬКО текст (Caption)
+    # Это предотвращает "вылеты" и мерцание
+    if last_image == current_image:
+        await safe_edit(query, text=txt, keyboard=get_battle_action_keyboard(), media=None)
+    else:
+        # Если картинка изменилась (начало боя), меняем медиа полностью
+        s['last_image'] = current_image
+        media_obj = InputMediaPhoto(current_image, caption=txt, parse_mode='Markdown')
+        await safe_edit(query, text=None, media=media_obj, keyboard=get_battle_action_keyboard())
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -554,9 +543,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     action = query.data
     
     s = battle_sessions.get(user_id)
+    
+    # ЗАЩИТА ОТ ВЫЛЕТА ЕСЛИ СЕССИЯ ПОТЕРЯНА
     if not s: 
-        # Если сессия потерялась, мягко возвращаем в меню
-        await safe_edit(query, text="⏳ Битва давно окончена...", keyboard=get_main_menu_keyboard(user_id))
+        await safe_edit(query, text="⌛ *Время вышло или бой завершен.*", keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
     c, e, log = s['char'], s['enemy'], s['log']
@@ -568,128 +558,100 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if action == 'flee':
         if e.get('is_boss') or e.get('is_mini_boss'):
              log.append("🚫 *ОТ БОССА НЕЛЬЗЯ СБЕЖАТЬ!*")
-        elif random.random() < 0.6: # 60% шанс побега
+        elif random.random() < 0.6: 
             database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
             del battle_sessions[user_id]
-            txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!* Вы спасли свою шкуру, но потеряли честь."
+            txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!*"
+            # При побеге картинка меняется на деревню -> media update
             await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         else:
-            log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!* Враг перекрыл путь.")
+            log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
             
     elif action == 'defend':
-        log.append("🛡 Вы ушли в глухую оборону (Урон врага снижен).")
+        log.append("🛡 Вы ушли в глухую оборону.")
         
     elif action == 'attack_physical':
         dmg, is_crit = calculate_damage(c, e, 'physical')
         player_damage = dmg
-        
         verbs = ["рубанули", "пронзили", "ударили", "сокрушили"]
         verb = random.choice(verbs)
-        
-        if is_crit:
-            player_action_text = f"💥 *КРИТ!* Вы жестоко {verb} врага на *{dmg}* урона!"
-        else:
-            player_action_text = f"⚔️ Вы {verb} врага на *{dmg}* урона."
+        crit_txt = "💥 *КРИТ!* " if is_crit else ""
+        player_action_text = f"{crit_txt}Вы {verb} врага на *{dmg}*!"
             
     elif action == 'attack_magic':
         if c['mana'] >= 10:
             c['mana'] -= 10
             dmg, is_crit = calculate_damage(c, e, 'magic')
-            # Магия бьет больнее (бонус 20%)
             dmg = int(dmg * 1.2)
             player_damage = dmg
-            
-            spells = ["Огненная стрела", "Ледяной шип", "Разряд молнии", "Сгусток тьмы"]
+            spells = ["Огненная стрела", "Ледяной шип", "Разряд молнии"]
             spell = random.choice(spells)
-            
-            crit_txt = " *КРИТИЧЕСКИ*" if is_crit else ""
-            player_action_text = f"🔮 Вы выпустили {spell} и{crit_txt} нанесли *{dmg}* урона!"
+            crit_txt = " (КРИТ!)" if is_crit else ""
+            player_action_text = f"🔮 {spell} нанес *{dmg}* урона{crit_txt}!"
         else:
-            log.append("💧 *НЕТ МАНЫ!* Заклинание сорвалось!")
-            # Штрафной удар слабой физухой
+            log.append("💧 *НЕТ МАНЫ!*")
             player_damage = max(1, c['strength'] // 4)
-            player_action_text = f"👊 Вы ударили кулаком от безысходности на {player_damage}."
+            player_action_text = f"👊 Удар рукой на {player_damage}."
 
-    # Применение урона игрока
     if player_damage > 0:
         e['health'] -= player_damage
         log.append(player_action_text)
 
-    # --- ПРОВЕРКА СМЕРТИ ВРАГА ---
+    # --- ПОБЕДА ---
     if e['health'] <= 0:
-        # Расчет наград (чуть больше золота)
         gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
         xp_win = e['exp']
-        
         database.add_experience(user_id, xp_win)
         database.add_gold(user_id, gold_win)
-        
-        # Исцеление после боя (10% HP)
         heal = int(c['max_health'] * 0.1)
         final_hp = min(c['max_health'], c['health'] + heal)
-        
         database.update_character_stats(user_id, health=final_hp, mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
-        
         if e.get('is_boss'): database.increment_boss_kills(user_id, False)
         if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
         
         del battle_sessions[user_id]
         
-        win_msg = (f"🏆 *ПОБЕДА!*\n\n"
-                   f"☠️ {e['name']} пал к вашим ногам.\n"
-                   f"💰 Получено: *{gold_win}* золота\n"
-                   f"📚 Получено: *{xp_win}* опыта\n"
-                   f"❤️ Вы перевели дух и восстановили {heal} HP.")
-                   
+        win_msg = (f"🏆 *ПОБЕДА!*\n\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp\n❤️ +{heal} HP")
+        # Победа -> смена картинки на деревню -> media update
         await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
     # --- ХОД ВРАГА ---
     if action != 'flee' or (action == 'flee' and "ПОБЕГ НЕ УДАЛСЯ" in log[-1]):
-        
-        # Спец-атака врага (20% шанс)
         spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
-        
         if spec_dmg > 0:
             enemy_dmg = spec_dmg
             if action == 'defend': 
-                enemy_dmg = int(enemy_dmg * 0.6) # Блок работает и против спец ударов частично
-                log.append(f"🛡 Щит смягчил удар до {enemy_dmg}!")
+                enemy_dmg = int(enemy_dmg * 0.6)
+                log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
             c['health'] -= enemy_dmg
         else:
-            # Обычная атака
             base_dmg, is_dodged = calculate_enemy_damage(e, c)
-            
             if is_dodged:
-                log.append(f"💨 *УВОРОТ!* Атака {e['name']} прошла мимо!")
+                log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
             else:
                 if action == 'defend':
                     base_dmg //= 2
-                    log.append(f"🛡 Вы блокировали удар. Урон: *{base_dmg}*")
+                    log.append(f"🛡 Блок! Урон: *{base_dmg}*")
                 else:
-                    log.append(f"💔 {e['name']} нанес вам *{base_dmg}* урона!")
-                
+                    log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
                 c['health'] -= base_dmg
 
-    # --- ПРОВЕРКА СМЕРТИ ИГРОКА ---
+    # --- ПОРАЖЕНИЕ ---
     if c['health'] <= 0:
         database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
         del battle_sessions[user_id]
-        
-        death_msg = (f"💀 *ВЫ ПОГИБЛИ...*\n\n"
-                     f"{e['name']} оказался сильнее.\n"
-                     f"Ваше тело осталось лежать в локации {LOCATIONS.get(e['rank'], {}).get('name', 'Пустошь')}.\n"
-                     f"Жрецы воскресят вас в деревне, но вы потеряли часть опыта.")
-                     
+        death_msg = "💀 *ВЫ ПОГИБЛИ...* Жрецы воскресили вас в деревне."
+        # Смерть -> смена картинки на кладбище -> media update
         await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
-    # Обновляем сессию и рендерим
     s['turn'] += 1
     await render_battle(query, user_id)
     return IN_BATTLE
-    
+
+
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
