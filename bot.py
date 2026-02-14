@@ -619,22 +619,43 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         action = query.data
         c, e, log = s['char'], s['enemy'], s['log']
         
-        # --- ХОД ИГРОКА ---
-        player_damage = 0
-        player_action_text = ""
+        # --- ХОД ВРАГА ---
+        # Мы убрали проверку "if action != 'flee'...", так как если игрок сбежал успешно,
+        # код сюда просто не дойдет (сработает return выше).
         
-        if action == 'flee':
-            if e.get('is_boss') or e.get('is_mini_boss'):
-                 log.append("🚫 *ОТ БОССА НЕЛЬЗЯ СБЕЖАТЬ!*")
-            elif random.random() < 0.6: 
-                database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
-                del battle_sessions[user_id]
-                txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!*"
-                await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-                return MAIN_MENU
+        spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
+        
+        if spec_dmg > 0:
+            enemy_dmg = spec_dmg
+            if action == 'defend': 
+                enemy_dmg = int(enemy_dmg * 0.6)
+                log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
+            c['health'] -= enemy_dmg
+        else:
+            base_dmg, is_dodged = calculate_enemy_damage(e, c)
+            if is_dodged:
+                log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
             else:
-                log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
-                
+                if action == 'defend':
+                    base_dmg //= 2
+                    log.append(f"🛡 Блок! Урон: *{base_dmg}*")
+                else:
+                    log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
+                c['health'] -= base_dmg
+
+        # --- ПОРАЖЕНИЕ ---
+        if c['health'] <= 0:
+            # Обнуляем здоровье в базе
+            database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
+            
+            # Удаляем сессию боя
+            if user_id in battle_sessions:
+                del battle_sessions[user_id]
+            
+            death_msg = "💀 *ВЫ ПОГИБЛИ...* Темные жрецы воскресили вас в деревне, но часть души утеряна."
+            await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
+            
         elif action == 'defend':
             log.append("🛡 Вы ушли в глухую оборону.")
             
