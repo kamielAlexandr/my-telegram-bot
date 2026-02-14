@@ -50,7 +50,7 @@ IMAGE_URLS = {
     'training_camp': 'https://img1.liveinternet.ru/images/attach/b/2/1/726/1726838_full0011.jpg',
     'hell_gate': 'https://abrakadabra.fun/uploads/posts/2022-01/1642490542_3-abrakadabra-fun-p-temnii-mag-art-5.jpg',
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
-    'shop': 'https://img.freepik.com/premium-photo/medieval-market-stall_23-2150911310.jpg',
+    'shop': 'https://cubiq.ru/wp-content/uploads/2021/07/picture-1-15.jpeg',
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
     'craft': 'https://img.freepik.com/free-photo/blacksmith-workshop_23-2150911315.jpg'
 }
