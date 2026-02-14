@@ -43,7 +43,7 @@ IMAGE_URLS = {
     'dragon_ancient': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
     'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
     'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
-    'village': 'https://img.freepik.com/premium-photo/tavern-like-game_808092-1770.jpg',
+    'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
