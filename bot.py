@@ -1054,13 +1054,15 @@ async def unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 def main():
+    # Инициализация базы данных
     database.init_db()
+    
+    # Создаем приложение
+    # Убрали JobQueue, чтобы не было ошибки, если библиотека не установлена
     app = Application.builder().token(TOKEN).build()
     
-    # Напоминание в 12:00
-    if app.job_queue:
-        app.job_queue.run_daily(daily_reminder, time=time(hour=12, minute=0), days=(0,1,2,3,4,5,6))
-    
+    # --- НАСТРОЙКА ДИАЛОГОВ ---
+    # Добавили per_message=True, чтобы убрать предупреждение и улучшить работу кнопок
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -1074,17 +1076,20 @@ def main():
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)]
         },
-        fallbacks=[CommandHandler('start', start)]
+        fallbacks=[CommandHandler('start', start)],
+        per_message=True  # <--- ВАЖНОЕ ИСПРАВЛЕНИЕ
     )
+    
     app.add_handler(conv)
     app.add_handler(CommandHandler('help', help_command))
     
     # Хендлер для любого текста, если пользователь не в диалоге
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
     
+    # Обработчик "протухших" кнопок
     app.add_handler(CallbackQueryHandler(unknown_callback))
-    print("⚔️ Бот Темного Фентези запущен!")
+    
+    print("⚔️ Бот Темного Фентези запущен и готов к работе!")
+    
+    # Запуск
     app.run_polling()
-
-if __name__ == '__main__':
-    main()
