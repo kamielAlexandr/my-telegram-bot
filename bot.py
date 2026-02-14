@@ -945,27 +945,46 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    # Не делаем query.answer() тут, чтобы не сбивать уведомления от use_item
     data = query.data
     user_id = query.from_user.id
+    
     if data == 'back_to_main':
+        await query.answer()
         await safe_edit(query, text="Главное меню", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+    
     elif data.startswith('use_'):
         key = data.split('_', 1)[1]
         item = ITEMS_DB.get(key)
         effect = item['effect'] if item else 0
         
-        res, msg = database.use_item(user_id, key, item['type'], item['name'], effect) 
-        await query.answer(msg, show_alert=True)
+        # Используем предмет
+        res, msg = database.use_item(user_id, key, item['type'], item['name'], effect)
+        await query.answer(msg, show_alert=True) # Показываем всплывающее окно
+        
+        # Сразу обновляем меню, чтобы показать новые HP и количество предметов
         items = database.get_inventory(user_id)
-        if items:
-            await query.edit_message_reply_markup(reply_markup=get_inventory_keyboard(items, 0))
-        else:
-            await safe_edit(query, text="Пусто", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Пусто", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        char = database.get_character(user_id) # Загружаем обновленного героя
+        
+        # Показываем HP прямо в заголовке инвентаря
+        txt = f"🎒 *Инвентарь*\n❤️ Здоровье: {char['health']}/{char['max_health']}\n🌀 Мана: {char['mana']}/{char['max_mana']}\n\nНажми на предмет, чтобы использовать:"
+        
+        kb = get_inventory_keyboard(items, 0) if items else get_main_menu_keyboard(user_id)
+        
+        # Обновляем текст сообщения
+        try:
+             await query.edit_message_caption(caption=txt, parse_mode='Markdown', reply_markup=kb)
+        except BadRequest:
+             # Если текст не изменился (например, HP полное), игнорируем ошибку
+             pass
+        
+        if not items:
+            await safe_edit(query, text="Ваш мешок пуст.", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Ваш мешок пуст.", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
+            
     elif data == 'ignore':
-        await query.answer("Это экипировка. Она работает пассивно.", show_alert=True)
+        await query.answer("Это экипировка. Она работает пассивно (дает статы сразу при покупке).", show_alert=True)
 
     return INVENTORY_MENU
 
