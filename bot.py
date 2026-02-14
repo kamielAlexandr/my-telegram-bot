@@ -74,10 +74,10 @@ ITEMS_DB = {
     'large_mp': {'name': '🔮 Эликсир Бездны', 'desc': 'Наполняет вены магией.', 'price': 200, 'type': 'potion', 'effect': 100, 'cat': 'food', 'rank': 'B'},
 
     # --- ОРУЖИЕ ---
-    'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца. (+2 Силы)', 'price': 150, 'type': 'weapon', 'effect': 2, 'cat': 'weapon', 'rank': 'E'},
-    'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови. (+5 Силы)', 'price': 400, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'D'},
-    'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря. (+10 Силы)', 'price': 900, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'C'},
-    'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия. (+18 Силы)', 'price': 2500, 'type': 'weapon', 'effect': 18, 'cat': 'weapon', 'rank': 'B'},
+    'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца. (+5 Силы)', 'price': 150, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
+    'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови. (+10 Силы)', 'price': 400, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
+    'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря. (+15 Силы)', 'price': 900, 'type': 'weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
+    'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия. (+20 Силы)', 'price': 2500, 'type': 'weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
     'demon_slayer': {'name': '🔥 Убийца Демонов', 'desc': 'Пылает яростью. (+30 Силы)', 'price': 6000, 'type': 'weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'god_killer': {'name': '⚡ Гнев Титана', 'desc': 'Раскалывает небо. (+50 Силы)', 'price': 15000, 'type': 'weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
 
