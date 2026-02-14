@@ -229,10 +229,6 @@ def update_character_stats(user_id, **kwargs):
 # --- ИНВЕНТАРЬ И МАГАЗИН ---
 
 def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
-    """
-    Покупка предмета. 
-    Экипировка (weapon, armor, artifact) сразу дает пассивный бонус к статам.
-    """
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     
@@ -243,11 +239,11 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
                 cursor.execute("SELECT gold FROM player_characters WHERE user_id=%s", (user_id,))
                 res = cursor.fetchone()
                 if not res or res[0] < price:
-                    return False, f"Не хватает золота! Нужно {price}"
+                    return False, f"Не хватает золота! Нужно {price}g"
                 
                 cursor.execute("UPDATE player_characters SET gold = gold - %s WHERE user_id=%s", (price, user_id))
 
-            # 2. Добавляем в инвентарь
+            # 2. Добавляем в инвентарь (или увеличиваем кол-во)
             cursor.execute("SELECT id FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
             exist = cursor.fetchone()
             if exist:
@@ -262,16 +258,17 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
             msg_extra = ""
             if item_type == 'weapon':
                 cursor.execute("UPDATE player_characters SET strength = strength + %s WHERE user_id=%s", (effect_amount, user_id))
-                msg_extra = f"\n💪 Сила +{effect_amount}"
+                msg_extra = f"\n💪 Сила увеличилась на +{effect_amount}!"
             elif item_type == 'armor':
                 hp_bonus = effect_amount
                 vit_bonus = max(1, int(effect_amount / 10))
-                cursor.execute("UPDATE player_characters SET max_health = max_health + %s, vitality = vitality + %s WHERE user_id=%s", (hp_bonus, vit_bonus, user_id))
-                msg_extra = f"\n🛡️ Макс. HP +{hp_bonus}"
+                # ВАЖНО: Увеличиваем И max_health, И текущее health
+                cursor.execute("UPDATE player_characters SET max_health = max_health + %s, health = health + %s, vitality = vitality + %s WHERE user_id=%s", (hp_bonus, hp_bonus, vit_bonus, user_id))
+                msg_extra = f"\n🛡️ HP увеличено на +{hp_bonus}!"
             elif item_type in ['artifact', 'acc']:
                 int_bonus = effect_amount
                 mp_bonus = int_bonus * 5
-                cursor.execute("UPDATE player_characters SET intelligence = intelligence + %s, max_mana = max_mana + %s WHERE user_id=%s", (int_bonus, mp_bonus, user_id))
+                cursor.execute("UPDATE player_characters SET intelligence = intelligence + %s, max_mana = max_mana + %s, mana = mana + %s WHERE user_id=%s", (int_bonus, mp_bonus, mp_bonus, user_id))
                 msg_extra = f"\n🧠 Интеллект +{int_bonus}"
 
             conn.commit()
@@ -283,6 +280,7 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
         return False, "Ошибка при покупке"
     finally:
         conn.close()
+
 
 def use_item(user_id, item_key, item_type, item_name, effect_amount):
     """Использование расходников (еда, зелья, материалы)"""
