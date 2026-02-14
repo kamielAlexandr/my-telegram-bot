@@ -860,13 +860,19 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     
                     c['health'] -= final_dmg
 
+
         # --- 6. ПРОВЕРКА ПОРАЖЕНИЯ ---
         if c['health'] <= 0:
             database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
             if user_id in battle_sessions:
                 del battle_sessions[user_id]
             
-            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна в Бездне."
+            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна."
+            
+            # Добавляем совет, если игрок низкого уровня умер от босса
+            if c['level'] < 10 and (e.get('is_boss') or e.get('is_mini_boss')):
+                death_msg += "\n\n💡 *Урок:* Вы слишком слабы для Боссов. Прокачайтесь до 10 уровня, чтобы открыть Магию!"
+            
             death_image = IMAGE_URLS.get('dungeon', 'https://i.pinimg.com/736x/93/84/9f/93849fa5c577756a346cd6c4172b384d.jpg')
             
             await safe_edit(query, text=death_msg, media=InputMediaPhoto(death_image, caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
@@ -1165,12 +1171,21 @@ async def show_top_players(query, user_id):
     await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = "🆘 *Книга Знаний*\n• 📜 **Герой** - Ваши характеристики.\n• ⚔️ **Битва** - Сражения за золото и опыт.\n• 🛍 **Лавка** - Покупка снаряжения.\n• 🛠 **Кузница** - Крафт редких вещей.\n• 🎒 **Инвентарь** - Ваши запасы.\n❤️ **Важно:** Здоровье не восстанавливается автоматически! Пейте зелья."
+    text = (
+        "🆘 *Книга Знаний*\n\n"
+        "• 📜 **Герой** — Ваши характеристики.\n"
+        "• ⚔️ **Битва** — Сражения за золото и опыт.\n"
+        "• 🛍 **Лавка** — Покупка снаряжения.\n"
+        "• 🛠 **Кузница** — Крафт редких вещей.\n\n"
+        "✨ **СИЛА РАСЫ:**\n"
+        "На *10, 25 и 40 уровне* открываются уникальные способности (кнопка появится в бою). \n"
+        "⚠️ *Совет:* Не пытайтесь убить Боссов без способностей — это верная смерть!\n\n"
+        "❤️ **Важно:** Здоровье не восстанавливается само (только 5% в минуту). Пейте зелья!"
+    )
     if update.callback_query:
          await safe_edit(update.callback_query, text=text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=text, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(update.effective_user.id))
     else:
          await update.message.reply_text(text, parse_mode='Markdown')
-
 async def daily_reminder(context: ContextTypes.DEFAULT_TYPE):
     users = database.get_all_users()
     for uid in users:
