@@ -1090,6 +1090,9 @@ def main():
     app.add_handler(CallbackQueryHandler(unknown_callback))
     
     print("⚔️ Бот Темного Фентези запущен и готов к работе!")
+
     
     # Запуск
     app.run_polling()
+if __name__ == '__main__':
+    main()
