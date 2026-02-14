@@ -882,7 +882,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_sessions[user_id]['processing'] = False
             
     return IN_BATTLE
-
+    
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
