@@ -388,12 +388,16 @@ def get_location_enemies_keyboard(rank, level):
     kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_battle_menu')])
     return InlineKeyboardMarkup(kb)
 
-def get_battle_action_keyboard():
-    return InlineKeyboardMarkup([
+def get_battle_action_keyboard(level=1):
+    kb = [
         [InlineKeyboardButton("⚔️ Атака", callback_data='attack_physical'), InlineKeyboardButton("🔮 Магия", callback_data='attack_magic')],
         [InlineKeyboardButton("🛡 Блок", callback_data='defend'), InlineKeyboardButton("🏃 Сбежать", callback_data='flee')]
-    ])
-
+    ]
+    # Добавляем кнопку способностей, если уровень >= 10
+    if level >= 10:
+        kb.insert(1, [InlineKeyboardButton("💫 Способности", callback_data='abilities_menu')])
+    
+    return InlineKeyboardMarkup(kb)
 def get_inventory_keyboard(items, page):
     kb = []
     for i in items:
@@ -574,6 +578,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'log': [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"], 
             'turn': 1,
             'status_effects': [],
+            'cooldowns': {},
             'last_image': None,
             'processing': False
         }
@@ -616,106 +621,184 @@ async def render_battle(query, user_id):
     last_image = s.get('last_image')
     
     if last_image == current_image:
-        await safe_edit(query, text=txt, keyboard=get_battle_action_keyboard(), media=None)
+        await safe_edit(query, text=txt, keyboard=get_battle_action_keyboard(c['level']), media=None)
     else:
         s['last_image'] = current_image
         media_obj = InputMediaPhoto(current_image, caption=txt, parse_mode='Markdown')
-        await safe_edit(query, text=None, media=media_obj, keyboard=get_battle_action_keyboard())
+        await safe_edit(query, text=None, media=media_obj, keyboard=get_battle_action_keyboard(c['level']))
 
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
+    # 1. Проверяем, идет ли бой
     s = battle_sessions.get(user_id)
     if not s: 
         await query.answer()
-        await safe_edit(query, text="⌛ *Время вышло или бой завершен.*", keyboard=get_main_menu_keyboard(user_id))
+        await safe_edit(query, text="⌛ *Бой завершен или сессия истекла.*", keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
+    # Защита от двойных нажатий
     if s.get('processing'):
         await query.answer("⏳ ...", show_alert=False)
         return IN_BATTLE
     
+    # --- 2. ОБРАБОТКА МЕНЮ СПОСОБНОСТЕЙ (НЕ ТРАТИТ ХОД) ---
+    if query.data == 'abilities_menu':
+        char = s['char']
+        race_skills = RACE_ABILITIES.get(char['race'], {})
+        kb = []
+        
+        # Генерируем кнопки навыков
+        for lvl, skill in race_skills.items():
+            if char['level'] >= lvl:
+                # Проверка маны и кулдауна для иконки
+                cd_left = s['cooldowns'].get(skill['key'], 0)
+                status_icon = "✅"
+                if cd_left > 0: status_icon = f"⏳ {cd_left}"
+                elif char['mana'] < skill['mana']: status_icon = "💧"
+                
+                btn_text = f"{skill['name']} ({skill['mana']} MP) {status_icon}"
+                kb.append([InlineKeyboardButton(btn_text, callback_data=f"use_skill_{skill['key']}")])
+        
+        kb.append([InlineKeyboardButton("🔙 Назад в бой", callback_data='back_to_fight')])
+        await safe_edit(query, text=None, keyboard=InlineKeyboardMarkup(kb))
+        return IN_BATTLE
+
+    if query.data == 'back_to_fight':
+        await render_battle(query, user_id)
+        return IN_BATTLE
+
+    # --- 3. НАЧАЛО ХОДА (ТРАТИТ ХОД) ---
     s['processing'] = True
-    
     try:
         await query.answer()
         action = query.data
         c, e, log = s['char'], s['enemy'], s['log']
         
-        # --- ХОД ВРАГА ---
-        # Мы убрали проверку "if action != 'flee'...", так как если игрок сбежал успешно,
-        # код сюда просто не дойдет (сработает return выше).
+        player_damage = 0
+        enemy_damage_mod = 1.0 # Модификатор урона по игроку (1.0 = 100%, 0.5 = 50%)
         
-        spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
-        
-        if spec_dmg > 0:
-            enemy_dmg = spec_dmg
-            if action == 'defend': 
-                enemy_dmg = int(enemy_dmg * 0.6)
-                log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
-            c['health'] -= enemy_dmg
-        else:
-            base_dmg, is_dodged = calculate_enemy_damage(e, c)
-            if is_dodged:
-                log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
-            else:
-                if action == 'defend':
-                    base_dmg //= 2
-                    log.append(f"🛡 Блок! Урон: *{base_dmg}*")
-                else:
-                    log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
-                c['health'] -= base_dmg
+        # Уменьшаем кулдауны способностей в начале хода
+        for k in list(s['cooldowns'].keys()):
+            if s['cooldowns'][k] > 0: s['cooldowns'][k] -= 1
 
-        # --- ПОРАЖЕНИЕ ---
-        if c['health'] <= 0:
-            # Обнуляем здоровье в базе
-            database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
+        # === ДЕЙСТВИЯ ИГРОКА ===
+        
+        # А) Использование способности
+        if action.startswith('use_skill_'):
+            skill_key = action.split('_')[2]
             
-            # Удаляем сессию боя
-            if user_id in battle_sessions:
+            # Ищем навык в базе
+            skill = None
+            for lvl, sk in RACE_ABILITIES.get(c['race'], {}).items():
+                if sk['key'] == skill_key: skill = sk
+            
+            if not skill: return IN_BATTLE # Если навык не найден
+            
+            # Проверки перед использованием
+            if s['cooldowns'].get(skill_key, 0) > 0:
+                s['processing'] = False
+                await query.answer(f"⏳ Перезарядка! Ждите {s['cooldowns'][skill_key]} ход.", show_alert=True)
+                return IN_BATTLE
+            if c['mana'] < skill['mana']:
+                s['processing'] = False
+                await query.answer("💧 Не хватает маны!", show_alert=True)
+                return IN_BATTLE
+
+            # Списание маны и старт кулдауна
+            c['mana'] -= skill['mana']
+            s['cooldowns'][skill_key] = skill['cd']
+            
+            # Эффекты навыков
+            if skill['type'] == 'heal':
+                heal = int(c['max_health'] * skill['val'])
+                c['health'] = min(c['max_health'], c['health'] + heal)
+                log.append(f"✨ *{skill['name']}* восстановил {heal} HP!")
+            
+            elif skill['type'] == 'heal_mana':
+                heal = int(c['max_health'] * skill['val'])
+                c['health'] = min(c['max_health'], c['health'] + heal)
+                log.append(f"🍃 *{skill['name']}* лечит раны!")
+            
+            elif skill['type'] == 'dmg':
+                player_damage = int(c['strength'] * skill['val'])
+                log.append(f"⚔️ *{skill['name']}* нанес {player_damage} урона!")
+
+            elif skill['type'] == 'magic_nuke':
+                player_damage = int(c['intelligence'] * skill['val'])
+                log.append(f"⚡ *{skill['name']}* испепеляет врага на {player_damage}!")
+            
+            elif skill['type'] == 'lifesteal':
+                player_damage = int(c['strength'] * skill['val'])
+                heal = int(player_damage * 0.5)
+                c['health'] = min(c['max_health'], c['health'] + heal)
+                log.append(f"🩸 *{skill['name']}* нанес {player_damage} и вылечил {heal} HP!")
+            
+            elif skill['type'] == 'buff_def':
+                enemy_damage_mod = 0.1 # Враг нанесет только 10% урона
+                log.append(f"🛡 *{skill['name']}* поглощает почти весь урон!")
+            
+            elif skill['type'] == 'buff_str':
+                player_damage = int(c['strength'] * 2.0)
+                log.append(f"💢 *{skill['name']}* позволяет нанести {player_damage} сокрушительного урона!")
+            
+            elif skill['type'] == 'stun_dmg':
+                player_damage = int(c['strength'] * skill['val'])
+                if random.random() < 0.5: # 50% шанс стана
+                    enemy_damage_mod = 0.0 # Враг пропускает ход
+                    log.append(f"🔨 *{skill['name']}* оглушил врага! ({player_damage} ур.)")
+                else:
+                    log.append(f"🔨 *{skill['name']}* нанес {player_damage} урона.")
+            
+            elif skill['type'] == 'dmg_exec':
+                base = c['strength'] * skill['val']
+                if e['health'] < (e['max_health'] * 0.3):
+                    base *= 2
+                    log.append("☠️ *КАЗНЬ!* Критический удар по слабому врагу!")
+                player_damage = int(base)
+                log.append(f"🪓 *{skill['name']}* наносит {player_damage} урона!")
+
+        # Б) Обычные действия
+        elif action == 'flee':
+            if e.get('is_boss') or e.get('is_mini_boss'):
+                log.append("🚫 *ОТ БОССА НЕЛЬЗЯ СБЕЖАТЬ!*")
+            elif random.random() < 0.6: # Шанс побега 60%
+                database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
                 del battle_sessions[user_id]
-            
-            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна в Бездне."
-            
-            # ИСПОЛЬЗУЕМ НАДЕЖНУЮ КАРТИНКУ (например, подземелье или просто черную заглушку)
-            # Ссылка freepik часто ломается
-            death_image = IMAGE_URLS.get('dungeon', 'https://i.pinimg.com/736x/93/84/9f/93849fa5c577756a346cd6c4172b384d.jpg')
-            
-            await safe_edit(query, text=death_msg, media=InputMediaPhoto(death_image, caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-            return MAIN_MENU
-            
+                txt = "🏃 *ПОЗОРНОЕ БЕГСТВО!*"
+                await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
+            else:
+                log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
+        
         elif action == 'defend':
             log.append("🛡 Вы ушли в глухую оборону.")
+            enemy_damage_mod = 0.5 # Получаем 50% урона
             
         elif action == 'attack_physical':
             dmg, is_crit = calculate_damage(c, e, 'physical')
             player_damage = dmg
-            verbs = ["рубанули", "пронзили", "ударили", "сокрушили"]
-            verb = random.choice(verbs)
             crit_txt = "💥 *КРИТ!* " if is_crit else ""
-            player_action_text = f"{crit_txt}Вы {verb} врага на *{dmg}*!"
+            log.append(f"{crit_txt}Вы ударили врага на *{dmg}*!")
                 
         elif action == 'attack_magic':
             if c['mana'] >= 10:
                 c['mana'] -= 10
                 dmg, is_crit = calculate_damage(c, e, 'magic')
-                dmg = int(dmg * 1.2)
-                player_damage = dmg
-                spells = ["Огненная стрела", "Ледяной шип", "Разряд молнии"]
-                spell = random.choice(spells)
+                player_damage = int(dmg * 1.2)
                 crit_txt = " (КРИТ!)" if is_crit else ""
-                player_action_text = f"🔮 {spell} нанес *{dmg}* урона{crit_txt}!"
+                log.append(f"🔮 Магия нанесла *{player_damage}* урона{crit_txt}!")
             else:
                 log.append("💧 *НЕТ МАНЫ!*")
                 player_damage = max(1, c['strength'] // 4)
-                player_action_text = f"👊 Удар рукой на {player_damage}."
+                log.append(f"👊 Удар рукой на {player_damage}.")
 
+        # Применяем урон игрока по врагу
         if player_damage > 0:
             e['health'] -= player_damage
-            log.append(player_action_text)
 
-        # --- ПОБЕДА ---
+        # --- 4. ПРОВЕРКА ПОБЕДЫ ---
         if e['health'] <= 0:
             gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
             xp_win = e['exp']
@@ -727,9 +810,11 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     if random.random() < 0.4: # 40% шанс дропа
                         item_info = ITEMS_DB.get(drop)
                         if item_info:
+                            # Добавляем предмет (цена 0, эффект 0 - просто материал)
                             database.buy_item(user_id, drop, 'material', item_info['name'], 0, 0)
                             dropped_items.append(item_info['name'])
 
+            # Сохранение прогресса
             database.add_experience(user_id, xp_win)
             database.add_gold(user_id, gold_win)
             database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
@@ -745,39 +830,54 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
 
-        # --- ХОД ВРАГА ---
-        if action != 'flee' or (action == 'flee' and "ПОБЕГ НЕ УДАЛСЯ" in log[-1]):
+        # --- 5. ХОД ВРАГА (ЕСЛИ ОН ЖИВ) ---
+        
+        # Если враг не в стане (модификатор 0.0 ставится способностью оглушения)
+        if enemy_damage_mod == 0.0:
+             log.append("💫 Враг оглушен и пропускает ход!")
+        else:
+            # Спец атаки врага
             spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
+            
             if spec_dmg > 0:
-                enemy_dmg = spec_dmg
-                if action == 'defend': 
-                    enemy_dmg = int(enemy_dmg * 0.6)
-                    log.append(f"🛡 Блок снизил урон до {enemy_dmg}!")
-                c['health'] -= enemy_dmg
+                # Урон от спец атаки (с учетом блока/щита)
+                final_dmg = int(spec_dmg * enemy_damage_mod)
+                c['health'] -= final_dmg
+                if enemy_damage_mod < 1.0:
+                    log.append(f"🛡 Щит поглотил часть урона! ({final_dmg})")
             else:
+                # Обычная атака врага
                 base_dmg, is_dodged = calculate_enemy_damage(e, c)
                 if is_dodged:
                     log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
                 else:
-                    if action == 'defend':
-                        base_dmg //= 2
-                        log.append(f"🛡 Блок! Урон: *{base_dmg}*")
+                    final_dmg = int(base_dmg * enemy_damage_mod)
+                    
+                    if enemy_damage_mod < 1.0:
+                         log.append(f"🛡 Блок/Щит! Урон снижен до *{final_dmg}*")
                     else:
-                        log.append(f"💔 {e['name']} нанес *{base_dmg}* урона!")
-                    c['health'] -= base_dmg
+                         log.append(f"💔 {e['name']} нанес *{final_dmg}* урона!")
+                    
+                    c['health'] -= final_dmg
 
-        # --- ПОРАЖЕНИЕ ---
+        # --- 6. ПРОВЕРКА ПОРАЖЕНИЯ ---
         if c['health'] <= 0:
             database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
-            del battle_sessions[user_id]
-            death_msg = "💀 *ВЫ ПОГИБЛИ...* Темные жрецы воскресили вас в деревне, но часть души утеряна."
-            await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            if user_id in battle_sessions:
+                del battle_sessions[user_id]
+            
+            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна в Бездне."
+            death_image = IMAGE_URLS.get('dungeon', 'https://i.pinimg.com/736x/93/84/9f/93849fa5c577756a346cd6c4172b384d.jpg')
+            
+            await safe_edit(query, text=death_msg, media=InputMediaPhoto(death_image, caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         
+        # Переход к следующему ходу
         s['turn'] += 1
         await render_battle(query, user_id)
         
     finally:
+        # Снимаем блокировку обработки, чтобы кнопки снова работали
         if user_id in battle_sessions:
             battle_sessions[user_id]['processing'] = False
             
