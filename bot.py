@@ -752,39 +752,77 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = f"Категория: {cat.upper()}"
         await safe_edit(query, text=txt, keyboard=get_shop_items_keyboard(cat, char['gold']))
         return SHOP_MENU
-    elif data.startswith('buy_'):
-        item_key = data.split('_', 1)[1]
-        item = ITEMS_DB.get(item_key)
+    elif data.startswith('shop_cat_'):
+        cat = data.split('_')[2] # food, weapon, armor...
         
-        if not item: return SHOP_MENU
+        # Формируем красивое описание товаров
+        cat_names = {'food': '🍖 Еда и Зелья', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
+        txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n\n"
+        
+        for key, item in ITEMS_DB.items():
+            if item.get('cat') == cat:
+                # Формируем строку эффекта
+                effect_str = ""
+                if item['type'] == 'food': effect_str = f"❤️ +{item['effect']} HP"
+                elif item['type'] == 'potion': 
+                    if 'mp' in key: effect_str = f"🌀 +{item['effect']} MP"
+                    else: effect_str = f"❤️ +{item['effect']} HP"
+                elif item['type'] == 'weapon': effect_str = f"⚔️ +{item['effect']} Силы"
+                elif item['type'] == 'armor': effect_str = f"🛡 +{item['effect']} HP (Макс)"
+                elif item['type'] == 'artifact': effect_str = f"🔮 +{item['effect']} Интеллекта"
+                
+                # Добавляем товар в список
+                txt += f"▪️ *{item['name']}* — {item['price']}g\n"
+                txt += f"   _{item['desc']}_ "
+                if effect_str: txt += f"({effect_str})"
+                txt += "\n\n"
 
-        if item.get('rank'):
-            ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
-            try:
-                p_rank_idx = ranks_order.index(char['rank'])
-                i_rank_idx = ranks_order.index(item['rank'])
-                if p_rank_idx < i_rank_idx:
-                    await query.answer(f"🔒 Нужен ранг {item['rank']}!", show_alert=True)
-                    return SHOP_MENU
-            except: pass
+        # Обрезаем текст, если он слишком длинный (на всякий случай)
+        if len(txt) > 1000: txt = txt[:1000] + "..."
 
-        if char['gold'] >= item['price']:
-            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
-            await query.answer(msg, show_alert=True)
-            # Обновляем клавиатуру
-            char = database.get_character(user_id)
-            await query.edit_message_reply_markup(reply_markup=get_shop_items_keyboard(item['cat'], char['gold']))
-        else:
-            await query.answer("💸 Не хватает золота!", show_alert=True)
-            
-    return SHOP_MENU
+        await safe_edit(query, text=txt, keyboard=get_shop_items_keyboard(cat, char['gold']))
+        return SHOP_MENU
 
 async def show_craft_menu(query, user_id):
     items = database.get_inventory(user_id)
     inv_dict = {i['item_key']: i['quantity'] for i in items}
     
-    txt = "🛠 *Кузница*\nДревний мастер смотрит на твои трофеи.\n\n"
-    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt, parse_mode='Markdown'), keyboard=get_craft_keyboard(inv_dict))
+    txt = "🛠 *Кузница*\nДревний мастер смотрит на твои трофеи. Для создания предметов нужны ресурсы и золото.\n━━━━━━━━━━━━━━━━\n"
+    
+    for key, recipe in CRAFT_RECIPES.items():
+        result_item = ITEMS_DB.get(recipe['result'])
+        if not result_item: continue
+        
+        # Заголовок рецепта
+        txt += f"🔸 *{result_item['name']}* (Цена: {recipe['cost']}g)\n"
+        
+        # Список материалов
+        mats_list = []
+        can_craft = True
+        
+        for mat_key, required_amount in recipe['mats'].items():
+            mat_info = ITEMS_DB.get(mat_key)
+            mat_name = mat_info['name'] if mat_info else mat_key
+            user_amount = inv_dict.get(mat_key, 0)
+            
+            # Ставим галочку или крестик
+            if user_amount >= required_amount:
+                mark = "✅"
+            else:
+                mark = "❌"
+                can_craft = False
+                
+            mats_list.append(f"{mark} {mat_name}: {user_amount}/{required_amount}")
+        
+        txt += "\n".join(mats_list) + "\n\n"
+
+    # Если текст слишком длинный для подписи к фото, отправляем просто текст
+    # Но так как у нас safe_edit умеет менять медиа, попробуем обновить описание
+    try:
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt[:1024], parse_mode='Markdown'), keyboard=get_craft_keyboard(inv_dict))
+    except Exception:
+        # Если описание не влезает в caption (лимит 1024), шлем без картинки или сокращаем
+        await safe_edit(query, text=txt, keyboard=get_craft_keyboard(inv_dict))
 
 async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
