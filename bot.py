@@ -743,46 +743,97 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+    
     elif data == 'shop': # Возврат к категориям
         txt = f"🏪 *Мрачная лавка*\nЗолото: {char['gold']}💰\nЧего желаете?"
-        await safe_edit(query, text=txt, keyboard=get_shop_categories_keyboard())
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
+    
     elif data.startswith('shop_cat_'):
-        cat = data.split('_')[2] # food, weapon, armor...
-        txt = f"Категория: {cat.upper()}"
-        await safe_edit(query, text=txt, keyboard=get_shop_items_keyboard(cat, char['gold']))
-        return SHOP_MENU
-    elif data.startswith('shop_cat_'):
-        cat = data.split('_')[2] # food, weapon, armor...
+        cat = data.split('_')[2] # food, weapon, armor, mat, acc
         
-        # Формируем красивое описание товаров
-        cat_names = {'food': '🍖 Еда и Зелья', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
-        txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n\n"
+        # Заголовки для категорий
+        cat_names = {
+            'food': '🍖 Еда и Зелья', 
+            'mat': '🧱 Ресурсы', 
+            'weapon': '⚔️ Оружие', 
+            'armor': '🛡️ Броня', 
+            'acc': '💍 Аксессуары'
+        }
         
+        # Формируем текст описания
+        txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n_Нажми на кнопку ниже, чтобы купить:_\n\n"
+        
+        items_found = False
         for key, item in ITEMS_DB.items():
             if item.get('cat') == cat:
+                items_found = True
+                
                 # Формируем строку эффекта
                 effect_str = ""
-                if item['type'] == 'food': effect_str = f"❤️ +{item['effect']} HP"
+                if item['type'] == 'food': 
+                    effect_str = f" (+{item['effect']} ❤️)"
                 elif item['type'] == 'potion': 
-                    if 'mp' in key: effect_str = f"🌀 +{item['effect']} MP"
-                    else: effect_str = f"❤️ +{item['effect']} HP"
-                elif item['type'] == 'weapon': effect_str = f"⚔️ +{item['effect']} Силы"
-                elif item['type'] == 'armor': effect_str = f"🛡 +{item['effect']} HP (Макс)"
-                elif item['type'] == 'artifact': effect_str = f"🔮 +{item['effect']} Интеллекта"
+                    if 'mp' in key or 'mana' in key: effect_str = f" (+{item['effect']} 🌀)"
+                    else: effect_str = f" (+{item['effect']} ❤️)"
+                elif item['type'] == 'weapon': 
+                    effect_str = f" (+{item['effect']} ⚔️)"
+                elif item['type'] == 'armor': 
+                    effect_str = f" (+{item['effect']} 🛡)"
+                elif item['type'] == 'artifact': 
+                    effect_str = f" (+{item['effect']} 🧠)"
                 
-                # Добавляем товар в список
+                # Добавляем в общий текст
                 txt += f"▪️ *{item['name']}* — {item['price']}g\n"
-                txt += f"   _{item['desc']}_ "
-                if effect_str: txt += f"({effect_str})"
-                txt += "\n\n"
+                txt += f"   _{item['desc']}_{effect_str}\n\n"
 
-        # Обрезаем текст, если он слишком длинный (на всякий случай)
+        if not items_found:
+            txt += "В этой категории пока пусто..."
+
+        # Обрезаем, если текст слишком длинный (лимит телеграма 1024)
         if len(txt) > 1000: txt = txt[:1000] + "..."
 
-        await safe_edit(query, text=txt, keyboard=get_shop_items_keyboard(cat, char['gold']))
+        # ВАЖНО: Передаем InputMediaPhoto снова, чтобы обновился и текст, и картинка
+        # Используем ту же картинку магазина
+        media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
+        
+        await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
         return SHOP_MENU
+    
+    elif data.startswith('buy_'):
+        item_key = data.split('_', 1)[1]
+        item = ITEMS_DB.get(item_key)
+        
+        if not item: return SHOP_MENU
 
+        # Проверка ранга
+        if item.get('rank'):
+            ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+            try:
+                p_rank_idx = ranks_order.index(char['rank'])
+                i_rank_idx = ranks_order.index(item['rank'])
+                if p_rank_idx < i_rank_idx:
+                    await query.answer(f"🔒 Нужен ранг {item['rank']}!", show_alert=True)
+                    return SHOP_MENU
+            except: pass
+
+        if char['gold'] >= item['price']:
+            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
+            await query.answer(msg, show_alert=True)
+            
+            # Обновляем клавиатуру и баланс (рекурсивно вызываем показ категории)
+            # Чтобы обновить баланс золота в тексте, нам нужно заново сгенерировать меню этой категории
+            # Проще всего имитировать нажатие на категорию снова:
+            new_data = f"shop_cat_{item['cat']}"
+            
+            # Небольшой хак: меняем data в объекте query и вызываем shop_handler снова
+            query.data = new_data
+            await shop_handler(update, context)
+            return SHOP_MENU
+        else:
+            await query.answer("💸 Не хватает золота!", show_alert=True)
+            
+    return SHOP_MENU
 async def show_craft_menu(query, user_id):
     items = database.get_inventory(user_id)
     inv_dict = {i['item_key']: i['quantity'] for i in items}
