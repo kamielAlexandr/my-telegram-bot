@@ -1054,15 +1054,15 @@ async def unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except: pass
 
 def main():
-    # Инициализация базы данных
+    # 1. Инициализируем базу данных
     database.init_db()
     
-    # Создаем приложение
-    # Убрали JobQueue, чтобы не было ошибки, если библиотека не установлена
+    # 2. Создаем приложение БЕЗ JobQueue
+    # Это уберет ошибку "No JobQueue set up"
     app = Application.builder().token(TOKEN).build()
     
-    # --- НАСТРОЙКА ДИАЛОГОВ ---
-    # Добавили per_message=True, чтобы убрать предупреждение и улучшить работу кнопок
+    # 3. Настраиваем диалоги
+    # Мы УБРАЛИ per_message=True, так как это ломает кнопку /start
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -1076,22 +1076,21 @@ def main():
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)]
         },
-        fallbacks=[CommandHandler('start', start)],
-        per_message=True  # <--- ВАЖНОЕ ИСПРАВЛЕНИЕ
+        fallbacks=[CommandHandler('start', start)]
     )
     
     app.add_handler(conv)
     app.add_handler(CommandHandler('help', help_command))
     
-    # Хендлер для любого текста, если пользователь не в диалоге
+    # Хендлер для неизвестного текста
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
     
-    # Обработчик "протухших" кнопок
+    # Хендлер для старых кнопок
     app.add_handler(CallbackQueryHandler(unknown_callback))
     
-    print("⚔️ Бот Темного Фентези запущен и готов к работе!")
-
+    print("⚔️ Бот Темного Фентези перезапущен! Нажмите /start")
     
+    # Запуск (блокирующий процесс)
     # Запуск
     app.run_polling()
 if __name__ == '__main__':
