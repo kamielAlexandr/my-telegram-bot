@@ -906,45 +906,55 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = query.from_user.id
     
+    # 1. Обработка кнопки "Назад"
     if data == 'back_to_main':
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
+    # 2. Обработка крафта
     elif data.startswith('craft_'):
-        recipe_key = data.split('_')[1]
+        # --- ИСПРАВЛЕНИЕ ТУТ ---
+        # Было: recipe_key = data.split('_')[1] (теряло часть названия, если в нем были подчеркивания)
+        # Стало: data.split('_', 1)[1] (отрезает только первое слово "craft", остальное оставляет целиком)
+        recipe_key = data.split('_', 1)[1] 
+        
         recipe = CRAFT_RECIPES.get(recipe_key)
         
-        if not recipe: return CRAFT_MENU
+        # Если рецепт не найден (например, старая кнопка), обновляем меню
+        if not recipe: 
+            await query.answer("Рецепт устарел или не найден.", show_alert=True)
+            await show_craft_menu(query, user_id)
+            return CRAFT_MENU
         
-        # 1. Проверка золота
+        # 3. Проверка золота
         char = database.get_character(user_id)
         if char['gold'] < recipe['cost']:
             await query.answer(f"⚠️ Не хватает золота! Нужно {recipe['cost']}g", show_alert=True)
             return CRAFT_MENU
             
-        # 2. Проверка материалов (Финальная)
+        # 4. Проверка материалов
         items = database.get_inventory(user_id)
         inv_dict = {i['item_key']: i['quantity'] for i in items}
         
+        # Сначала проверяем ВСЕ материалы
         for mat, amt in recipe['mats'].items():
             if inv_dict.get(mat, 0) < amt:
-                mat_name = ITEMS_DB[mat]['name']
+                # Получаем красивое имя материала
+                mat_name = ITEMS_DB.get(mat, {'name': mat})['name']
                 await query.answer(f"⚠️ Не хватает: {mat_name}", show_alert=True)
                 return CRAFT_MENU
         
-        # 3. Списываем материалы (Используем новую функцию)
-        # Если хоть один материал не спишется — прерываем процесс (хотя проверка выше должна это исключить)
+        # 5. Списываем материалы
+        # Используем новую функцию remove_item, которую вы добавили в database.py
         for mat, amt in recipe['mats'].items():
             success = database.remove_item(user_id, mat, amt)
             if not success:
                 await query.answer("❌ Ошибка при списании материалов!", show_alert=True)
                 return CRAFT_MENU
 
-        # 4. Создаем предмет и списываем золото
-        # Используем buy_item, так как она уже умеет добавлять предмет, давать статы и списывать золото
+        # 6. Создаем предмет
         result_item = ITEMS_DB[recipe['result']]
         
-        # Важно: buy_item возвращает (True/False, Текст)
         res, msg = database.buy_item(
             user_id, 
             recipe['result'], 
@@ -956,7 +966,7 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if res:
             await query.answer(f"✅ Успех! Создано: {result_item['name']}", show_alert=True)
-            # Обновляем меню крафта, чтобы показать новые остатки ресурсов
+            # Обновляем меню, чтобы показать новые остатки ресурсов
             await show_craft_menu(query, user_id)
         else:
             await query.answer(f"❌ Ошибка крафта: {msg}", show_alert=True)
