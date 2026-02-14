@@ -445,3 +445,35 @@ def get_all_users():
             return [r[0] for r in cursor.fetchall()]
     finally:
         conn.close()
+        
+def remove_item(user_id, item_key, quantity):
+    """Списывает указанное количество предметов (для крафта)"""
+    conn = get_connection()
+    if not conn: return False
+    
+    try:
+        with conn.cursor() as cursor:
+            # Проверяем, есть ли предмет и хватает ли его
+            cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
+            res = cursor.fetchone()
+            
+            if not res: return False # Предмета нет
+            
+            item_id, current_qty = res
+            
+            if current_qty < quantity:
+                return False # Не хватает количества
+            
+            # Списываем
+            if current_qty == quantity:
+                cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
+            else:
+                cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (quantity, item_id))
+            
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Remove item error: {e}")
+        return False
+    finally:
+        conn.close()
