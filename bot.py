@@ -652,8 +652,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             if user_id in battle_sessions:
                 del battle_sessions[user_id]
             
-            death_msg = "💀 *ВЫ ПОГИБЛИ...* Темные жрецы воскресили вас в деревне, но часть души утеряна."
-            await safe_edit(query, text=death_msg, media=InputMediaPhoto("https://img.freepik.com/free-photo/graveyard-fog_23-2150911249.jpg", caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна в Бездне."
+            
+            # ИСПОЛЬЗУЕМ НАДЕЖНУЮ КАРТИНКУ (например, подземелье или просто черную заглушку)
+            # Ссылка freepik часто ломается
+            death_image = IMAGE_URLS.get('dungeon', 'https://i.pinimg.com/736x/93/84/9f/93849fa5c577756a346cd6c4172b384d.jpg')
+            
+            await safe_edit(query, text=death_msg, media=InputMediaPhoto(death_image, caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
             
         elif action == 'defend':
