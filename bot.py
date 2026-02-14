@@ -54,7 +54,31 @@ IMAGE_URLS = {
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
     'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg'
 }
-
+# --- СПОСОБНОСТИ РАС ---
+# type: heal (лечение), dmg (урон), buff (усиление)
+# scale: множитель (например, 2.0 = 200% урона)
+RACE_ABILITIES = {
+    'human': {
+        10: {'key': 'h1', 'name': '🙏 Молитва', 'mana': 20, 'cd': 4, 'type': 'heal', 'val': 0.4, 'desc': 'Восстанавливает 40% здоровья.'},
+        25: {'key': 'h2', 'name': '⚔️ Удар Героя', 'mana': 40, 'cd': 3, 'type': 'dmg', 'val': 2.5, 'desc': 'Мощный удар (250% урона).'},
+        40: {'key': 'h3', 'name': '🛡️ Божественный щит', 'mana': 60, 'cd': 6, 'type': 'buff_def', 'val': 500, 'desc': 'Полная защита на 1 ход.'}
+    },
+    'elf': {
+        10: {'key': 'e1', 'name': '🏹 Точный выстрел', 'mana': 15, 'cd': 2, 'type': 'dmg', 'val': 1.8, 'desc': 'Быстрый выстрел (180% урона).'},
+        25: {'key': 'e2', 'name': '🍃 Сила Леса', 'mana': 45, 'cd': 4, 'type': 'heal_mana', 'val': 0.5, 'desc': 'Лечит 50% HP и снимает эффекты.'},
+        40: {'key': 'e3', 'name': '⚡ Гроза', 'mana': 80, 'cd': 5, 'type': 'magic_nuke', 'val': 3.5, 'desc': 'Магический взрыв (350% маг. урона).'}
+    },
+    'orc': {
+        10: {'key': 'o1', 'name': '💢 Ярость', 'mana': 10, 'cd': 4, 'type': 'buff_str', 'val': 0.5, 'desc': '+50% к Силе на ход.'},
+        25: {'key': 'o2', 'name': '🩸 Кровожадность', 'mana': 30, 'cd': 3, 'type': 'lifesteal', 'val': 1.5, 'desc': 'Удар (150%) + лечение от урона.'},
+        40: {'key': 'o3', 'name': '🪓 Казнь', 'mana': 50, 'cd': 5, 'type': 'dmg_exec', 'val': 4.0, 'desc': 'Сокрушительный удар (400% урона).'}
+    },
+    'dwarf': {
+        10: {'key': 'd1', 'name': '🪨 Каменная кожа', 'mana': 20, 'cd': 4, 'type': 'buff_def', 'val': 0.8, 'desc': 'Снижает урон на 80% (1 ход).'},
+        25: {'key': 'd2', 'name': '🔨 Удар Молотом', 'mana': 35, 'cd': 3, 'type': 'stun_dmg', 'val': 2.0, 'desc': 'Урон (200%) + шанс оглушить.'},
+        40: {'key': 'd3', 'name': '🍺 Живая вода', 'mana': 50, 'cd': 5, 'type': 'heal', 'val': 1.0, 'desc': 'Полное восстановление здоровья.'}
+    }
+}
 # --- БАЗА ПРЕДМЕТОВ ---
 ITEMS_DB = {
     # --- ЕДА И ЗЕЛЬЯ ---
