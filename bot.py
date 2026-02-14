@@ -916,31 +916,51 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not recipe: return CRAFT_MENU
         
+        # 1. Проверка золота
         char = database.get_character(user_id)
         if char['gold'] < recipe['cost']:
-            await query.answer("Не хватает золота на работу мастера!", show_alert=True)
+            await query.answer(f"⚠️ Не хватает золота! Нужно {recipe['cost']}g", show_alert=True)
             return CRAFT_MENU
             
+        # 2. Проверка материалов (Финальная)
         items = database.get_inventory(user_id)
         inv_dict = {i['item_key']: i['quantity'] for i in items}
         
-        # Проверка материалов
         for mat, amt in recipe['mats'].items():
             if inv_dict.get(mat, 0) < amt:
-                await query.answer(f"Не хватает материалов: {ITEMS_DB[mat]['name']}", show_alert=True)
+                mat_name = ITEMS_DB[mat]['name']
+                await query.answer(f"⚠️ Не хватает: {mat_name}", show_alert=True)
                 return CRAFT_MENU
         
-        # Списываем материалы
+        # 3. Списываем материалы (Используем новую функцию)
+        # Если хоть один материал не спишется — прерываем процесс (хотя проверка выше должна это исключить)
         for mat, amt in recipe['mats'].items():
-            for _ in range(amt):
-                database.use_item(user_id, mat, 'material', 'Craft', 0) 
-        
+            success = database.remove_item(user_id, mat, amt)
+            if not success:
+                await query.answer("❌ Ошибка при списании материалов!", show_alert=True)
+                return CRAFT_MENU
+
+        # 4. Создаем предмет и списываем золото
+        # Используем buy_item, так как она уже умеет добавлять предмет, давать статы и списывать золото
         result_item = ITEMS_DB[recipe['result']]
-        database.buy_item(user_id, recipe['result'], result_item['type'], result_item['name'], recipe['cost'], result_item.get('effect', 0))
         
-        await query.answer(f"Создано: {result_item['name']}!", show_alert=True)
-        await show_craft_menu(query, user_id)
+        # Важно: buy_item возвращает (True/False, Текст)
+        res, msg = database.buy_item(
+            user_id, 
+            recipe['result'], 
+            result_item['type'], 
+            result_item['name'], 
+            recipe['cost'], 
+            result_item.get('effect', 0)
+        )
         
+        if res:
+            await query.answer(f"✅ Успех! Создано: {result_item['name']}", show_alert=True)
+            # Обновляем меню крафта, чтобы показать новые остатки ресурсов
+            await show_craft_menu(query, user_id)
+        else:
+            await query.answer(f"❌ Ошибка крафта: {msg}", show_alert=True)
+            
     return CRAFT_MENU
 
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
