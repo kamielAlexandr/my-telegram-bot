@@ -52,7 +52,7 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
     'shop': 'https://cubiq.ru/wp-content/uploads/2021/07/picture-1-15.jpeg',
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
-    'craft': 'https://img.freepik.com/free-photo/blacksmith-workshop_23-2150911315.jpg'
+    'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg'
 }
 
 # --- БАЗА ПРЕДМЕТОВ ---
