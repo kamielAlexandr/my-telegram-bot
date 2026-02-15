@@ -356,17 +356,24 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
-        [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],[InlineKeyboardButton("📜 Гильдия Авантюристов", callback_data='guild_menu')],
+        [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu')], 
+        [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],
         [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
-        
     ]
-    if char and char['stat_points'] > 0:
-        kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
-    # --- НОВОЕ: Кнопка только для Эльфов ---
-    if char['race'] == 'elf':
+    
+    # --- ОТЛАДКА ---
+    # Это напечатает расу в консоль (черное окно), когда вы откроете меню.
+    # Посмотрите, что там написано.
+    print(f"DEBUG: User {user_id} race is '{char['race']}'") 
+    
+    # --- ПРОВЕРКА РАСЫ ---
+    # .lower().strip() защищает от ошибок "Elf " или "ELF"
+    if char['race'] and char['race'].lower().strip() == 'elf':
         kb.insert(1, [InlineKeyboardButton("🔮 Магия Древних", callback_data='elf_magic_menu')])
     
-
+    if char and char['stat_points'] > 0:
+        kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
+        
     return InlineKeyboardMarkup(kb)
 
 def get_shop_categories_keyboard():
@@ -515,8 +522,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = f"🏪 *Мрачная лавка*\nТорговец смотрит на тебя из-под капюшона.\nЗолото: {char['gold']}💰"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
-    lif data == 'elf_magic_menu':
-        await elf_magic_menu_handler(update, context)
+
     elif data == 'craft_menu':
         await show_craft_menu(query, user_id)
         return CRAFT_MENU
@@ -540,7 +546,13 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption(rank_info, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
     elif data == 'help':
         await help_command(update, context)
-        
+    elif data == 'elf_magic_menu':
+        await elf_magic_menu_handler(update, context)
+    elif data.startswith('set_magic_'):
+        # Это нужно, если обработка клика происходит здесь, 
+        # но лучше, если она внутри elf_magic_menu_handler.
+        # Если вы сделали отдельную функцию elf_magic_menu_handler, этот блок здесь не нужен.
+        await elf_magic_menu_handler(update, context)    
     return MAIN_MENU
 
 async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
