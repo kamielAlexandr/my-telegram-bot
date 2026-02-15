@@ -1868,6 +1868,7 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 1. Кнопка НАЗАД
     if data == 'back_to_main':
+        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
@@ -1883,39 +1884,30 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Предмет, который хотим создать
             result_item = ITEMS_DB.get(recipe['result'])
-            target_type = result_item['type'] # weapon или armor
+            if not result_item:
+                await query.answer("Ошибка базы предметов.", show_alert=True)
+                return CRAFT_MENU
+                
+            target_type = result_item['type'] # weapon, armor, potion...
 
-            # --- 🛠 ПРОВЕРКА ЛИМИТА (С ПОДСЧЕТОМ КОЛИЧЕСТВА) 🛠 ---
-            
-            # Если мы крафтим не оружие и не броню (зелья, еду), лимит не нужен
-            if target_type in ['weapon', 'armor']:
-                items = database.get_inventory(user_id)
+            # --- ИСПРАВЛЕНИЕ: ПОЛУЧАЕМ ИНВЕНТАРЬ ЗДЕСЬ (ДЛЯ ВСЕХ ТИПОВ) ---
+            items = database.get_inventory(user_id)
+            # -------------------------------------------------------------
+
+            # --- 🛠 ПРОВЕРКА ЛИМИТА (Только для Оружия и Брони) 🛠 ---
+            if target_type in ['weapon', 'magic_weapon', 'armor']:
                 current_count = 0
                 
-                print(f"\n--- ПРОВЕРКА КРАФТА ---")
-                print(f"Хотим создать: {result_item['name']} (Тип: {target_type})")
+                # Считаем предметы такого же типа
+                target_types_group = ['weapon', 'magic_weapon'] if target_type in ['weapon', 'magic_weapon'] else ['armor']
                 
                 for item in items:
-                    # item - это словарь из БД {'item_key': 'sword', 'quantity': 2, ...}
-                    # Проверяем тип предмета через справочник ITEMS_DB, чтобы было надежно
-                    i_key = item['item_key']
-                    i_qty = item['quantity']
-                    
-                    # Ищем информацию о предмете в справочнике
-                    info = ITEMS_DB.get(i_key)
-                    
-                    if info:
-                        # Если тип совпадает (например, weapon == weapon)
-                        if info['type'] == target_type:
-                            current_count += i_qty
-                            print(f"Найдено: {info['name']} x{i_qty}. Итого: {current_count}")
-                    else:
-                        print(f"⚠️ Предмет {i_key} есть в сумке, но нет в ITEMS_DB!")
-
-                print(f"Всего предметов типа {target_type}: {current_count}/5")
+                    info = ITEMS_DB.get(item['item_key'])
+                    if info and info['type'] in target_types_group:
+                        current_count += item['quantity']
 
                 if current_count >= 5:
-                    await query.answer(f"⛔ ПРЕДЕЛ! У вас уже {current_count} шт. {target_type}.\nПродайте лишнее.", show_alert=True)
+                    await query.answer(f"⛔ ПРЕДЕЛ! У вас уже {current_count} шт. снаряжения этого типа.\nПродайте лишнее.", show_alert=True)
                     return CRAFT_MENU
             # -----------------------------------------------------------
 
@@ -1925,18 +1917,20 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer(f"⚠️ Не хватает золота! Нужно {recipe['cost']}g", show_alert=True)
                 return CRAFT_MENU
             
-            # Проверка материалов
+            # Проверка материалов (Теперь items существует всегда!)
             inv_dict = {i['item_key']: i['quantity'] for i in items}
+            
             for mat, amt in recipe['mats'].items():
                 if inv_dict.get(mat, 0) < amt:
                     mat_name = ITEMS_DB.get(mat, {'name': mat})['name']
                     await query.answer(f"⚠️ Не хватает: {mat_name}", show_alert=True)
                     return CRAFT_MENU
             
-            # Списание и Выдача
+            # Списание материалов
             for mat, amt in recipe['mats'].items():
                 database.remove_item(user_id, mat, amt)
 
+            # Выдача предмета
             res, msg = database.buy_item(
                 user_id, 
                 recipe['result'], 
@@ -1947,14 +1941,14 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             if res:
-                await query.answer(f"✅ Готово! {result_item['name']}", show_alert=True)
+                await query.answer(f"✅ Готово! Создано: {result_item['name']}", show_alert=True)
                 await show_craft_menu(query, user_id)
             else:
                 await query.answer(f"Ошибка: {msg}", show_alert=True)
 
         except Exception as e:
             print(f"CRAFT ERROR: {e}")
-            await query.answer(f"Ошибка: {e}", show_alert=True)
+            await query.answer(f"Ошибка крафта: {e}", show_alert=True)
             
     return CRAFT_MENU
     
