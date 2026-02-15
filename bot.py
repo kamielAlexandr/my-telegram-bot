@@ -433,7 +433,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     char = database.get_character(user.id)
     if char:
-        await update.message.reply_photo(IMAGE_URLS['village'], caption=f"С возвращением, {char['character_name']}! Темные времена настали, но твой клинок все еще остер.", reply_markup=get_main_menu_keyboard(user.id))
+        await update.message.reply_photo(IMAGE_URLS['village'], caption=f"С возвращением, {char['character_name']}! Темные времена настали, надеюсь ты готов к новым испытаниям.", reply_markup=get_main_menu_keyboard(user.id))
         return MAIN_MENU
     else:
         await update.message.reply_text("Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
