@@ -967,31 +967,45 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    # 1. Если нажали "Взять квест" (формат: take_quest_TYPE_TARGET_GOAL_GOLD_EXP)
+    # --- 1. ОБРАБОТКА КНОПКИ НАЗАД ---
+    # (Раньше этого блока не было, поэтому бот генерировал новые квесты)
+    if query.data == 'back_to_main':
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    # --- 2. ВЗЯТИЕ КВЕСТА ---
     if query.data.startswith('take_quest_'):
         parts = query.data.split('_')
-        # parts: 0-take, 1-quest, 2-type, 3-target, 4-goal, 5-gold, 6-exp
+        # Формат: take_quest_TYPE_TARGET...TARGET_GOAL_GOLD_EXP
+        # TARGET может быть сложным (например, goblin_elite), поэтому парсим с конца
         try:
-            database.take_quest(user_id, parts[2], parts[3], int(parts[4]), int(parts[5]), int(parts[6]))
+            q_exp = int(parts[-1])       # Последний элемент - опыт
+            q_gold = int(parts[-2])      # Предпоследний - золото
+            q_goal = int(parts[-3])      # Пред-предпоследний - цель
+            q_type = parts[2]            # Третий элемент - тип (kill/collect)
+            
+            # Собираем имя цели (все что между типом и цифрами)
+            q_target = "_".join(parts[3:-3])
+            
+            database.take_quest(user_id, q_type, q_target, q_goal, q_gold, q_exp)
             await query.answer("✅ Контракт подписан!", show_alert=True)
-            # Перезагружаем меню
+            
+            # Перезагружаем меню, чтобы показать активный квест
+            # (вызываем саму себя с обновленными данными)
             await guild_menu_handler(update, context)
             return GUILD_MENU
+            
         except Exception as e:
-            print(e)
-            await query.answer("Ошибка контракта.", show_alert=True)
+            print(f"Quest error: {e}")
+            await query.answer("Ошибка контракта (неверные данные).", show_alert=True)
+            return GUILD_MENU
 
-    # 2. Если нажали "Завершить квест"
+    # --- 3. ЗАВЕРШЕНИЕ КВЕСТА ---
     if query.data == 'complete_quest':
         success, msg = database.complete_quest(user_id)
         if success:
-            # Начисляем опыт через add_experience для проверки левелапа
-            # (так как в SQL мы просто увеличили цифру, но не проверили левел)
-            # Тут хитрость: мы добавляем 0 опыта, чтобы триггернуть проверку уровня внутри add_experience,
-            # но ваша функция add_experience добавляет число. 
-            # Лучше просто вызвать add_experience(user_id, 0) - она пересчитает уровень? 
-            # Нет, ваша add_experience добавляет к текущему.
-            # Оставим как есть. Золото и опыт уже начислены.
+            # Начисляем опыт (0, чтобы просто обновить уровень если надо, но add_experience в базе уже добавил цифры)
+            database.add_experience(user_id, 0) 
             await query.answer("🏆 Награда получена!", show_alert=True)
             await safe_edit(query, text=msg, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
@@ -999,17 +1013,24 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.answer(f"❌ {msg}", show_alert=True)
             return GUILD_MENU
 
-    # 3. ОТОБРАЖЕНИЕ МЕНЮ
+    # --- 4. ОТОБРАЖЕНИЕ МЕНЮ ГИЛЬДИИ ---
     
-    # Проверка: есть ли активный квест?
+    # А) Если у игрока УЖЕ есть квест
     if char.get('quest_target'):
         target_name = ""
+        progress_txt = ""
+        
         if char['quest_type'] == 'kill':
-            target_name = BASE_ENEMIES.get(char['quest_target'], {}).get('name', char['quest_target'])
+            # Ищем имя монстра
+            mob_info = BASE_ENEMIES.get(char['quest_target'])
+            target_name = mob_info['name'] if mob_info else char['quest_target']
             progress_txt = f"☠️ Убито: {char['quest_progress']}/{char['quest_goal']}"
         else:
-            target_name = ITEMS_DB.get(char['quest_target'], {}).get('name', char['quest_target'])
-            # Для сбора предметов прогресс проверим по инвентарю
+            # Ищем имя предмета
+            item_info = ITEMS_DB.get(char['quest_target'])
+            target_name = item_info['name'] if item_info else char['quest_target']
+            
+            # Проверяем инвентарь для отображения прогресса
             items = database.get_inventory(user_id)
             inv_qty = 0
             for i in items:
@@ -1028,6 +1049,34 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
+    # Б) Если квеста нет - проверяем, делал ли сегодня
+    today = datetime.now().date()
+    last_quest = char.get('last_quest_date')
+    
+    if isinstance(last_quest, str):
+        last_quest = datetime.strptime(last_quest, '%Y-%m-%d').date()
+        
+    if last_quest == today:
+        txt = "📜 *Доска пуста*\n\nМастер гильдии говорит: \"На сегодня работы нет. Приходи завтра!\""
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    # В) Если квеста нет и сегодня не делал - ГЕНЕРИРУЕМ
+    quests = generate_daily_quests(char['rank'])
+    
+    txt = "📜 *ДОСКА ОБЪЯВЛЕНИЙ*\nВыберите одно задание на сегодня (Осторожно, отказаться нельзя!):\n"
+    kb = []
+    
+    for q in quests:
+        # data format: take_quest_TYPE_TARGET_GOAL_GOLD_EXP
+        cb_data = f"take_quest_{q['type']}_{q['target']}_{q['goal']}_{q['gold']}_{q['exp']}"
+        btn_txt = f"{q['desc']} (💰{q['gold']} 📚{q['exp']})"
+        kb.append([InlineKeyboardButton(btn_txt, callback_data=cb_data)])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return GUILD_MENU
     # Проверка: делал ли квест сегодня?
     today = datetime.now().date()
     last_quest = char.get('last_quest_date')
