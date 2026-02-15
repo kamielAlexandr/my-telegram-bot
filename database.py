@@ -105,7 +105,8 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_reward_exp INTEGER DEFAULT 0",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_quest_date DATE",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS daily_quests_data TEXT",
-                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)"
             ]
             
             for sql in columns_to_add:
@@ -643,5 +644,16 @@ def save_daily_quests(user_id, quests):
     except Exception as e:
         print(f"Save quests error: {e}")
         return False
+    finally:
+        conn.close()
+def set_elf_magic(user_id, magic_type):
+    """Устанавливает тип магии для эльфа"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE player_characters SET elf_magic_type = %s WHERE user_id = %s", (magic_type, user_id))
+            conn.commit()
+            return True
     finally:
         conn.close()
