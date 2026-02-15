@@ -140,7 +140,14 @@ ITEMS_DB = {
     'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия. (+20 Силы)', 'price': 2500, 'type': 'weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
     'demon_slayer': {'name': '🔥 Убийца Демонов', 'desc': 'Пылает яростью. (+30 Силы)', 'price': 6000, 'type': 'weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'god_killer': {'name': '⚡ Гнев Титана', 'desc': 'Раскалывает небо. (+50 Силы)', 'price': 15000, 'type': 'weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
-
+    # --- МАГИЧЕСКОЕ ОРУЖИЕ (ПОСОХИ) ---
+    'wooden_staff': {'name': '🔮 Посох ученика', 'desc': 'Деревянная палка. (+5 Инт)', 'price': 150, 'type': 'magic_weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
+    'acolyte_wand': {'name': '🔮 Жезл Аколита', 'desc': 'Искрится магией. (+10 Инт)', 'price': 400, 'type': 'magic_weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
+    'crystal_staff': {'name': '💠 Кристальный посох', 'desc': 'Фокусирует энергию. (+15 Инт)', 'price': 900, 'type': 'magic_weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
+    'void_scepter': {'name': '🌑 Скипетр Пустоты', 'desc': 'Излучает тьму. (+20 Инт)', 'price': 2500, 'type': 'magic_weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
+    'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем. (+30 Инт)', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
+    'world_tree_branch': {'name': '🌿 Ветвь Древа Жизни', 'desc': 'Сила самой природы. (+50 Инт)', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
+    
     # --- БРОНЯ ---
     'leather_vest': {'name': '🛡️ Шкура волка', 'desc': 'Греет. (+3 ХП)', 'price': 120, 'type': 'armor', 'effect': 3, 'cat': 'armor', 'rank': 'E'},
     'chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Надежная. (+8 ХП)', 'price': 350, 'type': 'armor', 'effect': 8, 'cat': 'armor', 'rank': 'D'},
@@ -181,7 +188,7 @@ CRAFT_RECIPES = {
     'god_killer': {'result': 'god_killer', 'cost': 5000, 'mats': {'void_crystal': 5, 'demon_horn': 20, 'dragon_mail': 1}}
 }
 
-# --- БЕСТИАРИЙ ---
+
 # --- БЕСТИАРИЙ (Только материалы и расходники) ---
 BASE_ENEMIES = {
     # РАНГ E (1-14 ур)
@@ -1596,6 +1603,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else: effect_str = f" (+{item['effect']} ❤️)"
                 elif item['type'] == 'weapon': 
                     effect_str = f" (+{item['effect']} ⚔️)"
+                elif item['type'] == 'magic_weapon': effect_str = f" (+{item['effect']} 🔮)" # <--- НОВОЕ
                 elif item['type'] == 'armor': 
                     effect_str = f" (+{item['effect']} 🛡)"
                 elif item['type'] == 'artifact': 
@@ -1623,12 +1631,21 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = ITEMS_DB.get(item_key)
         
         if not item: return SHOP_MENU
-# --- НОВАЯ ПРОВЕРКА МЕСТА ---
-        if not database.check_inventory_space(user_id, item['type']):
-            limit = 5 # Наш лимит
-            type_name = "оружия" if item['type'] == 'weapon' else "брони"
-            await query.answer(f"🎒 Инвентарь переполнен!\nНельзя иметь больше {limit} ед. {type_name}.", show_alert=True)
-            return SHOP_MENU
+# Проверка лимита (Оружие + Маг. оружие + Броня)
+        if item['type'] in ['weapon', 'magic_weapon', 'armor']:
+             items = database.get_inventory(user_id)
+             # Считаем предметы такого же типа (оружие к оружию)
+             target_types = ['weapon', 'magic_weapon'] if item['type'] in ['weapon', 'magic_weapon'] else ['armor']
+
+             count = 0
+             for i in items:
+                 info = ITEMS_DB.get(i['item_key'])
+                 if info and info['type'] in target_types:
+                     count += i['quantity']
+
+             if count >= 5:
+                 await query.answer("🎒 Слот оружия/брони переполнен! (Макс 5 шт.)", show_alert=True)
+                 return SHOP_MENU
         # ---------------------------
         # Проверка ранга
         if item.get('rank'):
@@ -1869,7 +1886,9 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     w_count = 0
     a_count = 0
     for i in items:
-        if i['type'] == 'weapon': w_count += 1
+        info = ITEMS_DB.get(i['item_key'])
+        if info and info['type'] in ['weapon', 'magic_weapon']:
+            w_count += i['quantity']
         elif i['type'] == 'armor': a_count += 1
     
     txt = (f"🎒 **РЮКЗАК ГЕРОЯ**\n\n"
