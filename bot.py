@@ -209,12 +209,22 @@ BASE_ENEMIES = {
         'drops': ['goblin_ear', 'bread']
     },
     'slime': {
-        'name': '🟢 Кислотная Жижа', 
-        'base_health': 40, 'base_min_physical_damage': 2, 'base_max_physical_damage': 7, 'base_min_magic_damage': 1, 'base_max_magic_damage': 4, 
-        'base_exp': 10, 'base_gold': 7, 'rank': 'E', 
-        'description': 'Аморфная масса.', 'image': IMAGE_URLS['slime'], 'difficulty': 'easy', 
-        'abilities': ['basic_attack', 'poison_spit'], 'damage_type': 'mixed', 'dodge_chance': 0.02, 
-        'drops': ['slime_goo']
+        'name': '🟢 Ядовитая Слизь', 
+        'base_health': 45, # Чуть жирнее
+        'base_min_physical_damage': 3, 
+        'base_max_physical_damage': 6, 
+        'base_min_magic_damage': 2, 
+        'base_max_magic_damage': 5, 
+        'base_exp': 18,  # БОНУС ОПЫТА
+        'base_gold': 15, # БОНУС ЗОЛОТА
+        'rank': 'E', 
+        'description': 'Бурлящая кислотная масса. С каждым ходом её яд разъедает сильнее!', 
+        'image': IMAGE_URLS['slime'], 
+        'difficulty': 'medium', # Повысили сложность
+        'abilities': ['basic_attack', 'toxic_growth'], 
+        'damage_type': 'mixed', 
+        'dodge_chance': 0.02, 
+        'drops': ['slime_goo', 'small_hp'] # Добавили шанс на хилку
     },
     'goblin_elite': {
         'name': '👹 Вожак Гоблинов', 
@@ -931,7 +941,8 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'status_effects': [],
             'cooldowns': {},
             'last_image': None,
-            'processing': False
+            'processing': False,
+            'slime_stacks': 0
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -1250,6 +1261,27 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
         # --- 5. ХОД ВРАГА (ЕСЛИ ОН ЖИВ) ---
         
+        # === СПЕЦ. МЕХАНИКА СЛИЗИ (Накопление яда) ===
+        if s['enemy_key'] == 'slime':
+            # Увеличиваем счетчик
+            s['slime_stacks'] += 1
+            stack = s['slime_stacks']
+            
+            # Формула урона ядом: Стак * 3 (3, 6, 9, 12...)
+            poison_dmg = stack * 3
+            
+            # Слизь лечится от яда (становится сильнее)
+            heal_amount = stack * 2
+            e['health'] = min(e['max_health'], e['health'] + heal_amount)
+            
+            # Наносим урон игроку (игнорирует броню!)
+            c['health'] -= poison_dmg
+            
+            log.append(f"🤢 *ЯД!* Слизь разъедает вас на -{poison_dmg} HP (Стак {stack})")
+            log.append(f"🦠 Слизь поглощает плоть и лечится на +{heal_amount} HP.")
+        # ===============================================
+
+     
         # Если враг не в стане (модификатор 0.0 ставится способностью оглушения)
         if enemy_damage_mod == 0.0:
              log.append("💫 Враг оглушен и пропускает ход!")
