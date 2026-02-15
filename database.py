@@ -106,7 +106,9 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_quest_date DATE",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS daily_quests_data TEXT",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE",
-                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)",
+                # В списке columns_to_add:
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)"
             ]
             
             for sql in columns_to_add:
@@ -653,6 +655,17 @@ def set_elf_magic(user_id, magic_type):
     try:
         with conn.cursor() as cursor:
             cursor.execute("UPDATE player_characters SET elf_magic_type = %s WHERE user_id = %s", (magic_type, user_id))
+            conn.commit()
+            return True
+    finally:
+        conn.close()
+def set_elf_spell(user_id, spell_key):
+    """Запоминает выбранное активное заклинание"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE player_characters SET elf_active_spell = %s WHERE user_id = %s", (spell_key, user_id))
             conn.commit()
             return True
     finally:
