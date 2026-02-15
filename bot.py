@@ -538,7 +538,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
         
         txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
-               f"HP: {get_health_bar(char['health'], char['max_health'])} | MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
+               f"HP: {get_health_bar(char['health'], char['max_health'])} \n"
+               f"MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
                f"Золото: {char['gold']} | Опыт: {get_xp_bar(char['level'], char['experience'])}\n\n"
                f"⚔️ Урон: {phys} (Физ) / {mag} (Маг)\n"
                f"💨 Уклонение: {dodge}%\n"
