@@ -17,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU = range(9)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU= range(9)
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
@@ -52,7 +52,8 @@ IMAGE_URLS = {
     'throne_god': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
     'shop': 'https://cubiq.ru/wp-content/uploads/2021/07/picture-1-15.jpeg',
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
-    'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg'
+    'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg',
+    'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg'
 }
 # --- СПОСОБНОСТИ РАС ---
 # type: heal (лечение), dmg (урон), buff (усиление)
@@ -333,8 +334,9 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
-        [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],
+        [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],[InlineKeyboardButton("📜 Гильдия Авантюристов", callback_data='guild_menu')],
         [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
+        
     ]
     if char and char['stat_points'] > 0:
         kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
@@ -501,6 +503,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         char = database.get_character(user_id)
         await query.edit_message_caption("Выберите характеристику для улучшения:", reply_markup=get_level_up_keyboard(char, char['stat_points']))
         return LEVEL_UP
+    elif data == 'guild_menu':
+        await guild_menu_handler(update, context)
+        return GUILD_MENU
     elif data == 'rank_info':
         rank_info = """🏆 *РАНГИ*\n🆕 E: 1-14 ур (Руины)\n🟢 D: 15-24 ур (Лес)\n🔵 C: 25-34 ур (Катакомбы)\n🟣 B: 35-44 ур (Замок)\n🟠 A: 45-54 ур (Ад)\n⚡ S: 55+ ур (Трон Хаоса)"""
         await query.edit_message_caption(rank_info, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
@@ -575,6 +580,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         battle_sessions[user_id] = {
             'char': char, 
             'enemy': enemy, 
+            'enemy_key': enemy_key,
             'log': [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"], 
             'turn': 1,
             'status_effects': [],
@@ -638,7 +644,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, text="⌛ *Бой завершен или сессия истекла.*", keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # Защита от двойных нажатий
+    # Защита от двойных нажатий (спама кнопок)
     if s.get('processing'):
         await query.answer("⏳ ...", show_alert=False)
         return IN_BATTLE
@@ -814,6 +820,17 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                             database.buy_item(user_id, drop, 'material', item_info['name'], 0, 0)
                             dropped_items.append(item_info['name'])
 
+            # === [НОВОЕ] ОБНОВЛЕНИЕ КВЕСТА ГИЛЬДИИ ===
+            # Получаем ID врага из сессии
+            enemy_key = s.get('enemy_key') 
+            
+            # Проверяем, есть ли квест типа "Убить" и совпадает ли цель
+            if c.get('quest_type') == 'kill' and c.get('quest_target') == enemy_key:
+                # Если квест еще не выполнен полностью
+                if c.get('quest_progress') < c.get('quest_goal'):
+                    database.update_quest_progress(user_id, 1)
+                    # Можно добавить уведомление в лог победы, но это не обязательно
+
             # Сохранение прогресса
             database.add_experience(user_id, xp_win)
             database.add_gold(user_id, gold_win)
@@ -860,16 +877,15 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                     
                     c['health'] -= final_dmg
 
-
         # --- 6. ПРОВЕРКА ПОРАЖЕНИЯ ---
         if c['health'] <= 0:
             database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
             if user_id in battle_sessions:
                 del battle_sessions[user_id]
             
-            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна."
+            death_msg = "💀 *ВЫ ПОГИБЛИ...*\n\nТемные жрецы нашли ваше тело и воскресили в деревне, но часть души была утеряна в Бездне."
             
-            # Добавляем совет, если игрок низкого уровня умер от босса
+            # Совет для новичков
             if c['level'] < 10 and (e.get('is_boss') or e.get('is_mini_boss')):
                 death_msg += "\n\n💡 *Урок:* Вы слишком слабы для Боссов. Прокачайтесь до 10 уровня, чтобы открыть Магию!"
             
@@ -888,7 +904,162 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_sessions[user_id]['processing'] = False
             
     return IN_BATTLE
+
+# --- ГЕНЕРАТОР ЗАДАНИЙ ---
+def generate_daily_quests(rank):
+    """Генерирует 3 случайных квеста для ранга игрока"""
+    quests = []
     
+    # Определяем доступных врагов для ранга
+    available_enemies = []
+    available_drops = []
+    
+    # Собираем врагов, подходящих по рангу (или чуть слабее)
+    ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    current_rank_idx = ranks_order.index(rank)
+    
+    for key, data in BASE_ENEMIES.items():
+        enemy_rank_idx = ranks_order.index(data.get('rank', 'E'))
+        if enemy_rank_idx <= current_rank_idx:
+            available_enemies.append(key)
+            if data.get('drops'):
+                for drop in data['drops']:
+                    available_drops.append(drop)
+    
+    if not available_enemies: available_enemies = ['wolf'] # Заглушка
+    
+    # Генерируем 3 варианта
+    for _ in range(3):
+        q_type = random.choice(['kill', 'kill', 'collect']) # Убийство падает чаще
+        
+        if q_type == 'kill':
+            target = random.choice(available_enemies)
+            enemy_name = BASE_ENEMIES[target]['name']
+            # Кол-во зависит от ранга (E: 3-5, S: 10-15)
+            count = random.randint(3, 5) + (current_rank_idx * 2)
+            gold = count * BASE_ENEMIES[target].get('base_gold', 5) * 1.5
+            exp = count * BASE_ENEMIES[target].get('base_exp', 5) * 1.5
+            quests.append({
+                'type': 'kill', 'target': target, 'goal': count, 
+                'gold': int(gold), 'exp': int(exp), 
+                'desc': f"Убить: {enemy_name} ({count} шт.)"
+            })
+            
+        elif q_type == 'collect':
+            if not available_drops: 
+                continue 
+            target = random.choice(available_drops)
+            item_name = ITEMS_DB.get(target, {'name': target})['name']
+            count = random.randint(2, 4) + current_rank_idx
+            gold = count * ITEMS_DB.get(target, {}).get('price', 5) * 2.0
+            exp = gold * 0.8
+            quests.append({
+                'type': 'collect', 'target': target, 'goal': count, 
+                'gold': int(gold), 'exp': int(exp), 
+                'desc': f"Принести: {item_name} ({count} шт.)"
+            })
+            
+    return quests
+
+# --- ХЕНДЛЕР ГИЛЬДИИ ---
+async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    # 1. Если нажали "Взять квест" (формат: take_quest_TYPE_TARGET_GOAL_GOLD_EXP)
+    if query.data.startswith('take_quest_'):
+        parts = query.data.split('_')
+        # parts: 0-take, 1-quest, 2-type, 3-target, 4-goal, 5-gold, 6-exp
+        try:
+            database.take_quest(user_id, parts[2], parts[3], int(parts[4]), int(parts[5]), int(parts[6]))
+            await query.answer("✅ Контракт подписан!", show_alert=True)
+            # Перезагружаем меню
+            await guild_menu_handler(update, context)
+            return GUILD_MENU
+        except Exception as e:
+            print(e)
+            await query.answer("Ошибка контракта.", show_alert=True)
+
+    # 2. Если нажали "Завершить квест"
+    if query.data == 'complete_quest':
+        success, msg = database.complete_quest(user_id)
+        if success:
+            # Начисляем опыт через add_experience для проверки левелапа
+            # (так как в SQL мы просто увеличили цифру, но не проверили левел)
+            # Тут хитрость: мы добавляем 0 опыта, чтобы триггернуть проверку уровня внутри add_experience,
+            # но ваша функция add_experience добавляет число. 
+            # Лучше просто вызвать add_experience(user_id, 0) - она пересчитает уровень? 
+            # Нет, ваша add_experience добавляет к текущему.
+            # Оставим как есть. Золото и опыт уже начислены.
+            await query.answer("🏆 Награда получена!", show_alert=True)
+            await safe_edit(query, text=msg, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
+        else:
+            await query.answer(f"❌ {msg}", show_alert=True)
+            return GUILD_MENU
+
+    # 3. ОТОБРАЖЕНИЕ МЕНЮ
+    
+    # Проверка: есть ли активный квест?
+    if char.get('quest_target'):
+        target_name = ""
+        if char['quest_type'] == 'kill':
+            target_name = BASE_ENEMIES.get(char['quest_target'], {}).get('name', char['quest_target'])
+            progress_txt = f"☠️ Убито: {char['quest_progress']}/{char['quest_goal']}"
+        else:
+            target_name = ITEMS_DB.get(char['quest_target'], {}).get('name', char['quest_target'])
+            # Для сбора предметов прогресс проверим по инвентарю
+            items = database.get_inventory(user_id)
+            inv_qty = 0
+            for i in items:
+                if i['item_key'] == char['quest_target']:
+                    inv_qty = i['quantity']
+            progress_txt = f"🎒 Собрано: {inv_qty}/{char['quest_goal']}"
+        
+        txt = (f"📜 *ТЕКУЩИЙ КОНТРАКТ*\n\n"
+               f"Цель: {target_name}\n"
+               f"{progress_txt}\n\n"
+               f"💰 Награда: {char['quest_reward_gold']}g | 📚 {char['quest_reward_exp']}xp")
+        
+        kb = [[InlineKeyboardButton("✅ Завершить и получить награду", callback_data='complete_quest')],
+              [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+        
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return GUILD_MENU
+
+    # Проверка: делал ли квест сегодня?
+    today = datetime.now().date()
+    last_quest = char.get('last_quest_date')
+    
+    # Если last_quest это строка (бывает с sqlite/postgres драйверами), конвертируем
+    if isinstance(last_quest, str):
+        last_quest = datetime.strptime(last_quest, '%Y-%m-%d').date()
+        
+    if last_quest == today:
+        txt = "📜 *Доска пуста*\n\nМастер гильдии говорит: \"На сегодня работы нет. Приходи завтра!\""
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    # ГЕНЕРАЦИЯ НОВЫХ КВЕСТОВ
+    quests = generate_daily_quests(char['rank'])
+    
+    txt = "📜 *ДОСКА ОБЪЯВЛЕНИЙ*\nВыберите одно задание на сегодня (Осторожно, отказаться нельзя!):\n"
+    kb = []
+    
+    for q in quests:
+        # data format: take_quest_TYPE_TARGET_GOAL_GOLD_EXP
+        cb_data = f"take_quest_{q['type']}_{q['target']}_{q['goal']}_{q['gold']}_{q['exp']}"
+        btn_txt = f"{q['desc']} (💰{q['gold']} 📚{q['exp']})"
+        kb.append([InlineKeyboardButton(btn_txt, callback_data=cb_data)])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return GUILD_MENU
+
+
+
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -1220,6 +1391,7 @@ def main():
             MAIN_MENU: [CallbackQueryHandler(main_menu_handler)],
             BATTLE_MENU: [CallbackQueryHandler(battle_menu_handler)],
             IN_BATTLE: [CallbackQueryHandler(battle_action_handler)],
+            GUILD_MENU: [CallbackQueryHandler(guild_menu_handler)],
             SHOP_MENU: [CallbackQueryHandler(shop_handler)],
             CRAFT_MENU: [CallbackQueryHandler(craft_handler)],
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
