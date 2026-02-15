@@ -284,6 +284,14 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
             if item_type == 'weapon':
                 cursor.execute("UPDATE player_characters SET strength = strength + %s WHERE user_id=%s", (effect_amount, user_id))
                 msg_extra = f"\n💪 Сила увеличилась на +{effect_amount}!"
+            # --- НОВЫЙ БЛОК ДЛЯ МАГОВ ---
+            elif item_type == 'magic_weapon':
+                # Посохи дают Интеллект и немного Маны (Int * 3)
+                int_bonus = effect_amount
+                mp_bonus = int_bonus * 3
+                cursor.execute("UPDATE player_characters SET intelligence = intelligence + %s, max_mana = max_mana + %s, mana = mana + %s WHERE user_id=%s", (int_bonus, mp_bonus, mp_bonus, user_id))
+                msg_extra = f"\n🔮 Интеллект +{int_bonus} / Мана +{mp_bonus}"
+            # ----------------------------
             elif item_type == 'armor':
                 hp_bonus = effect_amount
                 vit_bonus = max(1, int(effect_amount / 10))
