@@ -545,35 +545,53 @@ def update_quest_progress(user_id, amount=1):
         conn.close()
 
 def complete_quest(user_id):
-    """Завершаем квест и выдаем награду"""
+    """Завершаем квест и выдаем награду (с проверкой выполнения)"""
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal FROM player_characters WHERE user_id=%s", (user_id,))
+            # 1. Запрашиваем данные, ВКЛЮЧАЯ ТЕКУЩИЙ ПРОГРЕСС
+            cursor.execute("""
+                SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress 
+                FROM player_characters 
+                WHERE user_id=%s
+            """, (user_id,))
+            
             res = cursor.fetchone()
-            if not res: return False, "Нет квеста"
+            if not res or not res[2]: # Если квеста нет (quest_type is NULL)
+                return False, "У вас нет активного задания."
             
-            gold, exp, q_type, target, goal = res
+            gold, exp, q_type, target, goal, progress = res
             
-            # Если квест на сбор предметов, проверяем и забираем их
-            if q_type == 'collect':
-                # Проверяем наличие в инвентаре (используем логику из remove_item)
-                # Тут нужен прямой SQL для надежности
+            # --- ПРОВЕРКА ВЫПОЛНЕНИЯ ---
+            
+            # А) Для квеста на убийство
+            if q_type == 'kill':
+                if progress < goal:
+                    return False, f"Задание еще не выполнено! Убито: {progress}/{goal}"
+
+            # Б) Для квеста на сбор предметов
+            elif q_type == 'collect':
+                # Проверяем наличие в инвентаре
                 cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, target))
                 inv_res = cursor.fetchone()
-                if not inv_res or inv_res[1] < goal:
-                    # Получаем имя предмета для ошибки
-                    return False, f"Не хватает предметов в инвентаре ({inv_res[1] if inv_res else 0}/{goal})!"
                 
-                # Удаляем предметы
-                item_id, current_qty = inv_res
+                # Если предмета нет или его мало
+                current_qty = inv_res[1] if inv_res else 0
+                if current_qty < goal:
+                    # Получаем красивое имя для ошибки (опционально, но полезно)
+                    # item_name = ... (можно не делать запрос, просто вернуть ошибку)
+                    return False, f"Не хватает предметов в сумке! ({current_qty}/{goal})"
+                
+                # Если хватает — забираем предметы
+                item_id = inv_res[0]
                 if current_qty == goal:
                     cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
                 else:
                     cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
             
-            # Выдаем награду и ставим дату выполнения (сегодня)
+            # 3. ВЫДАЧА НАГРАДЫ
+            # Обнуляем квест и ставим сегодняшнюю дату
             cursor.execute("""
                 UPDATE player_characters 
                 SET gold = gold + %s, experience = experience + %s,
@@ -582,16 +600,15 @@ def complete_quest(user_id):
                 WHERE user_id=%s
             """, (gold, exp, user_id))
             
-            # Добавляем опыт через существующую функцию (чтобы уровень апнулся)
-            # Но SQL выше уже добавил цифру, так что просто вызовем add_experience с 0,
-            # чтобы сработала проверка уровня? Нет, лучше просто обновить уровень вручную или вызвать логику уровня.
-            # Для простоты: опыт добавили SQL-ем, а потом вызовем add_experience(user_id, 0) для пересчета уровня в будущем,
-            # или просто оставим как есть.
-            
             conn.commit()
             return True, f"Задание выполнено!\nПолучено: {gold}g и {exp}xp"
+            
+    except Exception as e:
+        print(f"Complete quest error: {e}")
+        return False, "Ошибка при завершении квеста."
     finally:
         conn.close()
+        
 def get_stored_quests(user_id):
     """Возвращает сохраненные квесты и дату их генерации"""
     conn = get_connection()
