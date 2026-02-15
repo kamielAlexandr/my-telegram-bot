@@ -85,6 +85,36 @@ ELF_MAGIC_TYPES = {
     'lunar': {'name': '🌙 Магия Луны', 'desc': 'Холодный свет ночи.'},
     'star':  {'name': '✨ Магия Звезд', 'desc': 'Космическая энергия.'}
 }
+# --- ЭЛЬФИЙСКАЯ КНИГА ЗАКЛИНАНИЙ ---
+ELF_SPELLS = {
+    # СОЛНЦЕ (Чистый урон)
+    'sun': {
+        'name': '☀️ Школа Солнца',
+        'spells': {
+            'sun_ray': {'name': 'Лучевой ожог', 'lvl': 1, 'mana': 10, 'desc': 'Базовый урон огнем (120%).', 'type': 'dmg', 'val': 1.2},
+            'sun_flare': {'name': 'Солнечная вспышка', 'lvl': 15, 'mana': 25, 'desc': 'Мощный взрыв (200% урона).', 'type': 'dmg', 'val': 2.0},
+            'supernova': {'name': 'Сверхновая', 'lvl': 30, 'mana': 60, 'desc': 'Испепеление (350% урона).', 'type': 'dmg', 'val': 3.5}
+        }
+    },
+    # ЛУНА (Вампиризм и дебаффы)
+    'moon': {
+        'name': '🌙 Школа Луны',
+        'spells': {
+            'moon_bolt': {'name': 'Лунная стрела', 'lvl': 1, 'mana': 12, 'desc': 'Урон (100%) + кража 30% HP.', 'type': 'drain', 'val': 1.0},
+            'nightmare': {'name': 'Кошмар', 'lvl': 15, 'mana': 30, 'desc': 'Снижает урон врага на 50% и бьет.', 'type': 'debuff_dmg', 'val': 1.5},
+            'eclipse': {'name': 'Затмение', 'lvl': 30, 'mana': 55, 'desc': 'Крадет много жизни (250% урона).', 'type': 'drain', 'val': 2.5}
+        }
+    },
+    # ЗВЕЗДЫ (Мана и усиление)
+    'star': {
+        'name': '✨ Школа Звезд',
+        'spells': {
+            'star_dust': {'name': 'Звездная пыль', 'lvl': 1, 'mana': 5, 'desc': 'Слабый урон, но почти без маны.', 'type': 'dmg', 'val': 1.1},
+            'comet': {'name': 'Комета', 'lvl': 15, 'mana': 20, 'desc': 'Урон (150%) + шанс оглушить.', 'type': 'stun', 'val': 1.5},
+            'galaxy': {'name': 'Парад планет', 'lvl': 30, 'mana': 50, 'desc': 'Серия ударов (300% урона).', 'type': 'dmg', 'val': 3.0}
+        }
+    }
+}
 # --- БАЗА ПРЕДМЕТОВ ---
 ITEMS_DB = {
     # --- ЕДА И ЗЕЛЬЯ ---
@@ -830,17 +860,73 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             log.append(f"{crit_txt}Вы ударили врага на *{dmg}*!")
                 
         elif action == 'attack_magic':
-            if c['mana'] >= 10:
-                c['mana'] -= 10
-                dmg, is_crit = calculate_damage(c, e, 'magic')
-                player_damage = int(dmg * 1.2)
-                crit_txt = " (КРИТ!)" if is_crit else ""
-                log.append(f"🔮 Магия нанесла *{player_damage}* урона{crit_txt}!")
+            # 1. Определяем заклинание
+            active_spell_key = c.get('elf_active_spell')
+            spell = None
+            
+            # Ищем параметры заклинания в словаре
+            if c['race'] == 'elf' and active_spell_key:
+                for school in ELF_SPELLS.values():
+                    if active_spell_key in school['spells']:
+                        spell = school['spells'][active_spell_key]
+                        break
+            
+            # 2. Определяем стоимость маны
+            mana_cost = spell['mana'] if spell else 10
+            
+            # 3. Проверка маны
+            if c['mana'] >= mana_cost:
+                c['mana'] -= mana_cost
+                
+                # --- ЕСЛИ ЭТО ОБЫЧНАЯ МАГИЯ (НЕ ЭЛЬФ ИЛИ НЕ ВЫБРАНО) ---
+                if not spell:
+                    dmg, is_crit = calculate_damage(c, e, 'magic')
+                    player_damage = int(dmg * 1.2)
+                    crit_txt = " (КРИТ!)" if is_crit else ""
+                    log.append(f"🔮 Магия нанесла *{player_damage}* урона{crit_txt}!")
+                
+                # --- ЕСЛИ ЭТО ЭЛЬФИЙСКОЕ ЗАКЛИНАНИЕ ---
+                else:
+                    # Базовый маг. урон
+                    base_mag = c['intelligence'] // 2
+                    is_crit = random.random() < calculate_crit_chance(c['agility'])
+                    crit_mult = 1.5 if is_crit else 1.0
+                    crit_txt = " (КРИТ!)" if is_crit else ""
+                    
+                    # Логика эффектов
+                    if spell['type'] == 'dmg':
+                        dmg = int(base_mag * spell['val'] * crit_mult)
+                        # Разброс урона
+                        dmg = random.randint(int(dmg*0.9), int(dmg*1.1))
+                        player_damage = dmg
+                        log.append(f"🔥 *{spell['name']}* нанес {dmg} урона{crit_txt}!")
+                        
+                    elif spell['type'] == 'drain':
+                        dmg = int(base_mag * spell['val'] * crit_mult)
+                        player_damage = dmg
+                        heal = int(dmg * 0.3) if spell['val'] < 2.0 else int(dmg * 0.5)
+                        c['health'] = min(c['max_health'], c['health'] + heal)
+                        log.append(f"🌙 *{spell['name']}* вытянул {dmg} жизни (+{heal} HP){crit_txt}!")
+                        
+                    elif spell['type'] == 'debuff_dmg':
+                        dmg = int(base_mag * spell['val'] * crit_mult)
+                        player_damage = dmg
+                        enemy_damage_mod = 0.5 # Ослабление врага на этот ход
+                        log.append(f"🌑 *{spell['name']}* нанес {dmg} урона и ослабил врага!")
+                        
+                    elif spell['type'] == 'stun':
+                        dmg = int(base_mag * spell['val'] * crit_mult)
+                        player_damage = dmg
+                        if random.random() < 0.4: # 40% шанс стана
+                            enemy_damage_mod = 0.0
+                            log.append(f"✨ *{spell['name']}* ({dmg} ур.) оглушил врага!")
+                        else:
+                            log.append(f"✨ *{spell['name']}* нанес {dmg} урона.")
+
             else:
                 log.append("💧 *НЕТ МАНЫ!*")
                 player_damage = max(1, c['strength'] // 4)
                 log.append(f"👊 Удар рукой на {player_damage}.")
-
         # Применяем урон игрока по врагу
         if player_damage > 0:
             e['health'] -= player_damage
@@ -1140,50 +1226,86 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    char = database.get_character(user_id)
     
-    # Защита: пускаем только эльфов
-    if char['race'] != 'elf':
-        await query.answer("Только эльфы могут управлять потоками магии!", show_alert=True)
-        return MAIN_MENU
-
-    # Обработка выбора
-    if query.data.startswith('set_magic_'):
-        m_type = query.data.split('_')[2]
-        database.set_elf_magic(user_id, m_type)
-        await query.answer(f"Вы постигли {ELF_MAGIC_TYPES[m_type]['name']}!", show_alert=True)
-        # Перезагружаем меню
-        await elf_magic_menu_handler(update, context)
-        return MAIN_MENU
-        
+    # 1. ОБРАБОТКА КНОПКИ "НАЗАД В ГЛАВНОЕ"
     if query.data == 'back_to_main':
+        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # ОТОБРАЖЕНИЕ МЕНЮ
-    current_magic = char.get('elf_magic_type')
-    magic_name = ELF_MAGIC_TYPES[current_magic]['name'] if current_magic else "Не выбрано"
-    
-    bonus = (char['level'] // 3) * 3 # +3 урона за каждые 3 уровня
-    
-    txt = (f"🧝‍♀️ *Тайные знания Эльфов*\n\n"
-           f"Ваша мудрость растет. Каждые 3 уровня магический урон увеличивается.\n"
-           f"Текущий бонус: *+{bonus} к урону магии*\n"
-           f"Выбранная стихия: *{magic_name}*\n\n"
-           f"Выберите источник силы:")
-           
-    kb = []
-    for k, v in ELF_MAGIC_TYPES.items():
-        icon = "✅ " if current_magic == k else ""
-        kb.append([InlineKeyboardButton(f"{icon}{v['name']}", callback_data=f"set_magic_{k}")])
+    # 2. ОБРАБОТКА ВЫБОРА ШКОЛЫ (Например, нажали "Солнце")
+    if query.data.startswith('school_'):
+        school_key = query.data.split('_')[1] # sun, moon, star
+        char = database.get_character(user_id)
         
-    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+        school_data = ELF_SPELLS[school_key]
+        active_spell = char.get('elf_active_spell')
+        
+        txt = f"📖 *{school_data['name']}*\nВыберите заклинание, которое будете использовать в бою:\n\n"
+        kb = []
+        
+        for key, spell in school_data['spells'].items():
+            # Проверяем уровень
+            status = "🔒 (Нужен ур. " + str(spell['lvl']) + ")"
+            if char['level'] >= spell['lvl']:
+                if active_spell == key:
+                    status = "✅ АКТИВНО"
+                else:
+                    status = "Выбрать"
+                    
+            btn_text = f"{spell['name']} ({spell['mana']} MP) - {status}"
+            
+            # Если уровень позволяет, даем выбрать
+            if char['level'] >= spell['lvl']:
+                kb.append([InlineKeyboardButton(btn_text, callback_data=f"set_spell_{key}")])
+            else:
+                kb.append([InlineKeyboardButton(f"🔒 {spell['name']} (Ур. {spell['lvl']})", callback_data="ignore")])
+                
+        kb.append([InlineKeyboardButton("🔙 К списку школ", callback_data='elf_magic_menu')])
+        
+        await safe_edit(query, text=txt, keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU # Остаемся в этом же состоянии
+
+    # 3. ОБРАБОТКА ВЫБОРА ЗАКЛИНАНИЯ
+    if query.data.startswith('set_spell_'):
+        spell_key = query.data.split('_', 2)[2]
+        database.set_elf_spell(user_id, spell_key)
+        await query.answer("Заклинание подготовлено!", show_alert=True)
+        # Возвращаемся в меню школ
+        await elf_magic_menu_handler(update, context) 
+        return MAIN_MENU
+
+    # 4. ГЛАВНОЕ МЕНЮ МАГИИ (СПИСОК ШКОЛ)
+    # Сюда попадаем по кнопке из главного меню или по "Назад к списку школ"
+    char = database.get_character(user_id)
     
-    # Картинка эльфа или мага
-    img = IMAGE_URLS.get('elf', IMAGE_URLS['mage'])
+    # Определяем текущее активное заклинание для красоты
+    curr_spell_key = char.get('elf_active_spell')
+    curr_spell_name = "Не выбрано (Будет обычная магия)"
+    
+    # Ищем название активного спелла
+    for school in ELF_SPELLS.values():
+        if curr_spell_key in school['spells']:
+            curr_spell_name = school['spells'][curr_spell_key]['name']
+            break
+
+    txt = (f"🧝‍♀️ *Магический Гримуар*\n\n"
+           f"Здесь вы выбираете, какую магию использовать кнопкой «🔮 Магия» в бою.\n"
+           f"⚡ Активное заклинание: *{curr_spell_name}*\n\n"
+           f"Выберите школу:")
+    
+    kb = [
+        [InlineKeyboardButton("☀️ Солнце (Урон)", callback_data='school_sun')],
+        [InlineKeyboardButton("🌙 Луна (Вампиризм)", callback_data='school_moon')],
+        [InlineKeyboardButton("✨ Звезды (Контроль)", callback_data='school_star')],
+        [InlineKeyboardButton("🔙 Назад в меню", callback_data='back_to_main')]
+    ]
+    
+    # Картинка мага
+    img = IMAGE_URLS.get('mage', 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg')
     
     await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
-    return MAIN_MENU # Используем состояние MAIN_MENU, чтобы не плодить лишние
+    return MAIN_MENU
     
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
