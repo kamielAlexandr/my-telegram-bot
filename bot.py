@@ -1466,76 +1466,82 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = query.from_user.id
     
-    # 1. Обработка кнопки "Назад"
+    # 1. Кнопка НАЗАД
     if data == 'back_to_main':
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
-    # 2. Обработка крафта
+    # 2. Обработка КРАФТА
     elif data.startswith('craft_'):
-        # --- ИСПРАВЛЕНИЕ ТУТ ---
-        # Было: recipe_key = data.split('_')[1] (теряло часть названия, если в нем были подчеркивания)
-        # Стало: data.split('_', 1)[1] (отрезает только первое слово "craft", остальное оставляет целиком)
-        recipe_key = data.split('_', 1)[1] 
-        
-        recipe = CRAFT_RECIPES.get(recipe_key)
-        if not database.check_inventory_space(user_id, result_item['type']):
-            await query.answer(f"🎒 Нет места для {result_item['name']}!\nПродайте старое снаряжение.", show_alert=True)
-            return CRAFT_MENU
-        # ----------------------------
-        # Если рецепт не найден (например, старая кнопка), обновляем меню
-        if not recipe: 
-            await query.answer("Рецепт устарел или не найден.", show_alert=True)
-            await show_craft_menu(query, user_id)
-            return CRAFT_MENU
-        
-        # 3. Проверка золота
-        char = database.get_character(user_id)
-        if char['gold'] < recipe['cost']:
-            await query.answer(f"⚠️ Не хватает золота! Нужно {recipe['cost']}g", show_alert=True)
-            return CRAFT_MENU
+        try: # <--- НАЧАЛО ЗАЩИТЫ ОТ ОШИБОК
+            # Читаем рецепт (защита от имен с подчеркиванием)
+            recipe_key = data.split('_', 1)[1]
+            recipe = CRAFT_RECIPES.get(recipe_key)
             
-        # 4. Проверка материалов
-        items = database.get_inventory(user_id)
-        inv_dict = {i['item_key']: i['quantity'] for i in items}
-        
-        # Сначала проверяем ВСЕ материалы
-        for mat, amt in recipe['mats'].items():
-            if inv_dict.get(mat, 0) < amt:
-                # Получаем красивое имя материала
-                mat_name = ITEMS_DB.get(mat, {'name': mat})['name']
-                await query.answer(f"⚠️ Не хватает: {mat_name}", show_alert=True)
+            if not recipe:
+                await query.answer("Рецепт устарел.", show_alert=True)
+                await show_craft_menu(query, user_id)
                 return CRAFT_MENU
-        
-        # 5. Списываем материалы
-        # Используем новую функцию remove_item, которую вы добавили в database.py
-        for mat, amt in recipe['mats'].items():
-            success = database.remove_item(user_id, mat, amt)
-            if not success:
-                await query.answer("❌ Ошибка при списании материалов!", show_alert=True)
+            
+            # Проверка золота
+            char = database.get_character(user_id)
+            if char['gold'] < recipe['cost']:
+                await query.answer(f"⚠️ Не хватает золота! Нужно {recipe['cost']}g", show_alert=True)
                 return CRAFT_MENU
+            
+            # --- ПРОВЕРКА МЕСТА (С защитой) ---
+            # Получаем предмет результата
+            result_item = ITEMS_DB.get(recipe['result'])
+            if not result_item:
+                await query.answer(f"Ошибка: Предмет {recipe['result']} не найден в базе!", show_alert=True)
+                return CRAFT_MENU
+            
+            # Вызываем функцию проверки (она должна быть в database.py)
+            # Если функции нет, код упадет в except внизу и скажет об этом
+            has_space = database.check_inventory_space(user_id, result_item.get('type', 'other'))
+            
+            if not has_space:
+                await query.answer("🎒 Инвентарь переполнен! (Макс. 5 шт. оружия/брони)", show_alert=True)
+                return CRAFT_MENU
+            # ----------------------------------
 
-        # 6. Создаем предмет
-        result_item = ITEMS_DB[recipe['result']]
-        
-        res, msg = database.buy_item(
-            user_id, 
-            recipe['result'], 
-            result_item['type'], 
-            result_item['name'], 
-            recipe['cost'], 
-            result_item.get('effect', 0)
-        )
-        
-        if res:
-            await query.answer(f"✅ Успех! Создано: {result_item['name']}", show_alert=True)
-            # Обновляем меню, чтобы показать новые остатки ресурсов
-            await show_craft_menu(query, user_id)
-        else:
-            await query.answer(f"❌ Ошибка крафта: {msg}", show_alert=True)
+            # Проверка материалов
+            items = database.get_inventory(user_id)
+            inv_dict = {i['item_key']: i['quantity'] for i in items}
+            
+            for mat, amt in recipe['mats'].items():
+                if inv_dict.get(mat, 0) < amt:
+                    mat_name = ITEMS_DB.get(mat, {'name': mat})['name']
+                    await query.answer(f"⚠️ Не хватает: {mat_name}", show_alert=True)
+                    return CRAFT_MENU
+            
+            # Списание материалов
+            for mat, amt in recipe['mats'].items():
+                database.remove_item(user_id, mat, amt)
+
+            # Выдача предмета
+            res, msg = database.buy_item(
+                user_id, 
+                recipe['result'], 
+                result_item['type'], 
+                result_item['name'], 
+                recipe['cost'], 
+                result_item.get('effect', 0)
+            )
+            
+            if res:
+                await query.answer(f"✅ Готово! Создано: {result_item['name']}", show_alert=True)
+                await show_craft_menu(query, user_id)
+            else:
+                await query.answer(f"❌ Ошибка базы: {msg}", show_alert=True)
+
+        except Exception as e:
+            # ВОТ ЭТО ПОКАЖЕТ ВАМ ПРИЧИНУ ОШИБКИ
+            print(f"CRITICAL CRAFT ERROR: {e}") 
+            await query.answer(f"🔥 Ошибка крафта: {e}", show_alert=True)
             
     return CRAFT_MENU
-
+    
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
