@@ -741,13 +741,29 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == 'profile':
         char = database.get_character(user_id)
+        
+        # --- 1. ОПРЕДЕЛЯЕМ ИМЯ РАСЫ (ИСПРАВЛЕНИЕ ОШИБКИ) ---
+        # Мы берем ключ расы (например, 'elf') и ищем его название в базе ('Эльф')
+        race_key = char['race']
+        # Используем .get на случай, если расы нет в словаре
+        race_info = database.RACES.get(race_key) 
+        
+        if race_info:
+            race_name = race_info['name']
+        else:
+            race_name = race_key.capitalize() # Если не нашли, пишем как есть (Elf)
+
+        # --- 2. РАСЧЕТ СТАТОВ ---
         phys = max(1, char['strength'] // 2)
         mag = max(1, char['intelligence'] // 2)
+        # Рассчитываем проценты (защита, если функции вернут None)
         dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
+        crit = int(calculate_crit_chance(char['agility']) * 100)
         
+        # --- 3. ФОРМИРОВАНИЕ ТЕКСТА ---
         txt = (
             f"👤 *{char['character_name']}*\n"
-            f"📖 Раса: *{race_name}*\n"
+            f"📖 Раса: *{race_name}*\n" 
             f"🎖 Уровень: *{char['level']}*\n"
             f"💰 Золото: *{char['gold']}g*\n"
             f"──────────────────\n"
@@ -761,7 +777,13 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧠 Инт: {char['intelligence']} | 💓 Жив: {char['vitality']}"
         )
         
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        kb = get_main_menu_keyboard(user_id)
+        
+        # Картинка расы
+        img = IMAGE_URLS.get(char['race'], IMAGE_URLS['human'])
+        
+        await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=kb)
+        return MAIN_MENU
     elif data == 'inventory':
         await show_inventory_menu(update, context)
         return INVENTORY_MENU
