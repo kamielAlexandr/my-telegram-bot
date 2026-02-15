@@ -2,7 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
-
+import json
 # --- КОНСТАНТЫ РАС ---
 RACES = {
     "human": {
@@ -568,5 +568,41 @@ def complete_quest(user_id):
             
             conn.commit()
             return True, f"Задание выполнено!\nПолучено: {gold}g и {exp}xp"
+    finally:
+        conn.close()
+def get_stored_quests(user_id):
+    """Возвращает сохраненные квесты и дату их генерации"""
+    conn = get_connection()
+    if not conn: return None, None
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT daily_quests_data, last_refresh_date FROM player_characters WHERE user_id=%s", (user_id,))
+            res = cursor.fetchone()
+            if res and res[0]:
+                return json.loads(res[0]), res[1]
+            return None, None
+    except Exception as e:
+        print(f"Get quests error: {e}")
+        return None, None
+    finally:
+        conn.close()
+
+def save_daily_quests(user_id, quests):
+    """Сохраняет список квестов и обновляет дату генерации на сегодня"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            json_data = json.dumps(quests)
+            cursor.execute("""
+                UPDATE player_characters 
+                SET daily_quests_data = %s, last_refresh_date = CURRENT_DATE 
+                WHERE user_id = %s
+            """, (json_data, user_id))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Save quests error: {e}")
+        return False
     finally:
         conn.close()
