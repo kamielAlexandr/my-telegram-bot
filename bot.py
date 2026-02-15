@@ -1235,13 +1235,16 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     user_id = query.from_user.id
     
+    # Мы используем этот флаг, чтобы понять, нужно ли рисовать меню в конце
+    should_render_menu = True
+
     # 1. ОБРАБОТКА КНОПКИ "НАЗАД В ГЛАВНОЕ"
     if query.data == 'back_to_main':
         await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # 2. ОБРАБОТКА ВЫБОРА ШКОЛЫ (Например, нажали "Солнце")
+    # 2. ОБРАБОТКА ВЫБОРА ШКОЛЫ (Рисуем подменю школы)
     if query.data.startswith('school_'):
         school_key = query.data.split('_')[1] # sun, moon, star
         char = database.get_character(user_id)
@@ -1253,7 +1256,6 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         kb = []
         
         for key, spell in school_data['spells'].items():
-            # Проверяем уровень
             status = "🔒 (Нужен ур. " + str(spell['lvl']) + ")"
             if char['level'] >= spell['lvl']:
                 if active_spell == key:
@@ -1263,7 +1265,6 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
                     
             btn_text = f"{spell['name']} ({spell['mana']} MP) - {status}"
             
-            # Если уровень позволяет, даем выбрать
             if char['level'] >= spell['lvl']:
                 kb.append([InlineKeyboardButton(btn_text, callback_data=f"set_spell_{key}")])
             else:
@@ -1272,26 +1273,24 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         kb.append([InlineKeyboardButton("🔙 К списку школ", callback_data='elf_magic_menu')])
         
         await safe_edit(query, text=txt, keyboard=InlineKeyboardMarkup(kb))
-        return MAIN_MENU # Остаемся в этом же состоянии
+        return MAIN_MENU # Выходим, так как мы уже отрисовали подменю
 
-    # 3. ОБРАБОТКА ВЫБОРА ЗАКЛИНАНИЯ
+    # 3. ОБРАБОТКА ВЫБОРА ЗАКЛИНАНИЯ (ИСПРАВЛЕНО)
     if query.data.startswith('set_spell_'):
         spell_key = query.data.split('_', 2)[2]
         database.set_elf_spell(user_id, spell_key)
         await query.answer("Заклинание подготовлено!", show_alert=True)
-        # Возвращаемся в меню школ
-        await elf_magic_menu_handler(update, context) 
-        return MAIN_MENU
+        # ВАЖНО: Мы НЕ вызываем здесь функцию заново.
+        # Мы просто позволяем коду идти дальше (в пункт 4), 
+        # чтобы он отрисовал главное меню школ.
 
     # 4. ГЛАВНОЕ МЕНЮ МАГИИ (СПИСОК ШКОЛ)
-    # Сюда попадаем по кнопке из главного меню или по "Назад к списку школ"
+    # Этот код выполнится, если нажали 'elf_magic_menu' ИЛИ если только что выбрали заклинание (пункт 3)
     char = database.get_character(user_id)
     
-    # Определяем текущее активное заклинание для красоты
     curr_spell_key = char.get('elf_active_spell')
     curr_spell_name = "Не выбрано (Будет обычная магия)"
     
-    # Ищем название активного спелла
     for school in ELF_SPELLS.values():
         if curr_spell_key in school['spells']:
             curr_spell_name = school['spells'][curr_spell_key]['name']
@@ -1309,12 +1308,10 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("🔙 Назад в меню", callback_data='back_to_main')]
     ]
     
-    # Картинка мага
     img = IMAGE_URLS.get('mage', 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg')
     
     await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return MAIN_MENU
-    
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
