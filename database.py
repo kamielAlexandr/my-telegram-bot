@@ -712,3 +712,62 @@ def get_inventory_count(user_id, item_type):
             return cursor.fetchone()[0]
     finally:
         conn.close()
+
+def sell_item_transaction(user_id, item_key, quantity=1):
+    """
+    Продает предмет:
+    1. Проверяет наличие.
+    2. Снимает статы (если это экипировка).
+    3. Удаляет предмет.
+    4. Начисляет золото (50% от цены).
+    """
+    # Здесь нам нужен доступ к ITEMS_DB, но database.py не видит bot.py.
+    # Поэтому мы передадим цену и характеристики аргументами из бота,
+    # ЛИБО (проще) сделаем всю логику проверок в боте, а здесь только SQL.
+    # Но для надежности лучше так:
+    pass 
+    # СТОП. Чтобы не усложнять импорты, сделаем универсальную функцию изменения,
+    # а логику "что отнимать" посчитаем в bot.py.
+
+def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
+    """
+    Выполняет продажу: удаляет предмет, дает золото, меняет статы.
+    stat_changes = {'strength': -5, 'max_health': -10} и т.д.
+    """
+    conn = get_connection()
+    if not conn: return False, "Ошибка подключения"
+    
+    try:
+        with conn.cursor() as cursor:
+            # 1. Проверяем наличие предмета
+            cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
+            res = cursor.fetchone()
+            if not res: return False, "Предмет не найден"
+            item_id, current_qty = res
+            
+            # 2. Удаляем предмет (или уменьшаем кол-во)
+            if current_qty <= 1:
+                cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
+            else:
+                cursor.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE id=%s", (item_id,))
+            
+            # 3. Добавляем золото
+            cursor.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id=%s", (price_to_add, user_id))
+            
+            # 4. Отнимаем статы (если продали экипировку)
+            if stat_changes:
+                # Формируем SQL динамически: "strength = strength + (-5), ..."
+                set_clauses = [f"{k} = {k} + %s" for k in stat_changes.keys()]
+                values = list(stat_changes.values())
+                values.append(user_id)
+                
+                sql = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id=%s"
+                cursor.execute(sql, values)
+            
+            conn.commit()
+            return True, "Успешно"
+    except Exception as e:
+        print(f"Sell error: {e}")
+        return False, f"Ошибка: {e}"
+    finally:
+        conn.close()
