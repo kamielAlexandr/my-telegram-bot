@@ -1562,109 +1562,141 @@ async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return MAIN_MENU
 
+async def render_sell_menu(query, user_id):
+    """Рисует меню продажи с актуальными данными"""
+    char = database.get_character(user_id)
+    items = database.get_inventory(user_id)
+    
+    txt = f"💰 *СКУПКА КРАДЕНОГО*\nТорговец готов купить ваши вещи за 50% от стоимости.\n\n_Ваше золото: {char['gold']}g_"
+    
+    if not items:
+        txt += "\n\n_(Рюкзак пуст)_"
+    
+    kb = []
+    for i in items:
+        item_info = ITEMS_DB.get(i['item_key'])
+        if not item_info: continue
+        
+        # Цена продажи = Цена / 2
+        sell_price = max(1, item_info['price'] // 2)
+        
+        # Кнопка: "🐺 Шкура (x5) - 2g"
+        btn_txt = f"{item_info['name']} (x{i['quantity']}) — {sell_price}g"
+        kb.append([InlineKeyboardButton(btn_txt, callback_data=f"sell_item_{i['item_key']}")])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад в магазин", callback_data='shop')])
+    
+    # Используем safe_edit для обновления
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
 
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОТРИСОВКИ МЕНЮ ПРОДАЖИ ---
+async def render_sell_menu(query, user_id):
+    """Рисует меню продажи с актуальными данными о золоте и предметах"""
+    char = database.get_character(user_id)
+    items = database.get_inventory(user_id)
+    
+    txt = f"💰 *СКУПКА КРАДЕНОГО*\nТорговец готов купить ваши вещи за 50% от стоимости.\n\n_Ваше золото: {char['gold']}g_"
+    
+    if not items:
+        txt += "\n\n_(Рюкзак пуст)_"
+    
+    kb = []
+    for i in items:
+        item_info = ITEMS_DB.get(i['item_key'])
+        if not item_info: continue
+        
+        # Цена продажи = Цена / 2 (минимум 1 золотая)
+        sell_price = max(1, item_info['price'] // 2)
+        
+        # Кнопка: "🐺 Шкура (x5) - 2g"
+        btn_txt = f"{item_info['name']} (x{i['quantity']}) — {sell_price}g"
+        kb.append([InlineKeyboardButton(btn_txt, callback_data=f"sell_item_{i['item_key']}")])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад в магазин", callback_data='shop')])
+    
+    # Используем safe_edit для обновления картинки и текста
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+
+
+# --- ОСНОВНОЙ ХЕНДЛЕР МАГАЗИНА ---
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    # 1. Кнопка НАЗАД
+    # 1. КНОПКА НАЗАД (ВОЗВРАТ В ДЕРЕВНЮ)
     if data == 'back_to_main':
         await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # 2. ГЛАВНОЕ МЕНЮ МАГАЗИНА
+    # 2. ГЛАВНОЕ МЕНЮ МАГАЗИНА (КАТЕГОРИИ)
     elif data == 'shop': 
         await query.answer()
-        txt = f"🏪 *Мрачная лавка*\nЗолото: {char['gold']}💰\n\n_«Покупаю дорого, продаю дешево... или наоборот?»_"
+        txt = f"🏪 *Мрачная лавка*\nЗолото: {char['gold']}💰\nЧего желаете?"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
 
-    # --- 3. МЕНЮ ПРОДАЖИ (СПИСОК ВЕЩЕЙ) ---
+    # --- 3. ОТКРЫТИЕ МЕНЮ ПРОДАЖИ ---
     elif data == 'shop_sell_menu':
         await query.answer()
-        items = database.get_inventory(user_id)
-        
-        if not items:
-            await query.answer("У вас пустой рюкзак! Нечего продавать.", show_alert=True)
-            return SHOP_MENU
-            
-        txt = f"💰 *СКУПКА КРАДЕНОГО*\nТорговец готов купить ваши вещи за 50% от стоимости.\n\n_Ваше золото: {char['gold']}g_"
-        
-        kb = []
-        for i in items:
-            item_info = ITEMS_DB.get(i['item_key'])
-            if not item_info: continue
-            
-            # Цена продажи = Цена / 2
-            sell_price = max(1, item_info['price'] // 2)
-            
-            # Красивая кнопка: "🐺 Шкура (x5) - 2g"
-            btn_txt = f"{item_info['name']} (x{i['quantity']}) — {sell_price}g"
-            kb.append([InlineKeyboardButton(btn_txt, callback_data=f"sell_item_{i['item_key']}")])
-            
-        kb.append([InlineKeyboardButton("🔙 Назад в магазин", callback_data='shop')])
-        
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        await render_sell_menu(query, user_id)
         return SHOP_MENU
 
-    # --- 4. ОБРАБОТКА ПРОДАЖИ ---
+    # --- 4. ОБРАБОТКА ПРОДАЖИ ПРЕДМЕТА ---
     elif data.startswith('sell_item_'):
         item_key = data.split('_', 2)[2]
         item_info = ITEMS_DB.get(item_key)
         
         if not item_info:
-            await query.answer("Ошибка предмета.", show_alert=True)
+            await query.answer("Ошибка: предмет не найден.", show_alert=True)
+            # Обновляем меню на всякий случай
+            await render_sell_menu(query, user_id) 
             return SHOP_MENU
             
-        # Рассчитываем возврат статов (если продаем экипировку)
-        # Мы должны ОТНЯТЬ то, что предмет давал
+        # Считаем, сколько статов нужно ОТНЯТЬ (если продаем надетую экипировку)
         stat_changes = {}
-        
-        if item_info['type'] == 'weapon':
-            stat_changes['strength'] = -item_info.get('effect', 0)
+        if item_info.get('effect'):
+            eff = item_info['effect']
             
-        elif item_info['type'] == 'magic_weapon':
-            # Посох давал +Инт и +Ману. Отнимаем.
-            val = item_info.get('effect', 0)
-            stat_changes['intelligence'] = -val
-            stat_changes['max_mana'] = -(val * 3)
-            stat_changes['mana'] = -(val * 3) # Текущую ману тоже режем
-            
-        elif item_info['type'] == 'armor':
-            val = item_info.get('effect', 0)
-            stat_changes['max_health'] = -val
-            stat_changes['health'] = -val
-            stat_changes['vitality'] = -max(1, int(val / 10))
-            
-        elif item_info['type'] in ['artifact', 'acc']:
-            val = item_info.get('effect', 0)
-            stat_changes['intelligence'] = -val
-            stat_changes['max_mana'] = -(val * 5)
-            stat_changes['mana'] = -(val * 5)
+            if item_info['type'] == 'weapon':
+                stat_changes['strength'] = -eff
+                
+            elif item_info['type'] == 'magic_weapon':
+                # Посох давал +Инт и +Ману. Отнимаем.
+                stat_changes['intelligence'] = -eff
+                stat_changes['max_mana'] = -(eff * 3)
+                stat_changes['mana'] = -(eff * 3)
+                
+            elif item_info['type'] == 'armor':
+                stat_changes['max_health'] = -eff
+                stat_changes['health'] = -eff
+                stat_changes['vitality'] = -max(1, int(eff / 10))
+                
+            elif item_info['type'] in ['artifact', 'acc']:
+                stat_changes['intelligence'] = -eff
+                stat_changes['max_mana'] = -(eff * 5)
+                stat_changes['mana'] = -(eff * 5)
 
         # Цена продажи
         sell_price = max(1, item_info['price'] // 2)
 
-        # Выполняем транзакцию в БД
+        # Выполняем продажу в БД
+        # (Функция execute_sell должна быть в database.py)
         success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
         
         if success:
             await query.answer(f"💰 Продано: {item_info['name']} (+{sell_price}g)", show_alert=True)
-            # Обновляем меню продажи (чтобы обновилось кол-во и золото)
-            # Имитируем повторное нажатие на "Продать"
-            query.data = 'shop_sell_menu'
-            await shop_handler(update, context)
+            # ВАЖНО: Обновляем меню, чтобы убрать проданный предмет и обновить золото
+            await render_sell_menu(query, user_id)
         else:
             await query.answer(f"Ошибка: {msg}", show_alert=True)
             
         return SHOP_MENU
 
-    # 5. КАТЕГОРИИ ПОКУПКИ (Старый код)
+    # 5. ПРОСМОТР КАТЕГОРИИ ПОКУПКИ
     elif data.startswith('shop_cat_'):
-        # ... ваш старый код показа категории ...
         await query.answer()
         cat = data.split('_')[2]
         cat_names = {'food': '🍖 Еда', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
@@ -1675,6 +1707,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for key, item in ITEMS_DB.items():
             if item.get('cat') == cat:
                 items_found = True
+                
+                # Формируем описание бонусов
                 effect_str = ""
                 if item.get('effect'):
                     if item['type'] == 'weapon':       effect_str = f" (+{item['effect']} ⚔️)"
@@ -1686,39 +1720,48 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 txt += f"▪️ *{item['name']}* — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
 
-        if not items_found: txt += "Пусто..."
+        if not items_found: txt += "В этой категории пока пусто..."
         if len(txt) > 1000: txt = txt[:1000] + "..."
 
         media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
         await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
         return SHOP_MENU
     
-    # 6. ПОКУПКА (Старый код)
+    # 6. ПОКУПКА ПРЕДМЕТА
     elif data.startswith('buy_'):
-        # ... Ваш код покупки ...
-        # (Обязательно оставьте ваш старый код покупки здесь!)
         item_key = data.split('_', 1)[1]
         item = ITEMS_DB.get(item_key)
         
-        if not item: return SHOP_MENU
+        if not item: 
+            await query.answer("Товар не найден.")
+            return SHOP_MENU
 
-        # Проверка лимита (если нужно)
+        # --- ПРОВЕРКА ЛИМИТА ИНВЕНТАРЯ (5 ШТ) ---
         if item['type'] in ['weapon', 'magic_weapon', 'armor']:
              items = database.get_inventory(user_id)
-             target_types = ['weapon', 'magic_weapon'] if item['type'] in ['weapon', 'magic_weapon'] else ['armor']
+             # Считаем оружие вместе (обычное + магическое) или броню
+             if item['type'] in ['weapon', 'magic_weapon']:
+                 target_types = ['weapon', 'magic_weapon']
+             else:
+                 target_types = ['armor']
+             
              count = 0
              for i in items:
                  info = ITEMS_DB.get(i['item_key'])
                  if info and info['type'] in target_types:
                      count += i['quantity']
+                     
              if count >= 5:
-                 await query.answer("🎒 Инвентарь переполнен! (Макс 5 шт.)", show_alert=True)
+                 await query.answer("🎒 Слот переполнен! (Макс 5 шт. оружия/брони)", show_alert=True)
                  return SHOP_MENU
+        # ----------------------------------------
 
         if char['gold'] >= item['price']:
             res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
             await query.answer(msg, show_alert=True)
-            # Обновляем категорию
+            
+            # Обновляем категорию (чтобы обновился баланс золота в тексте)
+            # Мы меняем data на код категории и рекурсивно вызываем shop_handler
             query.data = f"shop_cat_{item['cat']}"
             await shop_handler(update, context)
         else:
