@@ -732,35 +732,32 @@ def sell_item_transaction(user_id, item_key, quantity=1):
 def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
     """
     Выполняет продажу: удаляет предмет, дает золото, меняет статы.
-    stat_changes = {'strength': -5, 'max_health': -10} и т.д.
     """
     conn = get_connection()
     if not conn: return False, "Ошибка подключения"
     
     try:
         with conn.cursor() as cursor:
-            # 1. Проверяем наличие предмета
+            # 1. Проверяем наличие
             cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
             res = cursor.fetchone()
             if not res: return False, "Предмет не найден"
             item_id, current_qty = res
             
-            # 2. Удаляем предмет (или уменьшаем кол-во)
+            # 2. Удаляем
             if current_qty <= 1:
                 cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
             else:
                 cursor.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE id=%s", (item_id,))
             
-            # 3. Добавляем золото
+            # 3. Даем золото
             cursor.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id=%s", (price_to_add, user_id))
             
-            # 4. Отнимаем статы (если продали экипировку)
+            # 4. Отнимаем статы (если нужно)
             if stat_changes:
-                # Формируем SQL динамически: "strength = strength + (-5), ..."
                 set_clauses = [f"{k} = {k} + %s" for k in stat_changes.keys()]
                 values = list(stat_changes.values())
                 values.append(user_id)
-                
                 sql = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id=%s"
                 cursor.execute(sql, values)
             
