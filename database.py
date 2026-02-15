@@ -670,37 +670,29 @@ def set_elf_spell(user_id, spell_key):
             return True
     finally:
         conn.close()
+# --- ВСТАВИТЬ В КОНЕЦ database.py ---
 def check_inventory_space(user_id, item_type):
-    """
-    Проверяет, есть ли место для нового предмета.
-    Возвращает True, если место есть.
-    """
-    # ЛИМИТЫ
-    LIMITS = {
-        'weapon': 5,
-        'armor': 5
-    }
-    
-    # Если предмет не имеет лимита (зелья, материалы), всегда разрешаем
-    if item_type not in LIMITS:
-        return True
-        
+    """Проверяет, есть ли место (Максимум 5 шт. для брони/оружия)"""
     conn = get_connection()
-    if not conn: return False
+    if not conn: return True # Если ошибка БД, лучше разрешить, чем ломать игру
     try:
         with conn.cursor() as cursor:
             # Считаем предметы этого типа
-            cursor.execute("""
-                SELECT COUNT(*) FROM player_inventory 
-                WHERE user_id = %s AND item_type = %s
-            """, (user_id, item_type))
-            
+            cursor.execute("SELECT COUNT(*) FROM player_inventory WHERE user_id = %s AND item_type = %s", (user_id, item_type))
             count = cursor.fetchone()[0]
             
-            # Если вещей меньше лимита — возвращаем True
-            return count < LIMITS[item_type]
+            # Лимиты
+            limit = 5
+            # Если это оружие или броня - проверяем лимит. Остальное (зелья) - безлимит.
+            if item_type in ['weapon', 'armor']:
+                return count < limit
+            return True
+    except Exception as e:
+        print(f"DB Error (check_space): {e}")
+        return True # В случае ошибки разрешаем крафт
     finally:
         conn.close()
+
 
 def get_inventory_count(user_id, item_type):
     """Возвращает количество предметов определенного типа (для отображения)"""
