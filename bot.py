@@ -1770,7 +1770,12 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
-
+ # 2. КНОПКА НАЗАД
+    if data == 'back_to_main':
+        await query.answer() # Останавливаем часики
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    
     # 1. ИСПОЛЬЗОВАНИЕ (Еда и Зелья)
     if data.startswith('use_'):
         # Получаем ключ предмета (защита от имен с подчеркиванием)
@@ -1826,11 +1831,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer(f"Нельзя использовать {item_info['name']}.\nТип: {item_info['type']}", show_alert=True)
             return INVENTORY_MENU
 
-    # 2. КНОПКА НАЗАД
-    elif data == 'back_to_main':
-        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-        return MAIN_MENU
-
+   
     # 3. ОТОБРАЖЕНИЕ ИНВЕНТАРЯ
     items = database.get_inventory(user_id)
     
