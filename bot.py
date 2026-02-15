@@ -724,7 +724,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"С возвращением, {char['character_name']}!\n"
             f"Темные времена настали, надеюсь ты готов к новым испытаниям.\n\n"
             f"🔔 *Следи за обновлениями в канале:*\n"
-            f"👉 [Герой Пути | Dark Fantasy](https://t.me/hero_spath)"
+            f"👉 [Путь героя | Dark Fantasy](https://t.me/hero_spath)"
         )
         
         await update.message.reply_photo(
