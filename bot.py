@@ -603,6 +603,9 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
         [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu')], 
         [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],
+        # --- НОВАЯ КНОПКА ССЫЛКИ ---
+        [InlineKeyboardButton("📢 Новости и Обновления", url='https://t.me/hero_spath')],
+        # ---------------------------
         [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
     ]
     
@@ -714,8 +717,22 @@ def get_race_selection_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     char = database.get_character(user.id)
+    
     if char:
-        await update.message.reply_photo(IMAGE_URLS['village'], caption=f"С возвращением, {char['character_name']}! Темные времена настали, надеюсь ты готов к новым испытаниям.", reply_markup=get_main_menu_keyboard(user.id))
+        # Обновленный текст с ссылкой
+        txt = (
+            f"С возвращением, {char['character_name']}!\n"
+            f"Темные времена настали, надеюсь ты готов к новым испытаниям.\n\n"
+            f"🔔 *Следи за обновлениями в канале:*\n"
+            f"👉 [Герой Пути | Dark Fantasy](https://t.me/hero_spath)"
+        )
+        
+        await update.message.reply_photo(
+            IMAGE_URLS['village'], 
+            caption=txt, 
+            parse_mode='Markdown', # Важно для работы ссылки
+            reply_markup=get_main_menu_keyboard(user.id)
+        )
         return MAIN_MENU
     else:
         await update.message.reply_text("Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
