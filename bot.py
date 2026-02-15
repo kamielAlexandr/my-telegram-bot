@@ -80,6 +80,11 @@ RACE_ABILITIES = {
         40: {'key': 'd3', 'name': '🍺 Живая вода', 'mana': 50, 'cd': 5, 'type': 'heal', 'val': 1.0, 'desc': 'Полное восстановление здоровья.'}
     }
 }
+ELF_MAGIC_TYPES = {
+    'solar': {'name': '☀️ Магия Солнца', 'desc': 'Испепеляющий жар.'},
+    'lunar': {'name': '🌙 Магия Луны', 'desc': 'Холодный свет ночи.'},
+    'star':  {'name': '✨ Магия Звезд', 'desc': 'Космическая энергия.'}
+}
 # --- БАЗА ПРЕДМЕТОВ ---
 ITEMS_DB = {
     # --- ЕДА И ЗЕЛЬЯ ---
@@ -274,12 +279,29 @@ def calculate_player_dodge_chance(agility): return min(0.03 + (agility * 0.003),
 def calculate_crit_chance(agility): return min(0.03 + (agility * 0.002), 0.15)
 
 def calculate_damage(character, enemy, damage_type='physical'):
+    # Базовый урон от статов
     base_damage = max(1, character['strength' if damage_type == 'physical' else 'intelligence'] // 2)
+    
+    # --- БОНУС ЭЛЬФОВ ---
+    # Если атакует эльф и использует магию
+    if character.get('race') == 'elf' and damage_type == 'magic':
+        magic_type = character.get('elf_magic_type')
+        if magic_type: # Если магия выбрана
+            # Формула: (Уровень / 3) * 3. 
+            # Пример: 10 ур = +9 урона. 30 ур = +30 урона.
+            elf_bonus = (character['level'] // 3) * 3
+            base_damage += elf_bonus
+            # Можно даже немного увеличить разброс рандома для магии
+            
+    # Сопротивление врага
     res = enemy.get('physical_resistance' if damage_type == 'physical' else 'magic_resistance', 0.0)
+    
     damage = random.randint(int(base_damage*0.8), int(base_damage*1.2))
     damage = max(1, int(damage * (1 - res)))
+    
     is_crit = random.random() < calculate_crit_chance(character.get('agility', 8))
     if is_crit: damage = int(damage * 1.5)
+    
     return damage, is_crit
 
 def calculate_enemy_damage(enemy, character):
@@ -340,6 +362,11 @@ def get_main_menu_keyboard(user_id):
     ]
     if char and char['stat_points'] > 0:
         kb.insert(2, [InlineKeyboardButton(f"🌟 ПРОКАЧАТЬ ({char['stat_points']})", callback_data='level_up_menu')])
+    # --- НОВОЕ: Кнопка только для Эльфов ---
+    if char['race'] == 'elf':
+        kb.insert(1, [InlineKeyboardButton("🔮 Магия Древних", callback_data='elf_magic_menu')])
+    
+
     return InlineKeyboardMarkup(kb)
 
 def get_shop_categories_keyboard():
@@ -488,6 +515,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = f"🏪 *Мрачная лавка*\nТорговец смотрит на тебя из-под капюшона.\nЗолото: {char['gold']}💰"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
+    lif data == 'elf_magic_menu':
+        await elf_magic_menu_handler(update, context)
     elif data == 'craft_menu':
         await show_craft_menu(query, user_id)
         return CRAFT_MENU
@@ -1096,7 +1125,54 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return GUILD_MENU
 
+async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    # Защита: пускаем только эльфов
+    if char['race'] != 'elf':
+        await query.answer("Только эльфы могут управлять потоками магии!", show_alert=True)
+        return MAIN_MENU
 
+    # Обработка выбора
+    if query.data.startswith('set_magic_'):
+        m_type = query.data.split('_')[2]
+        database.set_elf_magic(user_id, m_type)
+        await query.answer(f"Вы постигли {ELF_MAGIC_TYPES[m_type]['name']}!", show_alert=True)
+        # Перезагружаем меню
+        await elf_magic_menu_handler(update, context)
+        return MAIN_MENU
+        
+    if query.data == 'back_to_main':
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    # ОТОБРАЖЕНИЕ МЕНЮ
+    current_magic = char.get('elf_magic_type')
+    magic_name = ELF_MAGIC_TYPES[current_magic]['name'] if current_magic else "Не выбрано"
+    
+    bonus = (char['level'] // 3) * 3 # +3 урона за каждые 3 уровня
+    
+    txt = (f"🧝‍♀️ *Тайные знания Эльфов*\n\n"
+           f"Ваша мудрость растет. Каждые 3 уровня магический урон увеличивается.\n"
+           f"Текущий бонус: *+{bonus} к урону магии*\n"
+           f"Выбранная стихия: *{magic_name}*\n\n"
+           f"Выберите источник силы:")
+           
+    kb = []
+    for k, v in ELF_MAGIC_TYPES.items():
+        icon = "✅ " if current_magic == k else ""
+        kb.append([InlineKeyboardButton(f"{icon}{v['name']}", callback_data=f"set_magic_{k}")])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    
+    # Картинка эльфа или мага
+    img = IMAGE_URLS.get('elf', IMAGE_URLS['mage'])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return MAIN_MENU # Используем состояние MAIN_MENU, чтобы не плодить лишние
+    
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
