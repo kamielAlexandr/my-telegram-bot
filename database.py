@@ -670,3 +670,45 @@ def set_elf_spell(user_id, spell_key):
             return True
     finally:
         conn.close()
+def check_inventory_space(user_id, item_type):
+    """
+    Проверяет, есть ли место для нового предмета.
+    Возвращает True, если место есть.
+    """
+    # ЛИМИТЫ
+    LIMITS = {
+        'weapon': 5,
+        'armor': 5
+    }
+    
+    # Если предмет не имеет лимита (зелья, материалы), всегда разрешаем
+    if item_type not in LIMITS:
+        return True
+        
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            # Считаем предметы этого типа
+            cursor.execute("""
+                SELECT COUNT(*) FROM player_inventory 
+                WHERE user_id = %s AND item_type = %s
+            """, (user_id, item_type))
+            
+            count = cursor.fetchone()[0]
+            
+            # Если вещей меньше лимита — возвращаем True
+            return count < LIMITS[item_type]
+    finally:
+        conn.close()
+
+def get_inventory_count(user_id, item_type):
+    """Возвращает количество предметов определенного типа (для отображения)"""
+    conn = get_connection()
+    if not conn: return 0
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM player_inventory WHERE user_id = %s AND item_type = %s", (user_id, item_type))
+            return cursor.fetchone()[0]
+    finally:
+        conn.close()
