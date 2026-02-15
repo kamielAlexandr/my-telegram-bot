@@ -1385,7 +1385,13 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = ITEMS_DB.get(item_key)
         
         if not item: return SHOP_MENU
-
+# --- НОВАЯ ПРОВЕРКА МЕСТА ---
+        if not database.check_inventory_space(user_id, item['type']):
+            limit = 5 # Наш лимит
+            type_name = "оружия" if item['type'] == 'weapon' else "брони"
+            await query.answer(f"🎒 Инвентарь переполнен!\nНельзя иметь больше {limit} ед. {type_name}.", show_alert=True)
+            return SHOP_MENU
+        # ---------------------------
         # Проверка ранга
         if item.get('rank'):
             ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
@@ -1473,7 +1479,10 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recipe_key = data.split('_', 1)[1] 
         
         recipe = CRAFT_RECIPES.get(recipe_key)
-        
+        if not database.check_inventory_space(user_id, result_item['type']):
+            await query.answer(f"🎒 Нет места для {result_item['name']}!\nПродайте старое снаряжение.", show_alert=True)
+            return CRAFT_MENU
+        # ----------------------------
         # Если рецепт не найден (например, старая кнопка), обновляем меню
         if not recipe: 
             await query.answer("Рецепт устарел или не найден.", show_alert=True)
@@ -1537,6 +1546,15 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer()
         await safe_edit(query, text="Главное меню", media=InputMediaPhoto(IMAGE_URLS['village'], caption="Главное меню", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+    w_count = database.get_inventory_count(user_id, 'weapon')
+    a_count = database.get_inventory_count(user_id, 'armor')
+    
+    # Формируем заголовок с лимитами
+    txt = (f"🎒 **ВАШ ИНВЕНТАРЬ**\n\n"
+           f"⚔️ Оружие: **{w_count}/5**\n"
+           f"🛡 Броня: **{a_count}/5**\n"
+           f"🧪 Прочее: Без лимита\n"
+           f"──────────────────\n")
     
     elif data.startswith('use_'):
         key = data.split('_', 1)[1]
