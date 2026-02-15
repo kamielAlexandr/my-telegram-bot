@@ -45,7 +45,7 @@ def init_db():
     if not conn: return
     try:
         with conn.cursor() as cursor:
-            # 1. Таблица персонажей
+            # 1. Создание основной таблицы (если нет)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS player_characters (
                     id SERIAL PRIMARY KEY,
@@ -77,7 +77,7 @@ def init_db():
                 )
             """)
             
-            # 2. Таблица инвентаря
+            # 2. Создание таблицы инвентаря (если нет)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS player_inventory (
                     id SERIAL PRIMARY KEY,
@@ -90,17 +90,39 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
-            # Индексы
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_inventory_user ON player_inventory (user_id, item_key)")
+
+            # --- 3. АВТОМАТИЧЕСКОЕ ДОБАВЛЕНИЕ НОВЫХ КОЛОНОК (МИГРАЦИЯ) ---
+            # Мы пытаемся добавить колонки. Если они есть — команда просто игнорируется или падает (мы ловим ошибку).
+            # Это "грязный", но простой способ обновить структуру без сложных миграций.
             
+            columns_to_add = [
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_target VARCHAR(50)",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_type VARCHAR(20)",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_goal INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_progress INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_reward_gold INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quest_reward_exp INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_quest_date DATE",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS daily_quests_data TEXT",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE"
+            ]
+            
+            for sql in columns_to_add:
+                try:
+                    cursor.execute(sql)
+                    conn.commit()
+                except Exception as e:
+                    # Если колонка уже есть или БД не поддерживает IF NOT EXISTS (старый postgres),
+                    # просто откатываем транзакцию и идем дальше
+                    conn.rollback() 
+
             conn.commit()
-            print("✅ База данных инициализирована (Dark Fantasy RPG).")
+            print("✅ База данных обновлена (структура проверена).")
     except Exception as e:
         print(f"❌ Ошибка init_db: {e}")
     finally:
         conn.close()
-
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def apply_regeneration(character):
