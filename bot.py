@@ -522,6 +522,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
+    if data == 'elf_magic_menu' or data.startswith('school_') or data.startswith('set_spell_'):
+        # Вызываем функцию меню магии (убедитесь, что она существует в коде выше или ниже)
+        await elf_magic_menu_handler(update, context)
+        return MAIN_MENU
     
     if data == 'profile':
         char = database.get_character(user_id)
