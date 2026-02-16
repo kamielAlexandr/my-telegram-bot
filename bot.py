@@ -1510,14 +1510,20 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # Б) Проверка: делал ли уже квест сегодня (завершенный)
+    # Б) Проверка: Достигнут ли лимит (2 задания в день)
     today = datetime.now().date()
     last_quest_done = char.get('last_quest_date')
+    quests_today = char.get('quests_completed_today', 0)
+
+    # Приводим дату к правильному формату, если она строка
     if isinstance(last_quest_done, str):
         last_quest_done = datetime.strptime(last_quest_done, '%Y-%m-%d').date()
         
-    if last_quest_done == today:
-        txt = "📜 *Доска пуста*\n\nМастер гильдии говорит: \"На сегодня работы нет. Приходи завтра!\""
+    # Если квест делали сегодня И их количество уже 2 (или больше)
+    if last_quest_done == today and quests_today >= 2:
+        txt = (f"📜 *Доска пуста*\n\n"
+               f"Вы выполнили {quests_today}/2 заданий на сегодня.\n"
+               f"Мастер гильдии говорит: \"Ты хорошо поработал. Отдохни до завтра!\"")
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
