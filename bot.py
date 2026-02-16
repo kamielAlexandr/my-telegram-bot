@@ -140,22 +140,21 @@ ITEMS_DB = {
     'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия. (+20 Силы)', 'price': 2500, 'type': 'weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
     'demon_slayer': {'name': '🔥 Убийца Демонов', 'desc': 'Пылает яростью. (+30 Силы)', 'price': 6000, 'type': 'weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'god_killer': {'name': '⚡ Гнев Титана', 'desc': 'Раскалывает небо. (+50 Силы)', 'price': 15000, 'type': 'weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
-    # --- МАГИЧЕСКОЕ ОРУЖИЕ (ПОСОХИ) ---
-    'wooden_staff': {'name': '🔮 Посох ученика', 'desc': 'Деревянная палка. (+5 Инт)', 'price': 150, 'type': 'magic_weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
-    'acolyte_wand': {'name': '🔮 Жезл Аколита', 'desc': 'Искрится магией. (+10 Инт)', 'price': 400, 'type': 'magic_weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
-    'crystal_staff': {'name': '💠 Кристальный посох', 'desc': 'Фокусирует энергию. (+15 Инт)', 'price': 900, 'type': 'magic_weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
-    'void_scepter': {'name': '🌑 Скипетр Пустоты', 'desc': 'Излучает тьму. (+20 Инт)', 'price': 2500, 'type': 'magic_weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
-    'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем. (+30 Инт)', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
-    'world_tree_branch': {'name': '🌿 Ветвь Древа Жизни', 'desc': 'Сила самой природы. (+50 Инт)', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
-    
-    # --- БРОНЯ ---
-    'leather_vest': {'name': '🛡️ Шкура волка', 'desc': 'Греет. (+3 ХП)', 'price': 120, 'type': 'armor', 'effect': 3, 'cat': 'armor', 'rank': 'E'},
-    'chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Надежная. (+8 ХП)', 'price': 350, 'type': 'armor', 'effect': 8, 'cat': 'armor', 'rank': 'D'},
-    'plate_armor': {'name': '🛡️ Латы Крестоносца', 'desc': 'Освященная сталь. (+15 ХП)', 'price': 850, 'type': 'armor', 'effect': 15, 'cat': 'armor', 'rank': 'C'},
-    'mithril_armor': {'name': '💠 Доспех Ночи', 'desc': 'Сливается с тенями. (+25 ХП)', 'price': 2200, 'type': 'armor', 'effect': 25, 'cat': 'armor', 'rank': 'B'},
-    'dragon_mail': {'name': '🐉 Чешуя Дракона', 'desc': 'Легендарная. (+40 ХП)', 'price': 5500, 'type': 'armor', 'effect': 40, 'cat': 'armor', 'rank': 'A'},
-    'void_plate': {'name': '🌌 Доспех Пустоты', 'desc': 'Сама тьма. (+70 ХП)', 'price': 12000, 'type': 'armor', 'effect': 70, 'cat': 'armor', 'rank': 'S'},
+    # --- ОРУЖИЕ ---
+    'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца.', 'price': 150, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
+    'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови.', 'price': 400, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
+    'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря.', 'price': 900, 'type': 'weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
+    'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия.', 'price': 2500, 'type': 'weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
+    'demon_slayer': {'name': '🔥 Убийца Демонов', 'desc': 'Пылает яростью.', 'price': 6000, 'type': 'weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
+    'god_killer': {'name': '⚡ Гнев Титана', 'desc': 'Раскалывает небо.', 'price': 15000, 'type': 'weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
 
+    # --- МАГИЧЕСКОЕ ОРУЖИЕ (ПОСОХИ) ---
+    'wooden_staff': {'name': '🔮 Посох ученика', 'desc': 'Деревянная палка.', 'price': 150, 'type': 'magic_weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
+    'acolyte_wand': {'name': '🔮 Жезл Аколита', 'desc': 'Искрится магией.', 'price': 400, 'type': 'magic_weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
+    'crystal_staff': {'name': '💠 Кристальный посох', 'desc': 'Фокусирует энергию.', 'price': 900, 'type': 'magic_weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
+    'void_scepter': {'name': '🌑 Скипетр Пустоты', 'desc': 'Излучает тьму.', 'price': 2500, 'type': 'magic_weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
+    'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
+    'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
     # --- АКСЕССУАРЫ ---
     'wooden_ring': {'name': '💍 Кольцо из корня', 'desc': 'Слабый оберег. (+2 Инт)', 'price': 200, 'type': 'artifact', 'effect': 2, 'cat': 'acc', 'rank': 'E'},
     'silver_amulet': {'name': '🧿 Глаз Ведьмы', 'desc': 'Смотрит в душу. (+5 Инт)', 'price': 500, 'type': 'artifact', 'effect': 5, 'cat': 'acc', 'rank': 'D'},
