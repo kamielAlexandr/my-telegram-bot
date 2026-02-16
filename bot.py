@@ -1424,18 +1424,13 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = query.data
     user_id = query.from_user.id
     
-    # ВАЖНО: Мы НЕ вызываем query.answer() здесь, 
-    # чтобы иметь возможность показать всплывающее окно (alert) позже.
-
-    # --- 1. КНОПКА НАЗАД ---
+    # 1. Кнопка НАЗАД (Самая первая!)
     if data == 'back_to_main':
-        await query.answer() # Здесь отвечаем, так как просто переходим
+        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # --- 2. ОБРАБОТКА ДЕЙСТВИЙ ---
-    
-    # А) Взятие квеста
+    # 2. ОБРАБОТКА ДЕЙСТВИЙ
     if data.startswith('take_quest_'):
         parts = data.split('_')
         try:
@@ -1446,108 +1441,89 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             q_target = "_".join(parts[3:-3])
             
             database.take_quest(user_id, q_type, q_target, q_goal, q_gold, q_exp)
-            
             await query.answer("✅ Контракт подписан!", show_alert=True)
-            
         except Exception as e:
-            print(f"Quest error: {e}")
             await query.answer("Ошибка контракта.", show_alert=True)
 
-    # Б) Обновление заданий (Reroll)
     elif data == 'reroll_quests':
         char = database.get_character(user_id)
-        reroll_price = 50
-        if char['gold'] >= reroll_price:
-            database.add_gold(user_id, -reroll_price)
+        if char['gold'] >= 50:
+            database.add_gold(user_id, -50)
             new_quests = generate_daily_quests(char['rank'])
             database.save_daily_quests(user_id, new_quests)
-            await query.answer(f"🔄 Список обновлен! (-{reroll_price}g)", show_alert=True)
+            await query.answer("🔄 Список обновлен! (-50g)", show_alert=True)
         else:
-            await query.answer(f"💸 Не хватает золота! Нужно {reroll_price}g", show_alert=True)
+            await query.answer("💸 Не хватает золота!", show_alert=True)
 
-    # В) Завершение квеста (ИСПРАВЛЕНО)
     elif data == 'complete_quest':
-        # Вызываем БД
         success, msg = database.complete_quest(user_id)
-        
         if success:
             await query.answer("🏆 Награда получена!", show_alert=True)
-            # Возвращаем в деревню после победы
             await safe_edit(query, text=msg, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         else:
-            # Если ошибка (не выполнено), показываем алерт
             await query.answer(f"❌ {msg}", show_alert=True)
-            # И код пойдет дальше вниз, чтобы просто обновить меню (если нужно)
 
-    # Если мы не попали ни в одно действие, нужно всё-таки ответить Telegram,
-    # чтобы убрать часики (например, если просто обновляем страницу)
-    try:
-        await query.answer()
-    except:
-        pass
+    try: await query.answer()
+    except: pass
 
-    # --- 3. ЛОГИКА ОТРИСОВКИ (VIEW) ---
+    # 3. ОТРИСОВКА МЕНЮ
     char = database.get_character(user_id)
 
-    # СЦЕНАРИЙ 1: У ИГРОКА ЕСТЬ АКТИВНЫЙ КВЕСТ
+    # А) Если есть активный квест
     if char.get('quest_target'):
-        target_name = ""
-        progress_txt = ""
-        
-        if char['quest_type'] == 'kill':
-            mob_info = BASE_ENEMIES.get(char['quest_target'])
-            target_name = mob_info['name'] if mob_info else char['quest_target']
-            progress_txt = f"☠️ Убито: {char['quest_progress']}/{char['quest_goal']}"
+        target_name = char['quest_target']
+        # Пробуем найти красивое имя
+        if char['quest_type'] == 'kill' and char['quest_target'] in BASE_ENEMIES:
+            target_name = BASE_ENEMIES[char['quest_target']]['name']
+            prog_txt = f"☠️ Убито: {char['quest_progress']}/{char['quest_goal']}"
         else:
-            item_info = ITEMS_DB.get(char['quest_target'])
-            target_name = item_info['name'] if item_info else char['quest_target']
+            item = ITEMS_DB.get(char['quest_target'])
+            if item: target_name = item['name']
+            
+            # Считаем предметы в инвентаре
+            inv_qty = database.get_inventory_count(user_id, 'material') # Это заглушка, лучше перебором
+            # Точный подсчет:
             items = database.get_inventory(user_id)
-            inv_qty = 0
+            curr = 0
             for i in items:
                 if i['item_key'] == char['quest_target']:
-                    inv_qty = i['quantity']
+                    curr = i['quantity']
                     break
-            progress_txt = f"🎒 Собрано: {inv_qty}/{char['quest_goal']}"
-        
+            prog_txt = f"🎒 Собрано: {curr}/{char['quest_goal']}"
+
         txt = (f"📜 *ТЕКУЩИЙ КОНТРАКТ*\n\n"
-               f"Цель: {target_name}\n"
-               f"{progress_txt}\n\n"
-               f"💰 Награда: {char['quest_reward_gold']}g | 📚 {char['quest_reward_exp']}xp")
+               f"Цель: {target_name}\n{prog_txt}\n\n"
+               f"💰 {char['quest_reward_gold']}g | 📚 {char['quest_reward_exp']}xp")
         
         kb = [[InlineKeyboardButton("✅ Завершить задание", callback_data='complete_quest')],
               [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
-              
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # СЦЕНАРИЙ 2: КВЕСТА НЕТ. ПРОВЕРЯЕМ ЛИМИТ (2 В ДЕНЬ)
+    # Б) Если квеста нет - проверяем лимит (2 в день)
     today = datetime.now().date()
-    last_quest_done = char.get('last_quest_date')
-    quests_today = char.get('quests_completed_today', 0)
+    last_date = char.get('last_quest_date')
+    done_today = char.get('quests_completed_today', 0)
 
-    if isinstance(last_quest_done, str):
-        try:
-            last_quest_done = datetime.strptime(last_quest_done, '%Y-%m-%d').date()
-        except:
-            pass
-        
-    if last_quest_done == today and quests_today >= 2:
-        txt = (f"📜 *Доска пуста*\n\n"
-               f"Вы выполнили {quests_today}/2 заданий на сегодня.\n"
-               f"Мастер гильдии говорит: \"Ты хорошо поработал. Отдохни до завтра!\"")
-        
+    # Парсинг даты
+    if isinstance(last_date, str):
+        try: last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
+        except: pass
+    
+    if last_date == today and done_today >= 2:
+        txt = (f"📜 *ГИЛЬДИЯ ЗАКРЫТА*\n\n"
+               f"Вы выполнили {done_today}/2 заданий сегодня.\n"
+               f"Мастер говорит: \"Хватит геройствовать, иди проспись!\"")
         kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # СЦЕНАРИЙ 3: ДОСКА ОБЪЯВЛЕНИЙ
+    # В) Показываем доску
     stored_quests, last_refresh = database.get_stored_quests(user_id)
     if isinstance(last_refresh, str):
-        try:
-            last_refresh = datetime.strptime(last_refresh, '%Y-%m-%d').date()
-        except:
-            pass
+        try: last_refresh = datetime.strptime(last_refresh, '%Y-%m-%d').date()
+        except: pass
 
     quests_to_show = []
     if stored_quests and last_refresh == today:
@@ -1556,8 +1532,8 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         quests_to_show = generate_daily_quests(char['rank'])
         database.save_daily_quests(user_id, quests_to_show)
 
-    status_today = f"Выполнено сегодня: {quests_today}/2"
-    txt = f"📜 *ДОСКА ОБЪЯВЛЕНИЙ*\nВыберите задание.\n_{status_today}_"
+    status = f"Выполнено сегодня: {done_today}/2"
+    txt = f"📜 *ДОСКА ОБЪЯВЛЕНИЙ*\nВыберите контракт.\n_{status}_"
     
     kb = []
     for q in quests_to_show:
@@ -1570,6 +1546,7 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return GUILD_MENU
+    
 
 async def elf_magic_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
