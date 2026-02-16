@@ -109,6 +109,7 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)",
                 # В списке columns_to_add:
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0"
             ]
             
             for sql in columns_to_add:
@@ -561,63 +562,68 @@ def update_quest_progress(user_id, amount=1):
         conn.close()
 
 def complete_quest(user_id):
-    """Завершаем квест и выдаем награду (с проверкой выполнения)"""
+    """Завершаем квест с учетом лимита (2 раза в день)"""
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
     try:
         with conn.cursor() as cursor:
-            # 1. Запрашиваем данные, ВКЛЮЧАЯ ТЕКУЩИЙ ПРОГРЕСС
+            # 1. Получаем текущие данные квеста и дату последнего выполнения
             cursor.execute("""
-                SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress 
+                SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, last_quest_date, quests_completed_today
                 FROM player_characters 
                 WHERE user_id=%s
             """, (user_id,))
             
             res = cursor.fetchone()
-            if not res or not res[2]: # Если квеста нет (quest_type is NULL)
+            if not res or not res[2]: 
                 return False, "У вас нет активного задания."
             
-            gold, exp, q_type, target, goal, progress = res
+            gold, exp, q_type, target, goal, progress, last_date, daily_count = res
             
             # --- ПРОВЕРКА ВЫПОЛНЕНИЯ ---
-            
-            # А) Для квеста на убийство
             if q_type == 'kill':
                 if progress < goal:
                     return False, f"Задание еще не выполнено! Убито: {progress}/{goal}"
 
-            # Б) Для квеста на сбор предметов
             elif q_type == 'collect':
-                # Проверяем наличие в инвентаре
+                # Проверяем инвентарь
                 cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, target))
                 inv_res = cursor.fetchone()
-                
-                # Если предмета нет или его мало
                 current_qty = inv_res[1] if inv_res else 0
-                if current_qty < goal:
-                    # Получаем красивое имя для ошибки (опционально, но полезно)
-                    # item_name = ... (можно не делать запрос, просто вернуть ошибку)
-                    return False, f"Не хватает предметов в сумке! ({current_qty}/{goal})"
                 
-                # Если хватает — забираем предметы
+                if current_qty < goal:
+                    return False, f"Не хватает предметов! ({current_qty}/{goal})"
+                
+                # Забираем предметы
                 item_id = inv_res[0]
                 if current_qty == goal:
                     cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
                 else:
                     cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
             
-            # 3. ВЫДАЧА НАГРАДЫ
-            # Обнуляем квест и ставим сегодняшнюю дату
+            # --- РАСЧЕТ СЧЕТЧИКА ДНЕВНЫХ КВЕСТОВ ---
+            today = datetime.now().date()
+            new_count = 1
+            
+            # Если дата последнего квеста совпадает с сегодня, увеличиваем счетчик
+            if last_date == today:
+                new_count = (daily_count or 0) + 1
+            else:
+                # Если новый день, сбрасываем на 1
+                new_count = 1
+
+            # 3. ВЫДАЧА НАГРАДЫ И ОБНОВЛЕНИЕ
             cursor.execute("""
                 UPDATE player_characters 
                 SET gold = gold + %s, experience = experience + %s,
                     quest_type = NULL, quest_target = NULL, quest_goal = 0, quest_progress = 0,
-                    last_quest_date = CURRENT_DATE
+                    last_quest_date = CURRENT_DATE,
+                    quests_completed_today = %s
                 WHERE user_id=%s
-            """, (gold, exp, user_id))
+            """, (gold, exp, new_count, user_id))
             
             conn.commit()
-            return True, f"Задание выполнено!\nПолучено: {gold}g и {exp}xp"
+            return True, f"Задание выполнено! ({new_count}/2 за сегодня)\nПолучено: {gold}g и {exp}xp"
             
     except Exception as e:
         print(f"Complete quest error: {e}")
