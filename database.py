@@ -567,7 +567,7 @@ def complete_quest(user_id):
     if not conn: return False, "Ошибка БД"
     try:
         with conn.cursor() as cursor:
-            # 1. Получаем текущие данные квеста и дату последнего выполнения
+            # 1. Получаем данные
             cursor.execute("""
                 SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, last_quest_date, quests_completed_today
                 FROM player_characters 
@@ -592,7 +592,8 @@ def complete_quest(user_id):
                 current_qty = inv_res[1] if inv_res else 0
                 
                 if current_qty < goal:
-                    return False, f"Не хватает предметов! ({current_qty}/{goal})"
+                    # Пытаемся найти красивое имя предмета для ошибки
+                    return False, f"Не хватает предметов! В сумке: {current_qty}/{goal}.\n(Возможно, вы их продали?)"
                 
                 # Забираем предметы
                 item_id = inv_res[0]
@@ -601,18 +602,27 @@ def complete_quest(user_id):
                 else:
                     cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
             
-            # --- РАСЧЕТ СЧЕТЧИКА ДНЕВНЫХ КВЕСТОВ ---
+            # --- РАСЧЕТ ДНЕВНОГО ЛИМИТА (ИСПРАВЛЕНО) ---
             today = datetime.now().date()
+            
+            # Превращаем дату из строки в объект, если нужно
+            if isinstance(last_date, str):
+                try:
+                    last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
+                except ValueError:
+                    pass # Если формат кривой, last_date останется строкой и проверка ниже не сработает (сбросит на 1)
+
             new_count = 1
             
-            # Если дата последнего квеста совпадает с сегодня, увеличиваем счетчик
+            # Если дата совпадает — увеличиваем счетчик
             if last_date == today:
+                # (daily_count or 0) защищает от NULL в базе
                 new_count = (daily_count or 0) + 1
             else:
-                # Если новый день, сбрасываем на 1
+                # Новый день — сбрасываем на 1
                 new_count = 1
 
-            # 3. ВЫДАЧА НАГРАДЫ И ОБНОВЛЕНИЕ
+            # 3. ОБНОВЛЕНИЕ БАЗЫ
             cursor.execute("""
                 UPDATE player_characters 
                 SET gold = gold + %s, experience = experience + %s,
@@ -623,11 +633,11 @@ def complete_quest(user_id):
             """, (gold, exp, new_count, user_id))
             
             conn.commit()
-            return True, f"Задание выполнено! ({new_count}/2 за сегодня)\nПолучено: {gold}g и {exp}xp"
+            return True, f"✅ Задание выполнено! ({new_count}/2 за сегодня)\nНаграда: {gold}g и {exp}xp"
             
     except Exception as e:
         print(f"Complete quest error: {e}")
-        return False, "Ошибка при завершении квеста."
+        return False, "Ошибка выполнения квеста."
     finally:
         conn.close()
         
