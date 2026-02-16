@@ -564,17 +564,22 @@ def update_quest_progress(user_id, amount=1):
 def complete_quest(user_id):
     """Завершаем квест с учетом лимита (2 раза в день)"""
     conn = get_connection()
-    if not conn: return False, "Ошибка БД"
+    if not conn: return False, "Ошибка подключения к БД"
     try:
         with conn.cursor() as cursor:
             # 1. Получаем данные
-            cursor.execute("""
-                SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, last_quest_date, quests_completed_today
-                FROM player_characters 
-                WHERE user_id=%s
-            """, (user_id,))
-            
-            res = cursor.fetchone()
+            try:
+                cursor.execute("""
+                    SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, last_quest_date, quests_completed_today
+                    FROM player_characters 
+                    WHERE user_id=%s
+                """, (user_id,))
+                res = cursor.fetchone()
+            except Exception as e:
+                # Если колонка quests_completed_today не создалась, это спасет от краша
+                conn.rollback()
+                return False, "Ошибка структуры БД. Перезапустите бота (init_db)."
+
             if not res or not res[2]: 
                 return False, "У вас нет активного задания."
             
@@ -583,46 +588,39 @@ def complete_quest(user_id):
             # --- ПРОВЕРКА ВЫПОЛНЕНИЯ ---
             if q_type == 'kill':
                 if progress < goal:
-                    return False, f"Задание еще не выполнено! Убито: {progress}/{goal}"
+                    return False, f"Еще не выполнено! Убито: {progress}/{goal}"
 
             elif q_type == 'collect':
-                # Проверяем инвентарь
                 cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, target))
                 inv_res = cursor.fetchone()
                 current_qty = inv_res[1] if inv_res else 0
                 
                 if current_qty < goal:
-                    # Пытаемся найти красивое имя предмета для ошибки
-                    return False, f"Не хватает предметов! В сумке: {current_qty}/{goal}.\n(Возможно, вы их продали?)"
+                    return False, f"Не хватает предметов! ({current_qty}/{goal})"
                 
-                # Забираем предметы
                 item_id = inv_res[0]
                 if current_qty == goal:
                     cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
                 else:
                     cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
             
-            # --- РАСЧЕТ ДНЕВНОГО ЛИМИТА (ИСПРАВЛЕНО) ---
+            # --- РАСЧЕТ ДНЕВНОГО ЛИМИТА ---
             today = datetime.now().date()
             
-            # Превращаем дату из строки в объект, если нужно
+            # Приводим last_date к типу date, если это строка
             if isinstance(last_date, str):
                 try:
                     last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
-                except ValueError:
-                    pass # Если формат кривой, last_date останется строкой и проверка ниже не сработает (сбросит на 1)
+                except:
+                    pass # Если ошибка парсинга, считаем, что даты не совпадают
 
             new_count = 1
-            
-            # Если дата совпадает — увеличиваем счетчик
             if last_date == today:
-                # (daily_count or 0) защищает от NULL в базе
                 new_count = (daily_count or 0) + 1
             else:
-                # Новый день — сбрасываем на 1
                 new_count = 1
 
-            # 3. ОБНОВЛЕНИЕ БАЗЫ
+            # 3. ОБНОВЛЕНИЕ
             cursor.execute("""
                 UPDATE player_characters 
                 SET gold = gold + %s, experience = experience + %s,
@@ -636,8 +634,8 @@ def complete_quest(user_id):
             return True, f"✅ Задание выполнено! ({new_count}/2 за сегодня)\nНаграда: {gold}g и {exp}xp"
             
     except Exception as e:
-        print(f"Complete quest error: {e}")
-        return False, "Ошибка выполнения квеста."
+        print(f"Quest Error: {e}")
+        return False, f"Сбой: {e}"
     finally:
         conn.close()
         
