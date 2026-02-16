@@ -1751,35 +1751,53 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SHOP_MENU
 
     # 5. КАТЕГОРИИ
+    # 5. КАТЕГОРИИ (БЕЗОПАСНАЯ ВЕРСИЯ)
     elif data.startswith('shop_cat_'):
         await query.answer()
-        cat = data.split('_')[2]
-        cat_names = {'food': '🍖 Еда', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
-        
-        txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n_Баланс: {char['gold']}g_\n\n"
-        items_found = False
-        
-        for key, item in ITEMS_DB.items():
-            if item.get('cat') == cat:
-                items_found = True
-                effect_str = ""
-                if item.get('effect'):
-                    if item['type'] == 'weapon':       effect_str = f" (+{item['effect']} ⚔️)"
-                    elif item['type'] == 'magic_weapon': effect_str = f" (+{item['effect']} 🔮)"
-                    elif item['type'] == 'armor':      effect_str = f" (+{item['effect']} 🛡)"
-                    elif item['type'] == 'artifact':   effect_str = f" (+{item['effect']} 🧠)"
-                    elif item['type'] == 'food':       effect_str = f" (+{item['effect']} ❤️)"
-                    elif item['type'] == 'potion':     effect_str = f" (Эффект: {item['effect']})"
+        try:
+            cat = data.split('_')[2]
+            cat_names = {'food': '🍖 Еда', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
+            
+            txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n_Баланс: {char['gold']}g_\n\n"
+            items_found = False
+            
+            for key, item in ITEMS_DB.items():
+                # Проверяем, относится ли предмет к этой категории
+                if item.get('cat') == cat:
+                    items_found = True
+                    effect_str = ""
+                    
+                    # Безопасное получение типа и эффекта
+                    itype = item.get('type', 'unknown')
+                    ieffect = item.get('effect', 0)
+                    
+                    if ieffect:
+                        if itype == 'weapon':       effect_str = f" (+{ieffect} ⚔️)"
+                        elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
+                        elif itype == 'armor':      effect_str = f" (+{ieffect} 🛡)"
+                        elif itype == 'artifact':   effect_str = f" (+{ieffect} 🧠)"
+                        elif itype == 'food':       effect_str = f" (+{ieffect} ❤️)"
+                        elif itype == 'potion':     effect_str = f" (Эффект: {ieffect})"
 
-                # Добавляем инфо о ранге в текст
-                rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
-                txt += f"▪️ *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
+                    # Безопасное получение ранга
+                    rank_str = ""
+                    if item.get('rank'):
+                        rank_str = f" [Ранг {item['rank']}]"
 
-        if not items_found: txt += "В этой категории пока пусто..."
-        if len(txt) > 1000: txt = txt[:1000] + "..."
+                    txt += f"▪️ *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
 
-        media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
-        await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
+            if not items_found: txt += "В этой категории пока пусто..."
+            
+            # Обрезаем текст, если он слишком длинный для Телеграма
+            if len(txt) > 1000: txt = txt[:1000] + "..."
+
+            media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
+            await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
+            
+        except Exception as e:
+            print(f"ОШИБКА В МАГАЗИНЕ: {e}")
+            await query.answer("Ошибка данных магазина. См. консоль.", show_alert=True)
+            
         return SHOP_MENU
     
     # 6. ПОКУПКА (ИСПРАВЛЕНО: ВЕРНУЛИ ПРОВЕРКУ РАНГА)
