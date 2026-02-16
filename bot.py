@@ -1674,77 +1674,65 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    # 1. КНОПКА НАЗАД (ВОЗВРАТ В ДЕРЕВНЮ)
+    # 1. КНОПКА НАЗАД
     if data == 'back_to_main':
         await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # 2. ГЛАВНОЕ МЕНЮ МАГАЗИНА (КАТЕГОРИИ)
+    # 2. ГЛАВНОЕ МЕНЮ
     elif data == 'shop': 
         await query.answer()
         txt = f"🏪 *Мрачная лавка*\nЗолото: {char['gold']}💰\nЧего желаете?"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
 
-    # --- 3. ОТКРЫТИЕ МЕНЮ ПРОДАЖИ ---
+    # 3. МЕНЮ ПРОДАЖИ
     elif data == 'shop_sell_menu':
         await query.answer()
         await render_sell_menu(query, user_id)
         return SHOP_MENU
 
-    # --- 4. ОБРАБОТКА ПРОДАЖИ ПРЕДМЕТА ---
+    # 4. ОБРАБОТКА ПРОДАЖИ
     elif data.startswith('sell_item_'):
         item_key = data.split('_', 2)[2]
         item_info = ITEMS_DB.get(item_key)
         
         if not item_info:
-            await query.answer("Ошибка: предмет не найден.", show_alert=True)
-            # Обновляем меню на всякий случай
+            await query.answer("Ошибка предмета.", show_alert=True)
             await render_sell_menu(query, user_id) 
             return SHOP_MENU
             
-        # Считаем, сколько статов нужно ОТНЯТЬ (если продаем надетую экипировку)
         stat_changes = {}
         if item_info.get('effect'):
             eff = item_info['effect']
-            
             if item_info['type'] == 'weapon':
                 stat_changes['strength'] = -eff
-                
             elif item_info['type'] == 'magic_weapon':
-                # Посох давал +Инт и +Ману. Отнимаем.
                 stat_changes['intelligence'] = -eff
                 stat_changes['max_mana'] = -(eff * 3)
                 stat_changes['mana'] = -(eff * 3)
-                
             elif item_info['type'] == 'armor':
                 stat_changes['max_health'] = -eff
                 stat_changes['health'] = -eff
                 stat_changes['vitality'] = -max(1, int(eff / 10))
-                
             elif item_info['type'] in ['artifact', 'acc']:
                 stat_changes['intelligence'] = -eff
                 stat_changes['max_mana'] = -(eff * 5)
                 stat_changes['mana'] = -(eff * 5)
 
-        # Цена продажи
         sell_price = max(1, item_info['price'] // 2)
 
-        # Выполняем продажу в БД
-        # (Функция execute_sell должна быть в database.py)
         success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
         
         if success:
             await query.answer(f"💰 Продано: {item_info['name']} (+{sell_price}g)", show_alert=True)
-            # ВАЖНО: Обновляем меню, чтобы убрать проданный предмет и обновить золото
             await render_sell_menu(query, user_id)
         else:
             await query.answer(f"Ошибка: {msg}", show_alert=True)
-            
         return SHOP_MENU
 
-    # 5. ПРОСМОТР КАТЕГОРИИ ПОКУПКИ
+    # 5. КАТЕГОРИИ
     elif data.startswith('shop_cat_'):
         await query.answer()
         cat = data.split('_')[2]
@@ -1756,8 +1744,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for key, item in ITEMS_DB.items():
             if item.get('cat') == cat:
                 items_found = True
-                
-                # Формируем описание бонусов
                 effect_str = ""
                 if item.get('effect'):
                     if item['type'] == 'weapon':       effect_str = f" (+{item['effect']} ⚔️)"
@@ -1767,7 +1753,9 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     elif item['type'] == 'food':       effect_str = f" (+{item['effect']} ❤️)"
                     elif item['type'] == 'potion':     effect_str = f" (Эффект: {item['effect']})"
 
-                txt += f"▪️ *{item['name']}* — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
+                # Добавляем инфо о ранге в текст
+                rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
+                txt += f"▪️ *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
 
         if not items_found: txt += "В этой категории пока пусто..."
         if len(txt) > 1000: txt = txt[:1000] + "..."
@@ -1776,7 +1764,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
         return SHOP_MENU
     
-    # 6. ПОКУПКА ПРЕДМЕТА
+    # 6. ПОКУПКА (ИСПРАВЛЕНО: ВЕРНУЛИ ПРОВЕРКУ РАНГА)
     elif data.startswith('buy_'):
         item_key = data.split('_', 1)[1]
         item = ITEMS_DB.get(item_key)
@@ -1785,39 +1773,46 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Товар не найден.")
             return SHOP_MENU
 
-        # --- ПРОВЕРКА ЛИМИТА ИНВЕНТАРЯ (5 ШТ) ---
+        # --- [ВЕРНУЛИ ЭТОТ БЛОК] ПРОВЕРКА РАНГА ---
+        if item.get('rank'):
+            ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+            try:
+                p_rank_idx = ranks_order.index(char['rank'])
+                i_rank_idx = ranks_order.index(item['rank'])
+                
+                # Если ранг игрока (например E=0) меньше ранга предмета (например D=1)
+                if p_rank_idx < i_rank_idx:
+                    await query.answer(f"🔒 Недоступно! Нужен ранг {item['rank']}", show_alert=True)
+                    return SHOP_MENU
+            except ValueError:
+                pass # Если ранга нет в списке, разрешаем
+        # ------------------------------------------
+
+        # Проверка лимита инвентаря
         if item['type'] in ['weapon', 'magic_weapon', 'armor']:
              items = database.get_inventory(user_id)
-             # Считаем оружие вместе (обычное + магическое) или броню
-             if item['type'] in ['weapon', 'magic_weapon']:
-                 target_types = ['weapon', 'magic_weapon']
-             else:
-                 target_types = ['armor']
-             
+             target_types = ['weapon', 'magic_weapon'] if item['type'] in ['weapon', 'magic_weapon'] else ['armor']
              count = 0
              for i in items:
                  info = ITEMS_DB.get(i['item_key'])
                  if info and info['type'] in target_types:
                      count += i['quantity']
-                     
              if count >= 5:
-                 await query.answer("🎒 Слот переполнен! (Макс 5 шт. оружия/брони)", show_alert=True)
+                 await query.answer("🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
                  return SHOP_MENU
-        # ----------------------------------------
 
+        # Проверка золота
         if char['gold'] >= item['price']:
             res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
             await query.answer(msg, show_alert=True)
             
-            # Обновляем категорию (чтобы обновился баланс золота в тексте)
-            # Мы меняем data на код категории и рекурсивно вызываем shop_handler
+            # Обновляем категорию
             query.data = f"shop_cat_{item['cat']}"
             await shop_handler(update, context)
         else:
             await query.answer("💸 Не хватает золота!", show_alert=True)
             
     return SHOP_MENU
-
 
 
 async def show_craft_menu(query, user_id):
