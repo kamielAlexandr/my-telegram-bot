@@ -108,7 +108,7 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)",
                 # В списке columns_to_add:
-                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0"
             ]
             
