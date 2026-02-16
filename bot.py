@@ -1956,79 +1956,79 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
- # 2. КНОПКА НАЗАД
+    
+    # 1. КНОПКА НАЗАД (Всегда первая!)
     if data == 'back_to_main':
-        await query.answer() # Останавливаем часики
+        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
-    
-    # 1. ИСПОЛЬЗОВАНИЕ (Еда и Зелья)
+
+    # 2. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА
     if data.startswith('use_'):
-        # Получаем ключ предмета (защита от имен с подчеркиванием)
         try:
             item_key = data.split('_', 1)[1]
-        except IndexError:
-            await query.answer("Ошибка данных предмета.", show_alert=True)
-            return INVENTORY_MENU
-
-        # Ищем предмет в базе данных игры (характеристики)
-        item_info = ITEMS_DB.get(item_key)
-        if not item_info:
-            await query.answer("Этот предмет устарел или удален.", show_alert=True)
-            return INVENTORY_MENU
-
-        # --- ИСПРАВЛЕНИЕ: Разрешаем и 'potion', и 'food' ---
-        if item_info['type'] in ['potion', 'food']:
-            char = database.get_character(user_id)
+            item_info = ITEMS_DB.get(item_key)
             
-            # Проверяем наличие предмета в инвентаре игрока
-            items = database.get_inventory(user_id)
-            has_item = False
-            for i in items:
-                if i['item_key'] == item_key:
-                    has_item = True
-                    break
+            if not item_info:
+                await query.answer("Ошибка: предмет не найден.", show_alert=True)
+                # Не делаем return, пусть меню обновится
             
-            if not has_item:
-                await query.answer("Предмет закончился!", show_alert=True)
-                await inventory_menu_handler(update, context) # Обновляем вид
-                return INVENTORY_MENU
-
-            # Эффект восстановления
-            effect = item_info.get('effect', 0)
+            elif item_info['type'] not in ['potion', 'food']:
+                await query.answer("Это нельзя съесть или выпить.", show_alert=True)
             
-            # Проверка полного здоровья
-            if char['health'] >= char['max_health']:
-                await query.answer("Вы полностью здоровы и сыты!", show_alert=True)
-                return INVENTORY_MENU
+            else:
+                # Проверяем наличие в базе
+                items = database.get_inventory(user_id)
+                # Ищем предмет в списке
+                has_item = False
+                for i in items:
+                    if i['item_key'] == item_key:
+                        has_item = True
+                        break
                 
-            # Применяем лечение
-            new_hp = min(char['max_health'], char['health'] + effect)
-            database.update_character_stats(user_id, health=new_hp)
-            
-            # Удаляем 1 единицу
-            database.remove_item(user_id, item_key, 1)
-            
-            await query.answer(f"😋 Использовано: {item_info['name']}\nВосстановлено: +{effect} HP", show_alert=True)
-            await inventory_menu_handler(update, context)
-            return INVENTORY_MENU
-            
-        else:
-            await query.answer(f"Нельзя использовать {item_info['name']}.\nТип: {item_info['type']}", show_alert=True)
-            return INVENTORY_MENU
+                if not has_item:
+                    await query.answer("Предмет закончился!", show_alert=True)
+                else:
+                    # Проверяем здоровье/ману
+                    char = database.get_character(user_id)
+                    effect = item_info.get('effect', 0)
+                    
+                    # Логика для маны и здоровья
+                    is_mana = 'mana' in item_key or 'mp' in item_key
+                    
+                    if is_mana:
+                        if char['mana'] >= char['max_mana']:
+                            await query.answer("Мана полная!", show_alert=True)
+                        else:
+                            new_mp = min(char['max_mana'], char['mana'] + effect)
+                            database.update_character_stats(user_id, mana=new_mp)
+                            database.remove_item(user_id, item_key, 1)
+                            await query.answer(f"🌀 Выпито: {item_info['name']} (+{effect} MP)", show_alert=True)
+                    else:
+                        if char['health'] >= char['max_health']:
+                            await query.answer("Здоровье полное!", show_alert=True)
+                        else:
+                            new_hp = min(char['max_health'], char['health'] + effect)
+                            database.update_character_stats(user_id, health=new_hp)
+                            database.remove_item(user_id, item_key, 1)
+                            await query.answer(f"❤️ Съедено: {item_info['name']} (+{effect} HP)", show_alert=True)
+                            
+        except Exception as e:
+            print(f"Use Item Error: {e}")
+            await query.answer("Произошла ошибка.", show_alert=True)
 
-   
-    # 3. ОТОБРАЖЕНИЕ ИНВЕНТАРЯ
+    # 3. ОТРИСОВКА ИНВЕНТАРЯ (Всегда выполняется в конце)
+    
+    # Заново скачиваем актуальный инвентарь (после использования предмета)
     items = database.get_inventory(user_id)
     
-    # Подсчет лимитов (для красоты)
+    # Считаем лимиты для красоты
     w_count = 0
     a_count = 0
     for i in items:
-        info = ITEMS_DB.get(i['item_key'])
-        if info and info['type'] in ['weapon', 'magic_weapon']:
-            w_count += i['quantity']
-        elif i['type'] == 'armor': a_count += 1
+        itype = ITEMS_DB.get(i['item_key'], {}).get('type', 'unknown')
+        if itype in ['weapon', 'magic_weapon']: w_count += i['quantity']
+        elif itype == 'armor': a_count += i['quantity']
     
     txt = (f"🎒 **РЮКЗАК ГЕРОЯ**\n\n"
            f"⚔️ Оружие: **{w_count}/5**\n"
@@ -2041,22 +2041,24 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     
     kb = []
     for item in items:
-        # Кнопка действия зависит от типа
-        cb_data = "ignore"
-        btn_text = f"{item['item_name']} (x{item['quantity']})"
+        item_info = ITEMS_DB.get(item['item_key'])
+        if not item_info: continue
         
-        # Если это еда или зелье — добавляем кнопку использования
-        if item['type'] in ['potion', 'food']:
-            btn_text = f"🍽 {item['item_name']} (x{item['quantity']})"
+        btn_text = f"{item_info['name']} (x{item['quantity']})"
+        cb_data = "ignore"
+        
+        # Если это еда или зелье — добавляем кнопку "Использовать"
+        if item_info['type'] in ['potion', 'food']:
+            btn_text = f"🍽 {item_info['name']} (x{item['quantity']})"
             cb_data = f"use_{item['item_key']}"
         
         kb.append([InlineKeyboardButton(btn_text, callback_data=cb_data)])
 
     kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
     
+    # Обновляем сообщение
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('inventory', IMAGE_URLS['village']), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return INVENTORY_MENU
-
 
 
 
