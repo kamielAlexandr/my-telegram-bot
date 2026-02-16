@@ -1424,12 +1424,12 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = query.data
     user_id = query.from_user.id
     
-    # Снимаем "часики" сразу
-    try: await query.answer()
-    except: pass
+    # ВАЖНО: Мы НЕ вызываем query.answer() здесь, 
+    # чтобы иметь возможность показать всплывающее окно (alert) позже.
 
-    # --- 1. КНОПКА НАЗАД (САМАЯ ПЕРВАЯ) ---
+    # --- 1. КНОПКА НАЗАД ---
     if data == 'back_to_main':
+        await query.answer() # Здесь отвечаем, так как просто переходим
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
@@ -1439,27 +1439,21 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if data.startswith('take_quest_'):
         parts = data.split('_')
         try:
-            # Парсим данные из кнопки
             q_exp = int(parts[-1])
             q_gold = int(parts[-2])
             q_goal = int(parts[-3])
             q_type = parts[2]
             q_target = "_".join(parts[3:-3])
             
-            # Записываем в БД
             database.take_quest(user_id, q_type, q_target, q_goal, q_gold, q_exp)
             
-            # Показываем уведомление
             await query.answer("✅ Контракт подписан!", show_alert=True)
-            
-            # ВАЖНО: Мы не делаем return, а позволяем коду идти вниз, 
-            # чтобы он отрисовал меню "Текущий контракт"
             
         except Exception as e:
             print(f"Quest error: {e}")
             await query.answer("Ошибка контракта.", show_alert=True)
 
-    # Б) Платное обновление (Reroll)
+    # Б) Обновление заданий (Reroll)
     elif data == 'reroll_quests':
         char = database.get_character(user_id)
         reroll_price = 50
@@ -1471,23 +1465,32 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             await query.answer(f"💸 Не хватает золота! Нужно {reroll_price}g", show_alert=True)
 
-    # В) Завершение квеста
+    # В) Завершение квеста (ИСПРАВЛЕНО)
     elif data == 'complete_quest':
+        # Вызываем БД
         success, msg = database.complete_quest(user_id)
+        
         if success:
             await query.answer("🏆 Награда получена!", show_alert=True)
-            # После сдачи квеста мы хотим вернуться в главное меню или показать доску
-            # Давайте покажем сообщение о победе и вернем в деревню
+            # Возвращаем в деревню после победы
             await safe_edit(query, text=msg, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         else:
+            # Если ошибка (не выполнено), показываем алерт
             await query.answer(f"❌ {msg}", show_alert=True)
+            # И код пойдет дальше вниз, чтобы просто обновить меню (если нужно)
+
+    # Если мы не попали ни в одно действие, нужно всё-таки ответить Telegram,
+    # чтобы убрать часики (например, если просто обновляем страницу)
+    try:
+        await query.answer()
+    except:
+        pass
 
     # --- 3. ЛОГИКА ОТРИСОВКИ (VIEW) ---
-    # Мы скачиваем персонажа заново, чтобы увидеть изменения (например, взятый квест)
     char = database.get_character(user_id)
 
-    # СЦЕНАРИЙ 1: У ИГРОКА УЖЕ ЕСТЬ АКТИВНЫЙ КВЕСТ
+    # СЦЕНАРИЙ 1: У ИГРОКА ЕСТЬ АКТИВНЫЙ КВЕСТ
     if char.get('quest_target'):
         target_name = ""
         progress_txt = ""
@@ -1499,7 +1502,6 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             item_info = ITEMS_DB.get(char['quest_target'])
             target_name = item_info['name'] if item_info else char['quest_target']
-            # Считаем предметы в инвентаре
             items = database.get_inventory(user_id)
             inv_qty = 0
             for i in items:
@@ -1525,9 +1527,11 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     quests_today = char.get('quests_completed_today', 0)
 
     if isinstance(last_quest_done, str):
-        last_quest_done = datetime.strptime(last_quest_done, '%Y-%m-%d').date()
+        try:
+            last_quest_done = datetime.strptime(last_quest_done, '%Y-%m-%d').date()
+        except:
+            pass
         
-    # Если сегодня уже сделано 2 или больше квестов
     if last_quest_done == today and quests_today >= 2:
         txt = (f"📜 *Доска пуста*\n\n"
                f"Вы выполнили {quests_today}/2 заданий на сегодня.\n"
@@ -1537,12 +1541,13 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # СЦЕНАРИЙ 3: КВЕСТА НЕТ, ЛИМИТ НЕ ИСЧЕРПАН. ПОКАЗЫВАЕМ ДОСКУ.
-    
-    # Получаем или генерируем список
+    # СЦЕНАРИЙ 3: ДОСКА ОБЪЯВЛЕНИЙ
     stored_quests, last_refresh = database.get_stored_quests(user_id)
     if isinstance(last_refresh, str):
-        last_refresh = datetime.strptime(last_refresh, '%Y-%m-%d').date()
+        try:
+            last_refresh = datetime.strptime(last_refresh, '%Y-%m-%d').date()
+        except:
+            pass
 
     quests_to_show = []
     if stored_quests and last_refresh == today:
