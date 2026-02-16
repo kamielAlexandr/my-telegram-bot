@@ -764,40 +764,46 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    # 1. Снимаем "часики" загрузки сразу
+    try:
+        await query.answer()
+    except:
+        pass
+        
     data = query.data
     user_id = query.from_user.id
-# --- ВСТАВИТЬ ЭТОТ БЛОК В НАЧАЛО ФУНКЦИИ ---
-    # Перехватываем ВСЕ кнопки, связанные с магией эльфов
-    if data == 'elf_magic_menu' or data.startswith('school_') or data.startswith('set_spell_'):
-        # Передаем управление в функцию магии
-        await elf_magic_menu_handler(update, context)
-        # Важно: остаемся в том же состоянии
+
+    # --- [ВАЖНО] ИСПРАВЛЕНИЕ КНОПКИ "НАЗАД" ---
+    # Этого не было в вашем коде. Это нужно, чтобы кнопка "Назад" 
+    # в меню Магии Эльфов возвращала в Деревню.
+    if data == 'back_to_main':
+        await safe_edit(
+            query, 
+            text="В деревне", 
+            media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), 
+            keyboard=get_main_menu_keyboard(user_id)
+        )
         return MAIN_MENU
-    # -------------------------------------------
+    # ------------------------------------------
+
+    # 2. ПЕРЕХОД В МАГИЮ ЭЛЬФОВ (Блок в начале, как и нужно)
+    if data == 'elf_magic_menu' or data.startswith('school_') or data.startswith('set_spell_'):
+        await elf_magic_menu_handler(update, context)
+        return MAIN_MENU
     
+    # 3. ПРОФИЛЬ ГЕРОЯ (Ваш правильный код с исправлением race_name)
     if data == 'profile':
         char = database.get_character(user_id)
         
-        # --- 1. ОПРЕДЕЛЯЕМ ИМЯ РАСЫ (ИСПРАВЛЕНИЕ ОШИБКИ) ---
-        # Мы берем ключ расы (например, 'elf') и ищем его название в базе ('Эльф')
         race_key = char['race']
-        # Используем .get на случай, если расы нет в словаре
         race_info = database.RACES.get(race_key) 
-        
-        if race_info:
-            race_name = race_info['name']
-        else:
-            race_name = race_key.capitalize() # Если не нашли, пишем как есть (Elf)
+        race_name = race_info['name'] if race_info else race_key.capitalize()
 
-        # --- 2. РАСЧЕТ СТАТОВ ---
         phys = max(1, char['strength'] // 2)
         mag = max(1, char['intelligence'] // 2)
-        # Рассчитываем проценты (защита, если функции вернут None)
         dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
         crit = int(calculate_crit_chance(char['agility']) * 100)
         
-        # --- 3. ФОРМИРОВАНИЕ ТЕКСТА ---
         txt = (
             f"👤 *{char['character_name']}*\n"
             f"📖 Раса: *{race_name}*\n" 
@@ -814,16 +820,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧠 Инт: {char['intelligence']} | 💓 Жив: {char['vitality']}"
         )
         
-        kb = get_main_menu_keyboard(user_id)
-        
-        # Картинка расы
         img = IMAGE_URLS.get(char['race'], IMAGE_URLS['human'])
-        
-        await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=kb)
+        await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+
+    # 4. ИНВЕНТАРЬ
     elif data == 'inventory':
         await show_inventory_menu(update, context)
         return INVENTORY_MENU
+        
+    # 5. БИТВА
     elif data == 'battle_menu':
         char = database.get_character(user_id)
         if char['health'] <= 0:
@@ -831,42 +837,54 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
              return MAIN_MENU
         await safe_edit(query, text="Куда лежит твой путь, путник?", media=InputMediaPhoto(IMAGE_URLS['forest'], caption="Куда лежит твой путь, путник?", parse_mode='Markdown'), keyboard=get_battle_menu_keyboard(char))
         return BATTLE_MENU
+        
+    # 6. МАГАЗИН
     elif data == 'shop':
         char = database.get_character(user_id)
         txt = f"🏪 *Мрачная лавка*\nТорговец смотрит на тебя из-под капюшона.\nЗолото: {char['gold']}💰"
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=get_shop_categories_keyboard())
         return SHOP_MENU
 
+    # 7. КРАФТ
     elif data == 'craft_menu':
         await show_craft_menu(query, user_id)
         return CRAFT_MENU
-    elif data == 'stats' or data == 'top_players':
+        
+    # 8. ТОП ИГРОКОВ
+    elif data == 'top_players':
         await show_top_players(query, user_id)
+        
+    # 9. ОБНОВИТЬ (Исправил на возврат в деревню)
     elif data == 'refresh':
-        char = database.get_character(user_id)
-        txt = (f"👤 *{char['character_name']}* ({database.RACES[char['race']]['name']})\n"
-               f"HP: {get_health_bar(char['health'], char['max_health'])} | MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
-               f"Золото: {char['gold']}")
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        await safe_edit(
+            query, 
+            text="В деревне", 
+            media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), 
+            keyboard=get_main_menu_keyboard(user_id)
+        )
+        
+    # 10. ПРОКАЧКА
     elif data == 'level_up_menu':
         char = database.get_character(user_id)
         await query.edit_message_caption("Выберите характеристику для улучшения:", reply_markup=get_level_up_keyboard(char, char['stat_points']))
         return LEVEL_UP
+        
+    # 11. ГИЛЬДИЯ
     elif data == 'guild_menu':
         await guild_menu_handler(update, context)
         return GUILD_MENU
+        
+    # 12. ИНФО О РАНГАХ
     elif data == 'rank_info':
         rank_info = """🏆 *РАНГИ*\n🆕 E: 1-14 ур (Руины)\n🟢 D: 15-24 ур (Лес)\n🔵 C: 25-34 ур (Катакомбы)\n🟣 B: 35-44 ур (Замок)\n🟠 A: 45-54 ур (Ад)\n⚡ S: 55+ ур (Трон Хаоса)"""
         await query.edit_message_caption(rank_info, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+        
+    # 13. ПОМОЩЬ
     elif data == 'help':
         await help_command(update, context)
-    elif data == 'elf_magic_menu':
-        await elf_magic_menu_handler(update, context)
-    elif data.startswith('set_magic_'):
-        # Это нужно, если обработка клика происходит здесь, 
-        # но лучше, если она внутри elf_magic_menu_handler.
-        # Если вы сделали отдельную функцию elf_magic_menu_handler, этот блок здесь не нужен.
-        await elf_magic_menu_handler(update, context)    
+        
+    # (Дубликат elf_magic удален отсюда)
+
     return MAIN_MENU
 
 async def level_up_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
