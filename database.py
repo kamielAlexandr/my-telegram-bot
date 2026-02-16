@@ -479,29 +479,34 @@ def get_all_users():
     finally:
         conn.close()
         
-def remove_item(user_id, item_key, quantity):
-    """Списывает указанное количество предметов (для крафта)"""
+def remove_item(user_id, item_key, count=1):
+    """
+    Удаляет указанное количество предметов.
+    Если предметов 5, а удаляем 1 -> останется 4.
+    Если предметов 1, а удаляем 1 -> предмет удалится полностью.
+    """
     conn = get_connection()
     if not conn: return False
     
     try:
         with conn.cursor() as cursor:
-            # Проверяем, есть ли предмет и хватает ли его
+            # 1. Ищем, сколько у нас этого предмета сейчас
             cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
             res = cursor.fetchone()
             
-            if not res: return False # Предмета нет
+            if not res: return False # Предмета вообще нет
             
             item_id, current_qty = res
             
-            if current_qty < quantity:
-                return False # Не хватает количества
+            # 2. Считаем новый остаток
+            new_qty = current_qty - count
             
-            # Списываем
-            if current_qty == quantity:
+            if new_qty <= 0:
+                # Если остаток 0 или меньше — удаляем строку целиком
                 cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
             else:
-                cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (quantity, item_id))
+                # Иначе просто обновляем число
+                cursor.execute("UPDATE player_inventory SET quantity = %s WHERE id=%s", (new_qty, item_id))
             
             conn.commit()
             return True
