@@ -192,7 +192,7 @@ ITEMS_DB = {
     'bone_dust': {'name': '💀 Прах мертвеца', 'desc': 'Холодный.', 'price': 25, 'type': 'material', 'cat': 'mat', 'rank': 'C'},
     'vampire_fang': {'name': '🧛 Клык вампира', 'desc': 'Острый.', 'price': 60, 'type': 'material', 'cat': 'mat', 'rank': 'B'},
     'demon_horn': {'name': '😈 Рог демона', 'desc': 'Излучает жар.', 'price': 100, 'type': 'material', 'cat': 'mat', 'rank': 'A'},
-    'void_crystal': {'name': '🌌 Осколок Пустоты', 'desc': 'Из другого мира.', 'price': 300, 'type': 'material', 'cat': 'mat', 'rank': 'S'}
+    'void_crystal': {'name': '🌌 Осколок Пустоты', 'desc': 'Из другого мира.', 'price': 300, 'type': 'material', 'cat': 'mat', 'rank': 'S'},
 # --- ДОБАВИТЬ В ITEMS_DB ---
 # ==========================
     # 🌿 РЕСУРСЫ (ТРАВНИК)
