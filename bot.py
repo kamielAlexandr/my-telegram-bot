@@ -2750,30 +2750,31 @@ async def alchemy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_built = database.check_building(user_id, 'building_alchemy')
     
     if not is_built:
-        # Меню постройки
+        # Меню постройки (ЦЕНА 5000)
         txt = ("🏚 **СТАРАЯ ХИЖИНА**\n\n"
                "В деревню прибыл Травник. Он готов варить для вас мощные зелья, но ему нужна лаборатория.\n\n"
-               "💰 **Цена постройки:** 500 золота\n"
+               "💰 **Цена постройки:** 5000 золота\n"
                "🔨 **Требуется:** Ранг D")
         
-        kb = [[InlineKeyboardButton("🔨 Построить Лавку (500g)", callback_data='build_alchemy')]]
+        kb = [[InlineKeyboardButton("🔨 Построить Лавку (5000g)", callback_data='build_alchemy')]]
         await update.message.reply_photo(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
     else:
         # Меню алхимии (Показываем категории)
         await show_alchemy_menu(update, user_id)
-
+        
 async def build_alchemy_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    if char['gold'] >= 500:
-        database.add_gold(user_id, -500)
+    # ПРОВЕРКА НА 5000 ЗОЛОТА
+    if char['gold'] >= 5000:
+        database.add_gold(user_id, -5000)
         database.build_building(user_id, 'building_alchemy')
         await query.answer("✅ Лавка построена!", show_alert=True)
         await show_alchemy_menu(query, user_id) # Сразу открываем меню
     else:
-        await query.answer("❌ Не хватает золота (нужно 500g)", show_alert=True)
+        await query.answer("❌ Не хватает золота (нужно 5000g)", show_alert=True)
 
 async def show_alchemy_menu(source, user_id):
     """Показывает меню рецептов алхимии"""
