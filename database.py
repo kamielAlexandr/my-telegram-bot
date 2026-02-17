@@ -878,25 +878,37 @@ def cancel_quest(user_id):
     finally:
         conn.close()
 def check_building(user_id, building_name):
-    """Проверяет, построено ли здание (пока через костыль-таблицу или просто json, 
-    но для простоты будем хранить это как 'особый предмет' в инвентаре с ID 'building_alchemy')"""
+    """Проверяет, построено ли здание"""
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT quantity FROM inventory WHERE user_id = %s AND item_key = %s", (user_id, building_name))
-    res = c.fetchone()
-    conn.close()
-    return res and res[0] > 0
+    if not conn: return False
+    try:
+        with conn.cursor() as c:
+            # ИСПРАВЛЕНО: имя таблицы player_inventory
+            c.execute("SELECT quantity FROM player_inventory WHERE user_id = %s AND item_key = %s", (user_id, building_name))
+            res = c.fetchone()
+            return res and res[0] > 0
+    finally:
+        conn.close()
 
 def build_building(user_id, building_name):
     """Строит здание (выдает невидимый предмет)"""
-    # Мы используем existing функцию add_item или прямую вставку
     conn = get_connection()
-    c = conn.cursor()
-    # Просто вставляем предмет-флаг
-    c.execute("INSERT INTO inventory (user_id, item_key, item_type, item_name, quantity, equip_slot) VALUES (%s, %s, 'building', 'Лавка', 1, NULL) ON CONFLICT DO NOTHING", (user_id, building_name))
-    conn.commit()
-    conn.close()
-# В database.py
+    if not conn: return
+    try:
+        with conn.cursor() as c:
+            # ИСПРАВЛЕНО: 
+            # 1. Имя таблицы player_inventory
+            # 2. Убрана колонка equip_slot (её нет в базе)
+            # 3. Добавлен effect_amount = 0
+            c.execute("""
+                INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount) 
+                VALUES (%s, %s, 'building', 'Лавка Травника', 1, 0) 
+            """, (user_id, building_name))
+            conn.commit()
+    except Exception as e:
+        print(f"Build error: {e}")
+    finally:
+        conn.close()
 
 def init_companion_table():
     """Создает таблицу для экспедиций, если её нет"""
