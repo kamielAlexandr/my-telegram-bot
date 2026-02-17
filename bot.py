@@ -245,7 +245,7 @@ BASE_ENEMIES = {
         'base_gold': 18, 
         'rank': 'E', 
         'description': 'Бормочет заклинания и кидает огненные шары.', 
-        'image':  IMAGE_URLS['goblin_shaman']', 
+        'image':  IMAGE_URLS['goblin_shaman'], 
         'difficulty': 'medium', 
         'abilities': ['basic_attack', 'ignite'], 
         'damage_type': 'magic', # Бьет магией!
