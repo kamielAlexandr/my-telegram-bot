@@ -1088,9 +1088,17 @@ def get_shop_categories_keyboard():
 def get_shop_items_keyboard(category, user_gold):
     kb = []
     for k, v in ITEMS_DB.items():
+        # Проверяем категорию
         if v.get('cat') == category:
+            
+            # ФИЛЬТР: Не показываем кнопки для buff_potion в обычном магазине
+            if category == 'food' and v.get('type') == 'buff_potion':
+                continue
+                
+            # Иконка цены
             icon = "💰" if user_gold >= v['price'] else "🔒"
             kb.append([InlineKeyboardButton(f"{v['name']} ({v['price']}g) {icon}", callback_data=f"buy_{k}")])
+            
     kb.append([InlineKeyboardButton("🔙 Назад", callback_data='shop')])
     return InlineKeyboardMarkup(kb)
 
@@ -2178,57 +2186,86 @@ async def render_shop_category(query, user_id, cat):
     """Вспомогательная функция для отрисовки страницы категории"""
     try:
         char = database.get_character(user_id)
-        cat_names = {'food': '🍖 Еда', 'mat': '🧱 Ресурсы', 'weapon': '⚔️ Оружие', 'armor': '🛡️ Броня', 'acc': '💍 Аксессуары'}
+        # Названия категорий
+        cat_names = {
+            'food': '🍖 Еда и Напитки', 
+            'mat': '🧱 Ресурсы', 
+            'weapon': '⚔️ Оружие', 
+            'armor': '🛡️ Броня', 
+            'acc': '💍 Аксессуары'
+        }
         
-        txt = f"🛒 *{cat_names.get(cat, 'Товары')}*\n_Баланс: {char['gold']}g_\n\n"
+        txt = f"🏪 *{cat_names.get(cat, 'Товары')}*\n_Баланс: {char['gold']}g_\n\n"
         items_found = False
         
         for key, item in ITEMS_DB.items():
-            # ВАЖНОЕ ИСПРАВЛЕНИЕ: Мы проверяем item['cat'], а не item['type']
-            # Вся броня (heavy/light/magic) имеет cat='armor', так что это сработает
-            if item.get('cat') == cat:
-                items_found = True
-                effect_str = ""
-                
-                itype = item.get('type', 'unknown')
-                ieffect = item.get('effect', 0)
-                
-                if ieffect:
-                    if itype == 'weapon':         effect_str = f" (+{ieffect} ⚔️)"
-                    elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
-                    
-                    # --- ТИПЫ БРОНИ ---
-                    elif itype == 'heavy_armor':  effect_str = f" (+{ieffect} HP/Физ)"
-                    elif itype == 'light_armor':  effect_str = f" (+{int(ieffect*0.6)} HP/Ловк)"
-                    elif itype == 'magic_armor':  effect_str = f" (+{ieffect*2} MP/Маг)"
-                    elif itype == 'armor':        effect_str = f" (+{ieffect} HP)" # Для старых вещей
-                    # ------------------
-                    
-                    elif itype == 'artifact':     effect_str = f" (+{ieffect} 🧠)"
-                    elif itype == 'food':         effect_str = f" (+{ieffect} ❤️)"
-                    elif itype == 'potion':       effect_str = f" (Эффект: {ieffect})"
+            # 1. Проверяем категорию (должна совпадать)
+            if item.get('cat') != cat:
+                continue
 
-                rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
+            # 2. ИСКЛЮЧЕНИЕ ДЛЯ ЕДЫ/ЗЕЛИЙ
+            # Если мы в разделе еды, мы НЕ показываем 'buff_potion'
+            # (они только для крафта у Травника)
+            itype = item.get('type', 'unknown')
+            if cat == 'food' and itype == 'buff_potion':
+                continue
                 
-                # Иконки для красоты
-                icon = "▪️"
-                if itype == 'heavy_armor': icon = "🛡"
-                elif itype == 'light_armor': icon = "💨"
-                elif itype == 'magic_armor': icon = "🔮"
-                
-                txt += f"{icon} *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
+            # 3. ПРОВЕРКА НА ТЕСТОВЫЕ ПРЕДМЕТЫ (если есть админка)
+            if item.get('is_test', False):
+                # Здесь можно добавить проверку на ID админа, если нужно
+                # if user_id not in ADMIN_IDS: continue
+                pass
 
-        if not items_found: txt += "В этой категории пока пусто..."
+            items_found = True
+            effect_str = ""
+            ieffect = item.get('effect', 0)
+            
+            # Логика текста эффектов
+            if ieffect:
+                if itype == 'weapon':         effect_str = f" (+{ieffect} ⚔️)"
+                elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
+                elif itype == 'heavy_armor':  effect_str = f" (+{ieffect} HP/Физ)"
+                elif itype == 'light_armor':  effect_str = f" (+{int(ieffect*0.6)} HP/Ловк)"
+                elif itype == 'magic_armor':  effect_str = f" (+{ieffect*2} MP/Маг)"
+                elif itype == 'armor':        effect_str = f" (+{ieffect} HP)"
+                elif itype == 'artifact':     effect_str = f" (+{ieffect} 🧠)"
+                elif itype == 'food':         effect_str = f" (+{ieffect} ❤️)"
+                elif itype == 'potion':       
+                    # Различаем ману и здоровье по названию или эффекту
+                    if 'mp' in key or 'mana' in key:
+                         effect_str = f" (+{ieffect} MP)"
+                    else:
+                         effect_str = f" (+{ieffect} HP)"
+
+            rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
+            
+            # Иконка
+            icon = "▪️"
+            if itype == 'heavy_armor': icon = "🛡"
+            elif itype == 'light_armor': icon = "💨"
+            elif itype == 'magic_armor': icon = "🔮"
+            elif itype == 'food': icon = "🍖"
+            elif itype == 'potion': icon = "🧪"
+            
+            # Добавляем товар в список
+            txt += f"{icon} *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
+
+        if not items_found: 
+            txt += "В этой категории пока пусто или товары закончились."
+        
         if len(txt) > 1000: txt = txt[:1000] + "..."
 
+        # Отрисовка
         media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
         await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
         
     except Exception as e:
-        print(f"Error rendering category: {e}")
-        # Если ошибка (например, картинка), шлем текст
-        await safe_edit(query, text="Ошибка магазина.", keyboard=get_main_menu_keyboard(user_id))
-        
+        import traceback
+        print(f"Shop Render Error: {e}")
+        print(traceback.format_exc())
+        await safe_edit(query, text="Ошибка магазина. Попробуйте позже.", keyboard=get_main_menu_keyboard(user_id))
+
+
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
