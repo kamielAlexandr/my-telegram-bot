@@ -47,6 +47,7 @@ IMAGE_URLS = {
     'forest_spider':'https://i.pinimg.com/1200x/6b/17/a8/6b17a8e5f64f24e2eae2ae468840de76.jpg',
     'wild_boar':'https://i.pinimg.com/736x/cf/8f/57/cf8f57e07d4a1b2a468fa90f8ca0e083.jpg',
     'forest_troll':'https://i.pinimg.com/736x/ae/80/26/ae8026a1ec5a321226c0d2edea140840.jpg',
+    'frost_spider': 'https://i.pinimg.com/736x/0a/60/93/0a60932d84db8392fb138096f9202517.jpg',
     'forest_guardian':'https://i.pinimg.com/1200x/50/dd/fa/50ddfa68afdc12925fbd2fb3140fe8f7.jpg',
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
@@ -335,6 +336,27 @@ BASE_ENEMIES = {
         'abilities': ['basic_attack', 'regeneration'], 'damage_type': 'physical', 'dodge_chance': 0.12, 
         'drops': ['iron_ore', 'roast_boar']
     },
+    'frost_spider': {
+        'name': '❄️ Морозный Паук', 
+        'base_health': 85, # Живучий
+        'base_min_physical_damage': 2, # Слабо кусает физически
+        'base_max_physical_damage': 5, 
+        'base_min_magic_damage': 8,    # Бьет магией холода
+        'base_max_magic_damage': 12, 
+        'base_exp': 35, 
+        'base_gold': 28, 
+        'rank': 'D', 
+        'description': 'Его паутина холоднее льда. Замораживает жертву заживо.', 
+        'image': IMAGE_URLS['frost_spider'], 
+        'difficulty': 'hard', 
+        'abilities': ['basic_attack', 'freeze_bite'], 
+        'damage_type': 'magic', # Бьет магией
+        'dodge_chance': 0.15, 
+        'drops': ['spider_silk', 'small_mp'],
+        # Крепкий хитин (защита от мечей), но боится огня (низкий маг резист)
+        'physical_resistance': 0.30, 
+        'magic_resistance': -0.10
+    },
     'forest_guardian': {
         'name': '🌳 Проклятый Энт', 
         'base_health': 150, 'base_min_physical_damage': 13, 'base_max_physical_damage': 25, 'base_min_magic_damage': 7, 'base_max_magic_damage': 13, 
@@ -500,7 +522,7 @@ BASE_ENEMIES = {
 # --- ЛОКАЦИИ ---
 LOCATIONS = {
     'E': {'name': '🏚️ Руины Деревни', 'description': 'Здесь лишь пепел и безумцы.', 'image': IMAGE_URLS['village'], 'min_level': 1, 'enemies': ['wolf', 'goblin', 'slime','goblin_shaman' ,'goblin_elite','training_master']},
-    'D': {'name': '🌲 Шепчущий Лес', 'description': 'Тени здесь длиннее, чем кажется.', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_troll', 'forest_guardian']},
+    'D': {'name': '🌲 Шепчущий Лес', 'description': 'Тени здесь длиннее, чем кажется.', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'frost_spider','forest_troll', 'forest_guardian']},
     'C': {'name': '☠️ Катакомбы Скорби', 'description': 'Подземелья, пропахшие гнилью.', 'image': IMAGE_URLS['dungeon'], 'min_level': 20, 'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord']},
     'B': {'name': '🏰 Проклятая Цитадель', 'description': 'Обитель вампиров.', 'image': IMAGE_URLS['castle'], 'min_level': 30, 'enemies': ['dark_knight', 'vampire', 'gargoyle', 'death_knight', 'castle_overlord']},
     'A': {'name': '🔥 Врата Ада', 'description': 'Земля раскалена.', 'image': IMAGE_URLS['hell_gate'], 'min_level': 40, 'enemies': ['imp', 'demon', 'succubus', 'pit_fiend', 'demon_general']},
@@ -1023,7 +1045,8 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'last_image': None,
             'processing': False,
             'slime_stacks': 0,
-            'burn_stacks': 0
+            'burn_stacks': 0,
+            'frost_stacks': 0
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -1381,7 +1404,22 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             
             log.append(f"🔥 *ОЖОГ!* Ваша кожа горит: -{fire_dmg} HP (Стак {stack})")
         # ===============================================
+        if s['enemy_key'] == 'frost_spider':
+            # Увеличиваем счетчик холода
+            s['frost_stacks'] = s.get('frost_stacks', 0) + 1
+            stack = s['frost_stacks']
+            
+            # Формула урона: Стак * 5 (5, 10, 15...). Очень больно, если затянуть бой!
+            frost_dmg = stack * 5
+            
+            # Магический урон игнорирует обычную броню, но можно смягчить маг. резистом
+            # Но для простоты механики стаков сделаем чистый урон, как у яда
+            c['health'] -= frost_dmg
+            
+            log.append(f"❄️ *ОБМОРОЖЕНИЕ!* Кровь стынет в жилах: -{frost_dmg} HP (Стак {stack})")
+        # ===============================================
         # Если враг не в стане (модификатор 0.0 ставится способностью оглушения)
+        
         if enemy_damage_mod == 0.0:
              log.append("💫 Враг оглушен и пропускает ход!")
         else:
