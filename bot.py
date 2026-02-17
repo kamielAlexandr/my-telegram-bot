@@ -24,10 +24,10 @@ battle_sessions = {}
 
 # --- ВИЗУАЛ (DARK FANTASY) ---
 IMAGE_URLS = {
-    'human': 'https://i126.fastpic.org/thumb/2026/0130/2c/_d2515d33e45fa7ffb5246cacabdaba2c.jpeg',
-    'elf': 'https://i126.fastpic.org/thumb/2026/0130/81/_d3d94be5aa45b9239aeb5adc41443081.jpeg',
-    'dwarf': 'https://i126.fastpic.org/thumb/2026/0130/5b/_c188fac4eb6d205bd9fc0486c9b9355b.jpeg',
-    'orc': 'https://i126.fastpic.org/thumb/2026/0130/20/_b8c1f666bd21bb415e8fb35145eb3e20.jpeg',
+    'human': 'https://i.pinimg.com/736x/9b/f6/20/9bf6203bb54a7b095840f55fa780a365.jpg',
+    'elf': 'https://i.pinimg.com/736x/c5/b1/e6/c5b1e645ceadf9c42e8ab51393981bb9.jpg',
+    'dwarf': 'https://i.pinimg.com/736x/ef/b2/a2/efb2a24d7f7897ba9841764d8fb88c69.jpg',
+    'orc': 'https://i.pinimg.com/736x/9d/03/22/9d0322080cea97cfd1e4667f835592dd.jpg',
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
