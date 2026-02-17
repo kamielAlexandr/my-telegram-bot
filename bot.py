@@ -1371,56 +1371,69 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     return IN_BATTLE
 
 # --- ГЕНЕРАТОР ЗАДАНИЙ ---
-def generate_daily_quests(rank):
-    """Генерирует 3 случайных квеста для ранга игрока"""
+def generate_daily_quests(rank, reputation=0): # <--- Добавили аргумент reputation
+    """Генерирует квесты с учетом репутации"""
     quests = []
     
-    # Определяем доступных врагов для ранга
+    # Расчет множителя награды от репутации
+    rep_multiplier = 1.0
+    if reputation >= 100: rep_multiplier = 1.3  # +30%
+    elif reputation >= 50: rep_multiplier = 1.15 # +15%
+    
+    # ... (код сбора available_enemies и drops остается прежним) ...
+    # (Скопируйте его из старой функции)
+    # ПОВТОРЯЕМ ЛОГИКУ СБОРА ВРАГОВ:
     available_enemies = []
     available_drops = []
-    
-    # Собираем врагов, подходящих по рангу (или чуть слабее)
     ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
-    current_rank_idx = ranks_order.index(rank)
+    try: current_rank_idx = ranks_order.index(rank)
+    except: current_rank_idx = 0
     
     for key, data in BASE_ENEMIES.items():
-        enemy_rank_idx = ranks_order.index(data.get('rank', 'E'))
-        if enemy_rank_idx <= current_rank_idx:
+        e_rank = data.get('rank', 'E')
+        try: e_idx = ranks_order.index(e_rank)
+        except: e_idx = 0
+        if e_idx <= current_rank_idx:
             available_enemies.append(key)
             if data.get('drops'):
-                for drop in data['drops']:
-                    available_drops.append(drop)
+                for d in data['drops']: available_drops.append(d)
     
-    if not available_enemies: available_enemies = ['wolf'] # Заглушка
-    
-    # Генерируем 3 варианта
+    if not available_enemies: available_enemies = ['wolf']
+
+    # ГЕНЕРАЦИЯ
     for _ in range(3):
-        q_type = random.choice(['kill', 'kill', 'collect']) # Убийство падает чаще
+        q_type = random.choice(['kill', 'kill', 'collect'])
         
         if q_type == 'kill':
             target = random.choice(available_enemies)
             enemy_name = BASE_ENEMIES[target]['name']
-            # Кол-во зависит от ранга (E: 3-5, S: 10-15)
             count = random.randint(3, 5) + (current_rank_idx * 2)
-            gold = count * BASE_ENEMIES[target].get('base_gold', 5) * 1.5
-            exp = count * BASE_ENEMIES[target].get('base_exp', 5) * 1.5
+            
+            # ПРИМЕНЯЕМ МНОЖИТЕЛЬ РЕПУТАЦИИ
+            base_gold = count * BASE_ENEMIES[target].get('base_gold', 5) * 1.5
+            base_exp = count * BASE_ENEMIES[target].get('base_exp', 5) * 1.5
+            
             quests.append({
                 'type': 'kill', 'target': target, 'goal': count, 
-                'gold': int(gold), 'exp': int(exp), 
+                'gold': int(base_gold * rep_multiplier), # <--- БОНУС
+                'exp': int(base_exp * rep_multiplier),   # <--- БОНУС
                 'desc': f"Убить: {enemy_name} ({count} шт.)"
             })
             
         elif q_type == 'collect':
-            if not available_drops: 
-                continue 
+            if not available_drops: continue
             target = random.choice(available_drops)
             item_name = ITEMS_DB.get(target, {'name': target})['name']
             count = random.randint(2, 4) + current_rank_idx
-            gold = count * ITEMS_DB.get(target, {}).get('price', 5) * 2.0
-            exp = gold * 0.8
+            
+            # ПРИМЕНЯЕМ МНОЖИТЕЛЬ РЕПУТАЦИИ
+            base_gold = count * ITEMS_DB.get(target, {}).get('price', 5) * 2.0
+            base_exp = base_gold * 0.8
+            
             quests.append({
                 'type': 'collect', 'target': target, 'goal': count, 
-                'gold': int(gold), 'exp': int(exp), 
+                'gold': int(base_gold * rep_multiplier), # <--- БОНУС
+                'exp': int(base_exp * rep_multiplier),   # <--- БОНУС
                 'desc': f"Принести: {item_name} ({count} шт.)"
             })
             
@@ -1431,13 +1444,14 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = query.data
     user_id = query.from_user.id
     
-    # 1. Кнопка НАЗАД (Самая первая!)
+    # 1. КНОПКА НАЗАД
     if data == 'back_to_main':
-        await query.answer()
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
     # 2. ОБРАБОТКА ДЕЙСТВИЙ
+    
+    # А) Взятие квеста
     if data.startswith('take_quest_'):
         parts = data.split('_')
         try:
@@ -1446,51 +1460,80 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             q_goal = int(parts[-3])
             q_type = parts[2]
             q_target = "_".join(parts[3:-3])
-            
             database.take_quest(user_id, q_type, q_target, q_goal, q_gold, q_exp)
-            await query.answer("✅ Контракт подписан!", show_alert=True)
-        except Exception as e:
-            await query.answer("Ошибка контракта.", show_alert=True)
+            await query.answer("✅ Контракт подписан!")
+        except: pass
 
+    # Б) Реролл (обновление списка)
     elif data == 'reroll_quests':
         char = database.get_character(user_id)
         if char['gold'] >= 50:
             database.add_gold(user_id, -50)
-            new_quests = generate_daily_quests(char['rank'])
+            new_quests = generate_daily_quests(char['rank'], char.get('guild_reputation', 0))
             database.save_daily_quests(user_id, new_quests)
-            await query.answer("🔄 Список обновлен! (-50g)", show_alert=True)
+            await query.answer("Обновлено!")
         else:
-            await query.answer("💸 Не хватает золота!", show_alert=True)
+            await query.answer("Мало золота!")
 
+    # В) Завершение квеста
     elif data == 'complete_quest':
         success, msg = database.complete_quest(user_id)
         if success:
-            await query.answer("🏆 Награда получена!", show_alert=True)
+            await query.answer("Награда получена!")
             await safe_edit(query, text=msg, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
         else:
             await query.answer(f"❌ {msg}", show_alert=True)
 
+    # Г) НАЖАТИЕ "ОТКАЗАТЬСЯ" (ПРЕДУПРЕЖДЕНИЕ)
+    elif data == 'cancel_quest':
+        txt = ("⚠️ **РАЗРЫВ КОНТРАКТА**\n\n"
+               "Вы уверены, что хотите отказаться от задания?\n"
+               "Мастер Гильдии запомнит это.\n\n"
+               "📉 **Штраф:** -10 Репутации.")
+        
+        kb = [
+            [InlineKeyboardButton("✅ Да, я сдаюсь (-10 Реп)", callback_data='confirm_cancel')],
+            [InlineKeyboardButton("🔙 Нет, я справлюсь!", callback_data='guild_menu')] # Просто обновляем меню, вернет нас к квесту
+        ]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return GUILD_MENU
+
+    # Д) ПОДТВЕРЖДЕНИЕ ОТКАЗА (РЕАЛЬНОЕ УДАЛЕНИЕ)
+    elif data == 'confirm_cancel':
+        success, msg = database.cancel_quest(user_id)
+        if success:
+            await query.answer("Контракт разорван.", show_alert=True)
+            # Код пойдет дальше вниз и отрисует Доску Объявлений (так как квеста больше нет)
+        else:
+            await query.answer("Ошибка отмены.", show_alert=True)
+
+    # Е) ПРОСТО ОБНОВЛЕНИЕ МЕНЮ (ЕСЛИ НАЖАЛИ "НЕТ")
+    elif data == 'guild_menu':
+        pass # Просто идем вниз к отрисовке
+
     try: await query.answer()
     except: pass
 
-    # 3. ОТРИСОВКА МЕНЮ
+    # 3. ОТРИСОВКА (VIEW)
     char = database.get_character(user_id)
+    rep = char.get('guild_reputation', 0)
+    
+    rep_status = "😐 Нейтрал"
+    if rep >= 100: rep_status = "👑 Почет (+30% наград)"
+    elif rep >= 50: rep_status = "🤝 Уважение (+15% наград)"
+    
+    header = f"📜 *ГИЛЬДИЯ ГЕРОЕВ*\nРепутация: {rep} ({rep_status})\n━━━━━━━━━━━━━━━━\n"
 
-    # А) Если есть активный квест
+    # СЦЕНАРИЙ 1: ЕСТЬ АКТИВНЫЙ КВЕСТ
     if char.get('quest_target'):
         target_name = char['quest_target']
-        # Пробуем найти красивое имя
         if char['quest_type'] == 'kill' and char['quest_target'] in BASE_ENEMIES:
             target_name = BASE_ENEMIES[char['quest_target']]['name']
             prog_txt = f"☠️ Убито: {char['quest_progress']}/{char['quest_goal']}"
         else:
             item = ITEMS_DB.get(char['quest_target'])
             if item: target_name = item['name']
-            
-            # Считаем предметы в инвентаре
-            inv_qty = database.get_inventory_count(user_id, 'material') # Это заглушка, лучше перебором
-            # Точный подсчет:
             items = database.get_inventory(user_id)
             curr = 0
             for i in items:
@@ -1499,34 +1542,34 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     break
             prog_txt = f"🎒 Собрано: {curr}/{char['quest_goal']}"
 
-        txt = (f"📜 *ТЕКУЩИЙ КОНТРАКТ*\n\n"
+        txt = (f"{header}"
+               f"⚔️ *ТЕКУЩИЙ КОНТРАКТ*\n"
                f"Цель: {target_name}\n{prog_txt}\n\n"
                f"💰 {char['quest_reward_gold']}g | 📚 {char['quest_reward_exp']}xp")
         
-        kb = [[InlineKeyboardButton("✅ Завершить задание", callback_data='complete_quest')],
-              [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+        kb = [
+            [InlineKeyboardButton("✅ Завершить", callback_data='complete_quest')],
+            [InlineKeyboardButton("❌ Отказаться", callback_data='cancel_quest')], # Ведет на подтверждение
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
+        ]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # Б) Если квеста нет - проверяем лимит (2 в день)
+    # СЦЕНАРИЙ 2: ЛИМИТ ЗАДАНИЙ
     today = datetime.now().date()
     last_date = char.get('last_quest_date')
     done_today = char.get('quests_completed_today', 0)
-
-    # Парсинг даты
     if isinstance(last_date, str):
         try: last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
         except: pass
-    
+        
     if last_date == today and done_today >= 2:
-        txt = (f"📜 *ГИЛЬДИЯ ЗАКРЫТА*\n\n"
-               f"Вы выполнили {done_today}/2 заданий сегодня.\n"
-               f"Мастер говорит: \"Хватит геройствовать, иди проспись!\"")
+        txt = f"{header}\nЛимит заданий исчерпан (2/2).\nПриходите завтра."
         kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['guild'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return GUILD_MENU
 
-    # В) Показываем доску
+    # СЦЕНАРИЙ 3: ДОСКА ОБЪЯВЛЕНИЙ
     stored_quests, last_refresh = database.get_stored_quests(user_id)
     if isinstance(last_refresh, str):
         try: last_refresh = datetime.strptime(last_refresh, '%Y-%m-%d').date()
@@ -1536,11 +1579,10 @@ async def guild_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if stored_quests and last_refresh == today:
         quests_to_show = stored_quests
     else:
-        quests_to_show = generate_daily_quests(char['rank'])
+        quests_to_show = generate_daily_quests(char['rank'], rep)
         database.save_daily_quests(user_id, quests_to_show)
 
-    status = f"Выполнено сегодня: {done_today}/2"
-    txt = f"📜 *ДОСКА ОБЪЯВЛЕНИЙ*\nВыберите контракт.\n_{status}_"
+    txt = f"{header}Выберите контракт ({done_today}/2 сегодня):"
     
     kb = []
     for q in quests_to_show:
