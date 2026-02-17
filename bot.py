@@ -31,7 +31,7 @@ IMAGE_URLS = {
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
-    'mag_goblin': 'https://i.pinimg.com/736x/00/75/fd/0075fdfce906f756ef6174aa8afc5401.jpg' ,
+    'goblin_shaman': 'https://i.pinimg.com/736x/00/75/fd/0075fdfce906f756ef6174aa8afc5401.jpg' ,
     'hot_goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXgGesfRif8L7MrmHFJruGNuxRWf3G_SFgTw&s', 
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
@@ -245,7 +245,7 @@ BASE_ENEMIES = {
         'base_gold': 18, 
         'rank': 'E', 
         'description': 'Бормочет заклинания и кидает огненные шары.', 
-        'image':  IMAGE_URLS['mag_goblin']', 
+        'image':  IMAGE_URLS['goblin_shaman']', 
         'difficulty': 'medium', 
         'abilities': ['basic_attack', 'ignite'], 
         'damage_type': 'magic', # Бьет магией!
