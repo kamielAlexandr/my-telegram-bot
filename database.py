@@ -562,9 +562,9 @@ def update_quest_progress(user_id, amount=1):
         conn.close()
 
 def complete_quest(user_id):
-    """Завершаем квест с учетом лимита (2 раза в день)"""
+    """Завершаем квест с учетом лимита и ПРАВИЛЬНЫМ начислением опыта"""
     conn = get_connection()
-    if not conn: return False, "Ошибка подключения к БД"
+    if not conn: return False, "Ошибка БД"
     try:
         with conn.cursor() as cursor:
             # 1. Получаем данные
@@ -576,9 +576,8 @@ def complete_quest(user_id):
                 """, (user_id,))
                 res = cursor.fetchone()
             except Exception as e:
-                # Если колонка quests_completed_today не создалась, это спасет от краша
                 conn.rollback()
-                return False, "Ошибка структуры БД. Перезапустите бота (init_db)."
+                return False, "Ошибка структуры БД (init_db)."
 
             if not res or not res[2]: 
                 return False, "У вас нет активного задания."
@@ -606,13 +605,9 @@ def complete_quest(user_id):
             
             # --- РАСЧЕТ ДНЕВНОГО ЛИМИТА ---
             today = datetime.now().date()
-            
-            # Приводим last_date к типу date, если это строка
             if isinstance(last_date, str):
-                try:
-                    last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
-                except:
-                    pass # Если ошибка парсинга, считаем, что даты не совпадают
+                try: last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
+                except: pass
 
             new_count = 1
             if last_date == today:
@@ -620,17 +615,24 @@ def complete_quest(user_id):
             else:
                 new_count = 1
 
-            # 3. ОБНОВЛЕНИЕ
+            # 3. ОБНОВЛЕНИЕ (ИСПРАВЛЕНО!)
+            # Мы убрали "experience = experience + %s" отсюда.
+            # Опыт начислим через add_experience ниже.
             cursor.execute("""
                 UPDATE player_characters 
-                SET gold = gold + %s, experience = experience + %s,
+                SET gold = gold + %s,
                     quest_type = NULL, quest_target = NULL, quest_goal = 0, quest_progress = 0,
                     last_quest_date = CURRENT_DATE,
                     quests_completed_today = %s
                 WHERE user_id=%s
-            """, (gold, exp, new_count, user_id))
+            """, (gold, new_count, user_id))
             
             conn.commit()
+            
+            # --- 4. НАЧИСЛЕНИЕ ОПЫТА (ВАЖНО) ---
+            # Вызываем функцию, которая умеет повышать уровень
+            add_experience(user_id, exp)
+
             return True, f"✅ Задание выполнено! ({new_count}/2 за сегодня)\nНаграда: {gold}g и {exp}xp"
             
     except Exception as e:
