@@ -2044,13 +2044,19 @@ async def show_craft_category(query, user_id, category_filter):
             result_item = ITEMS_DB.get(recipe['result'])
             if not result_item: continue
             
-            # --- ФИЛЬТРАЦИЯ ---
+            # --- ФИЛЬТРАЦИЯ (ИСПРАВЛЕНО) ---
             itype = result_item['type']
             is_match = False
             
-            if category_filter == 'weapon' and itype in ['weapon', 'magic_weapon']: is_match = True
-            elif category_filter == 'armor' and itype in ['heavy_armor', 'light_armor', 'magic_armor', 'armor']: is_match = True
-            elif category_filter == 'consumables' and itype in ['food', 'potion']: is_match = True
+            if category_filter == 'weapon':
+                if itype in ['weapon', 'magic_weapon']: is_match = True
+            
+            elif category_filter == 'armor':
+                # Добавляем ВСЕ типы брони
+                if itype in ['heavy_armor', 'light_armor', 'magic_armor', 'armor']: is_match = True
+            
+            elif category_filter == 'consumables':
+                if itype in ['food', 'potion']: is_match = True
             
             if not is_match: continue
             # ------------------
@@ -2077,7 +2083,6 @@ async def show_craft_category(query, user_id, category_filter):
         if not found_recipes:
             txt += "В этой категории пока нет рецептов."
 
-        # Обрезаем текст если все равно длинный (но теперь вряд ли)
         if len(txt) > 1000: txt = txt[:1000] + "..."
         
         kb.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data='craft_menu')])
