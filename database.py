@@ -877,3 +877,70 @@ def cancel_quest(user_id):
             return True, f"Задание отменено.\n📉 Репутация: {new_rep} (-10)"
     finally:
         conn.close()
+def check_building(user_id, building_name):
+    """Проверяет, построено ли здание (пока через костыль-таблицу или просто json, 
+    но для простоты будем хранить это как 'особый предмет' в инвентаре с ID 'building_alchemy')"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT quantity FROM inventory WHERE user_id = %s AND item_key = %s", (user_id, building_name))
+    res = c.fetchone()
+    conn.close()
+    return res and res[0] > 0
+
+def build_building(user_id, building_name):
+    """Строит здание (выдает невидимый предмет)"""
+    # Мы используем existing функцию add_item или прямую вставку
+    conn = get_connection()
+    c = conn.cursor()
+    # Просто вставляем предмет-флаг
+    c.execute("INSERT INTO inventory (user_id, item_key, item_type, item_name, quantity, equip_slot) VALUES (%s, %s, 'building', 'Лавка', 1, NULL) ON CONFLICT DO NOTHING", (user_id, building_name))
+    conn.commit()
+    conn.close()
+# В database.py
+
+def init_companion_table():
+    """Создает таблицу для экспедиций, если её нет"""
+    conn = get_connection()
+    c = conn.cursor()
+    # state: 'idle' (свободен) или 'busy' (занят)
+    # location: 'E', 'D', 'C'...
+    # start_time: timestamp
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS expeditions (
+            user_id INTEGER PRIMARY KEY,
+            state TEXT DEFAULT 'idle',
+            location TEXT,
+            start_time TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_expedition_status(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT state, location, start_time FROM expeditions WHERE user_id = %s", (user_id,))
+    res = c.fetchone()
+    conn.close()
+    if not res:
+        return {'state': 'idle', 'location': None, 'start_time': None}
+    return {'state': res[0], 'location': res[1], 'start_time': res[2]}
+
+def start_expedition(user_id, location):
+    conn = get_connection()
+    c = conn.cursor()
+    now = datetime.now()
+    c.execute("""
+        INSERT INTO expeditions (user_id, state, location, start_time) 
+        VALUES (%s, 'busy', %s, %s)
+        ON CONFLICT(user_id) DO UPDATE SET state='busy', location=%s, start_time=%s
+    """, (user_id, location, now, location, now))
+    conn.commit()
+    conn.close()
+
+def finish_expedition(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE expeditions SET state='idle', location=NULL, start_time=NULL WHERE user_id=%s", (user_id,))
+    conn.commit()
+    conn.close()
