@@ -225,6 +225,8 @@ CRAFT_RECIPES = {
     # Новый рецепт
     'apprentice_robe': {'result': 'apprentice_robe', 'cost': 80, 'mats': {'spider_silk': 5, 'slime_goo': 5}},
     # Новый рецепт
+    # Новый рецепт: Звездная мантия (Ранг D)
+    'archmage_robe': {'result': 'archmage_robe', 'cost': 300, 'mats': {'spider_silk': 15, 'small_mp': 5}},
     'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
     'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
 }
