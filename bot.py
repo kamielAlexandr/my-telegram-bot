@@ -905,7 +905,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 7. КРАФТ
     elif data == 'craft_menu':
-        await show_craft_category(query, user_id)
+        await craft_handler(update, context)
         return CRAFT_MENU
         
     # 8. ТОП ИГРОКОВ
@@ -2060,6 +2060,7 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return MAIN_MENU
     
     # 2. ГЛАВНОЕ МЕНЮ КРАФТА (ВЫБОР КАТЕГОРИИ)
+    # 2. ГЛАВНОЕ МЕНЮ КРАФТА (ВЫБОР КАТЕГОРИИ)
     elif data == 'craft_menu':
         await query.answer()
         txt = "🛠 *Кузница*\nВыберите категорию предметов для создания:"
@@ -2072,7 +2073,7 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return CRAFT_MENU
-
+        
     # 3. ПРОСМОТР КАТЕГОРИИ
     elif data.startswith('craft_cat_'):
         await query.answer()
