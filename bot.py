@@ -2003,46 +2003,50 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_craft_menu(query, user_id):
-    items = database.get_inventory(user_id)
-    inv_dict = {i['item_key']: i['quantity'] for i in items}
-    
-    txt = "🛠 *Кузница*\nДревний мастер смотрит на твои трофеи. Для создания предметов нужны ресурсы и золото.\n━━━━━━━━━━━━━━━━\n"
-    
-    for key, recipe in CRAFT_RECIPES.items():
-        result_item = ITEMS_DB.get(recipe['result'])
-        if not result_item: continue
-        
-        # Заголовок рецепта
-        txt += f"🔸 *{result_item['name']}* (Цена: {recipe['cost']}g)\n"
-        
-        # Список материалов
-        mats_list = []
-        can_craft = True
-        
-        for mat_key, required_amount in recipe['mats'].items():
-            mat_info = ITEMS_DB.get(mat_key)
-            mat_name = mat_info['name'] if mat_info else mat_key
-            user_amount = inv_dict.get(mat_key, 0)
-            
-            # Ставим галочку или крестик
-            if user_amount >= required_amount:
-                mark = "✅"
-            else:
-                mark = "❌"
-                can_craft = False
-                
-            mats_list.append(f"{mark} {mat_name}: {user_amount}/{required_amount}")
-        
-        txt += "\n".join(mats_list) + "\n\n"
-
-    # Если текст слишком длинный для подписи к фото, отправляем просто текст
-    # Но так как у нас safe_edit умеет менять медиа, попробуем обновить описание
     try:
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt[:1024], parse_mode='Markdown'), keyboard=get_craft_keyboard(inv_dict))
-    except Exception:
-        # Если описание не влезает в caption (лимит 1024), шлем без картинки или сокращаем
-        await safe_edit(query, text=txt, keyboard=get_craft_keyboard(inv_dict))
+        items = database.get_inventory(user_id)
+        inv_dict = {i['item_key']: i['quantity'] for i in items}
+        
+        txt = "🛠 *Кузница*\nДревний мастер смотрит на твои трофеи.\n━━━━━━━━━━━━━━━━\n"
+        
+        for key, recipe in CRAFT_RECIPES.items():
+            # 1. Получаем предмет результата
+            result_item = ITEMS_DB.get(recipe['result'])
+            
+            # Если предмета нет в базе (например, опечатка), пропускаем, чтобы не ломать меню
+            if not result_item:
+                print(f"⚠️ Ошибка крафта: Рецепт ссылается на несуществующий предмет '{recipe['result']}'")
+                continue
+            
+            # Заголовок рецепта
+            txt += f"🔸 *{result_item['name']}* (Цена: {recipe['cost']}g)\n"
+            
+            # Список материалов
+            mats_list = []
+            
+            for mat_key, required_amount in recipe['mats'].items():
+                mat_info = ITEMS_DB.get(mat_key)
+                # Если материала нет в базе, используем его ключ как имя
+                mat_name = mat_info['name'] if mat_info else mat_key
+                
+                user_amount = inv_dict.get(mat_key, 0)
+                mark = "✅" if user_amount >= required_amount else "❌"
+                
+                mats_list.append(f"{mark} {mat_name}: {user_amount}/{required_amount}")
+            
+            txt += "\n".join(mats_list) + "\n\n"
 
+        # Обрезаем текст, если слишком длинный
+        if len(txt) > 1000: txt = txt[:1000] + "..."
+
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt, parse_mode='Markdown'), keyboard=get_craft_keyboard(inv_dict))
+
+    except Exception as e:
+        import traceback
+        print("❌ КРИТИЧЕСКАЯ ОШИБКА В МЕНЮ КРАФТА:")
+        print(traceback.format_exc()) # Это покажет полную ошибку в консоли
+        await query.answer("Кузница закрыта на ремонт (Ошибка кода).", show_alert=True)
+        
 async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
