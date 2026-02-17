@@ -194,9 +194,11 @@ ITEMS_DB = {
     'demon_horn': {'name': '😈 Рог демона', 'desc': 'Излучает жар.', 'price': 100, 'type': 'material', 'cat': 'mat', 'rank': 'A'},
     'void_crystal': {'name': '🌌 Осколок Пустоты', 'desc': 'Из другого мира.', 'price': 300, 'type': 'material', 'cat': 'mat', 'rank': 'S'}
 # --- ДОБАВИТЬ В ITEMS_DB ---
-
-ITEMS_DB.update({
-    # === РЕСУРСЫ РАНГ E (РУИНЫ) ===
+# ==========================
+    # 🌿 РЕСУРСЫ (ТРАВНИК)
+    # ==========================
+    
+    # E Ранг (Руины)
     'moss_lichen': {'name': '🌿 Мшистый лишайник', 'price': 2, 'type': 'material', 'rank': 'E'},
     'ruin_wormwood': {'name': '🌿 Руинная полынь', 'price': 3, 'type': 'material', 'rank': 'E'},
     'stone_beetle': {'name': '🐞 Каменный жук', 'price': 4, 'type': 'material', 'rank': 'E'},
@@ -206,7 +208,7 @@ ITEMS_DB.update({
     'stone_berry': {'name': '🍓 Каменная ягода', 'price': 3, 'type': 'material', 'rank': 'E'},
     'ruin_rose': {'name': '🌸 Руинная роза', 'price': 10, 'type': 'material', 'rank': 'E'},
 
-    # === РЕСУРСЫ РАНГ D (ЛЕС) ===
+    # D Ранг (Лес)
     'forest_fern': {'name': '🌿 Лесной папоротник', 'price': 5, 'type': 'material', 'rank': 'D'},
     'life_root': {'name': '🌿 Корень жизни', 'price': 8, 'type': 'material', 'rank': 'D'},
     'hypericum': {'name': '🌿 Зверобой', 'price': 6, 'type': 'material', 'rank': 'D'},
@@ -218,39 +220,178 @@ ITEMS_DB.update({
     'river_pebble': {'name': '🪨 Речная галька', 'price': 4, 'type': 'material', 'rank': 'D'},
     'flint': {'name': '🪨 Кремень', 'price': 7, 'type': 'material', 'rank': 'D'},
     'violet': {'name': '🌸 Фиалка', 'price': 8, 'type': 'material', 'rank': 'D'},
+    'lily_valley': {'name': '🌸 Ландыш', 'price': 9, 'type': 'material', 'rank': 'D'},
 
-    # === ЗЕЛЬЯ АЛХИМИКА (НОВЫЕ ТИПЫ) ===
-    # effect: значение
-    # duration: кол-во ходов (2 хода = 30 сек, 3 хода = 45 сек)
-    # buff_type: какой стат качаем
+    # C Ранг (Катакомбы)
+    'mycelium': {'name': '🌿 Грибница', 'price': 10, 'type': 'material', 'rank': 'C'},
+    'grave_moss': {'name': '🌿 Могильный мох', 'price': 12, 'type': 'material', 'rank': 'C'},
+    'corpse_root': {'name': '🌿 Трупный корень', 'price': 15, 'type': 'material', 'rank': 'C'},
+    'cave_cricket': {'name': '🐞 Пещерный сверчок', 'price': 12, 'type': 'material', 'rank': 'C'},
+    'bone_beetle': {'name': '🐞 Костяной жук', 'price': 14, 'type': 'material', 'rank': 'C'},
+    'glowing_larva': {'name': '🐞 Светящаяся личинка', 'price': 16, 'type': 'material', 'rank': 'C'},
+    'bone_crumbs': {'name': '🪨 Костяная крошка', 'price': 10, 'type': 'material', 'rank': 'C'},
+    'limestone': {'name': '🪨 Известняк', 'price': 11, 'type': 'material', 'rank': 'C'},
+    'sarcophagus_shard': {'name': '🪨 Осколок саркофага', 'price': 20, 'type': 'material', 'rank': 'C'},
+    'ghost_orchid': {'name': '🌸 Призрачная орхидея', 'price': 25, 'type': 'material', 'rank': 'C'},
+    'bone_berry': {'name': '🍓 Костяника', 'price': 15, 'type': 'material', 'rank': 'C'},
 
-    # Ранг E
+    # B Ранг (Замок)
+    'royal_thyme': {'name': '🌿 Королевский тимьян', 'price': 25, 'type': 'material', 'rank': 'B'},
+    'castle_ivy': {'name': '🌿 Замковый плющ', 'price': 20, 'type': 'material', 'rank': 'B'},
+    'knight_cherry': {'name': '🍓 Рыцарская вишня', 'price': 30, 'type': 'material', 'rank': 'B'},
+    'baron_currant': {'name': '🍓 Барская смородина', 'price': 28, 'type': 'material', 'rank': 'B'},
+    'velvet_beetle': {'name': '🐞 Бархатный жук', 'price': 35, 'type': 'material', 'rank': 'B'},
+    'moth': {'name': '🐞 Моль-чешуйница', 'price': 30, 'type': 'material', 'rank': 'B'},
+    'duke_lily': {'name': '🌸 Лилия герцога', 'price': 50, 'type': 'material', 'rank': 'B'},
+    'rosehip': {'name': '🌸 Шиповник', 'price': 20, 'type': 'material', 'rank': 'B'},
+    'marble_chips': {'name': '🪨 Мраморная крошка', 'price': 25, 'type': 'material', 'rank': 'B'},
+    'rusty_iron': {'name': '🪨 Ржавое железо', 'price': 15, 'type': 'material', 'rank': 'B'},
+    'precious_shard': {'name': '🪨 Драгоценный осколок', 'price': 60, 'type': 'material', 'rank': 'B'},
+
+    # A Ранг (Пекло)
+    'hell_nettle': {'name': '🌿 Адская крапива', 'price': 60, 'type': 'material', 'rank': 'A'},
+    'devil_claw': {'name': '🌿 Дьявольский коготь', 'price': 70, 'type': 'material', 'rank': 'A'},
+    'flame_berry': {'name': '🍓 Пламенная ягода', 'price': 65, 'type': 'material', 'rank': 'A'},
+    'blood_berry': {'name': '🍓 Кровавая ягода', 'price': 75, 'type': 'material', 'rank': 'A'},
+    'fire_fly': {'name': '🐞 Огненная муха', 'price': 80, 'type': 'material', 'rank': 'A'},
+    'demon_roach': {'name': '🐞 Демон-таракан', 'price': 70, 'type': 'material', 'rank': 'A'},
+    'lava_stone': {'name': '🪨 Лавовый камень', 'price': 90, 'type': 'material', 'rank': 'A'},
+    'sinner_ash': {'name': '🪨 Пепел грешников', 'price': 50, 'type': 'material', 'rank': 'A'},
+    'obsidian': {'name': '🪨 Обсидиан', 'price': 100, 'type': 'material', 'rank': 'A'},
+    'fire_rose': {'name': '🌸 Огненная роза', 'price': 120, 'type': 'material', 'rank': 'A'},
+    'hell_lily': {'name': '🌸 Адская лилия', 'price': 130, 'type': 'material', 'rank': 'A'},
+
+    # S Ранг (Хаос)
+    'chaos_grass': {'name': '🌿 Трава хаоса', 'price': 200, 'type': 'material', 'rank': 'S'},
+    'star_moss': {'name': '🌿 Звёздный мох', 'price': 250, 'type': 'material', 'rank': 'S'},
+    'cosmic_berry': {'name': '🍓 Космическая ягода', 'price': 300, 'type': 'material', 'rank': 'S'},
+    'void_berry': {'name': '🍓 Ягода пустоты', 'price': 350, 'type': 'material', 'rank': 'S'},
+    'crystal_dragonfly': {'name': '🐞 Кристальная стрекоза', 'price': 400, 'type': 'material', 'rank': 'S'},
+    'phantom_beetle': {'name': '🐞 Фантомный жук', 'price': 380, 'type': 'material', 'rank': 'S'},
+    'chaos_shard': {'name': '🪨 Осколок хаоса', 'price': 500, 'type': 'material', 'rank': 'S'},
+    'aether_crystal': {'name': '🪨 Эфирный кристалл', 'price': 600, 'type': 'material', 'rank': 'S'},
+    'primordial_matter': {'name': '🪨 Праматерия', 'price': 1000, 'type': 'material', 'rank': 'S'},
+    'void_flower': {'name': '🌸 Цветок бездны', 'price': 700, 'type': 'material', 'rank': 'S'},
+    'chaos_nectarine': {'name': '🌸 Нектарин хаоса', 'price': 800, 'type': 'material', 'rank': 'S'},
+
+
+    # ==========================
+    # 🧪 ЗЕЛЬЯ (ГОТОВЫЕ)
+    # ==========================
+    # E Ранг
+    'pot_small_hp': {'name': '🧪 Малое лечебное', 'desc': '+30 HP', 'price': 30, 'type': 'potion', 'effect': 30, 'cat': 'food', 'rank': 'E'},
+    'pot_small_mp': {'name': '🔮 Малое магическое', 'desc': '+20 MP', 'price': 30, 'type': 'potion', 'effect': 20, 'cat': 'food', 'rank': 'E'},
     'pot_small_str': {'name': '🧪 Малая мощь', 'desc': '+5 Физ.урона (2 хода)', 'price': 50, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 5, 'duration': 2, 'rank': 'E'},
     'pot_stone_skin': {'name': '🧪 Каменная кожа', 'desc': '+10 Брони (2 хода)', 'price': 50, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 10, 'duration': 2, 'rank': 'E'},
     'pot_agility': {'name': '🧪 Проворство', 'desc': '+2 Ловкости (2 хода)', 'price': 50, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 2, 'duration': 2, 'rank': 'E'},
-    'pot_poison_touch': {'name': '🧪 Ядовитое касание', 'desc': 'Оружие отравляет врага.', 'price': 60, 'type': 'buff_potion', 'buff_type': 'poison_weapon', 'effect': 10, 'duration': 3, 'rank': 'E'},
+    'pot_poison_touch': {'name': '☠️ Ядовитое касание', 'desc': 'Оружие отравляет (10 ур/ход)', 'price': 60, 'type': 'buff_potion', 'buff_type': 'poison_weapon', 'effect': 10, 'duration': 3, 'rank': 'E'},
+    'pot_wind_speed': {'name': '🧪 Скорость ветра', 'desc': '+10% Уворота (2 хода)', 'price': 60, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 10, 'duration': 2, 'rank': 'E'},
 
-    # Ранг D
+    # D Ранг
+    'pot_medium_hp': {'name': '🧪 Лечебное зелье', 'desc': '+60 HP', 'price': 60, 'type': 'potion', 'effect': 60, 'cat': 'food', 'rank': 'D'},
+    'pot_mana_rec': {'name': '🔮 Восстановление маны', 'desc': '+40 MP', 'price': 60, 'type': 'potion', 'effect': 40, 'cat': 'food', 'rank': 'D'},
     'pot_forest_rage': {'name': '🧪 Ярость леса', 'desc': '+10 Физ.урона (3 хода)', 'price': 100, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 10, 'duration': 3, 'rank': 'D'},
     'pot_flower_magic': {'name': '🧪 Магия цветов', 'desc': '+5 Маг.урона (3 хода)', 'price': 100, 'type': 'buff_potion', 'buff_type': 'intelligence', 'effect': 5, 'duration': 3, 'rank': 'D'},
     'pot_oak_skin': {'name': '🧪 Дубовая броня', 'desc': '+20 Брони (3 хода)', 'price': 120, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 20, 'duration': 3, 'rank': 'D'},
-    'pot_fire_cloak': {'name': '🧪 Огненный плащ', 'desc': 'Жжет врага при атаке.', 'price': 150, 'type': 'buff_potion', 'buff_type': 'fire_shield', 'effect': 10, 'duration': 2, 'rank': 'D'},
-})
+    'pot_evasion': {'name': '🧪 Уклонение', 'desc': '+4 Ловкости (3 хода)', 'price': 120, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 4, 'duration': 3, 'rank': 'D'},
+    'pot_fire_cloak': {'name': '🔥 Огненный плащ', 'desc': 'Жжет врага при атаке (10 ур).', 'price': 150, 'type': 'buff_potion', 'buff_type': 'fire_shield', 'effect': 10, 'duration': 2, 'rank': 'D'},
+
+    # C Ранг
+    'pot_elixir_life': {'name': '🧪 Эликсир жизни', 'desc': '+100 HP', 'price': 150, 'type': 'potion', 'effect': 100, 'cat': 'food', 'rank': 'C'},
+    'pot_necro': {'name': '🔮 Некромантия', 'desc': '+70 MP', 'price': 150, 'type': 'potion', 'effect': 70, 'cat': 'food', 'rank': 'C'},
+    'pot_bone_str': {'name': '🧪 Костяная сила', 'desc': '+15 Физ.урона (4 хода)', 'price': 200, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 15, 'duration': 4, 'rank': 'C'},
+    'pot_ghost_pow': {'name': '🧪 Призрачная мощь', 'desc': '+10 Маг.урона (4 хода)', 'price': 200, 'type': 'buff_potion', 'buff_type': 'intelligence', 'effect': 10, 'duration': 4, 'rank': 'C'},
+    'pot_dead_armor': {'name': '🧪 Броня мертвеца', 'desc': '+30 Брони (4 хода)', 'price': 220, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 30, 'duration': 4, 'rank': 'C'},
+    'pot_corpse_agi': {'name': '🧪 Трупная ловкость', 'desc': '+6 Ловкости (4 хода)', 'price': 220, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 6, 'duration': 4, 'rank': 'C'},
+    'item_ice_spike': {'name': '❄️ Свиток Ледяного Шипа', 'desc': 'Наносит 40 урона (Однораз.)', 'price': 250, 'type': 'combat_item', 'effect': 40, 'rank': 'C'},
+
+    # B Ранг
+    'pot_knight_hp': {'name': '🧪 Рыцарское здоровье', 'desc': '+150 HP', 'price': 300, 'type': 'potion', 'effect': 150, 'cat': 'food', 'rank': 'B'},
+    'pot_lord_mp': {'name': '🔮 Мана лорда', 'desc': '+100 MP', 'price': 300, 'type': 'potion', 'effect': 100, 'cat': 'food', 'rank': 'B'},
+    'pot_steel_pow': {'name': '🧪 Мощь стали', 'desc': '+20 Физ.урона (5 ходов)', 'price': 400, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 20, 'duration': 5, 'rank': 'B'},
+    'pot_duke_mag': {'name': '🧪 Герцогская магия', 'desc': '+15 Маг.урона (5 ходов)', 'price': 400, 'type': 'buff_potion', 'buff_type': 'intelligence', 'effect': 15, 'duration': 5, 'rank': 'B'},
+    'pot_bastion': {'name': '🧪 Бастион', 'desc': '+40 Брони (5 ходов)', 'price': 450, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 40, 'duration': 5, 'rank': 'B'},
+    'pot_ghost_evasion': {'name': '🧪 Призрачный уворот', 'desc': '+8 Ловкости (5 ходов)', 'price': 450, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 8, 'duration': 5, 'rank': 'B'},
+    'pot_crit': {'name': '🧪 Критический удар', 'desc': 'Шанс крита +10% (5 ходов)', 'price': 500, 'type': 'buff_potion', 'buff_type': 'crit_chance', 'effect': 10, 'duration': 5, 'rank': 'B'},
+
+    # A Ранг
+    'pot_demon_blood': {'name': '🧪 Кровь демона', 'desc': '+250 HP', 'price': 600, 'type': 'potion', 'effect': 250, 'cat': 'food', 'rank': 'A'},
+    'pot_void_nrg': {'name': '🔮 Энергия бездны', 'desc': '+150 MP', 'price': 600, 'type': 'potion', 'effect': 150, 'cat': 'food', 'rank': 'A'},
+    'pot_hell_fury': {'name': '🧪 Ярость ада', 'desc': '+30 Физ.урона (6 ходов)', 'price': 800, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 30, 'duration': 6, 'rank': 'A'},
+    'pot_mind_flame': {'name': '🧪 Пламя разума', 'desc': '+25 Маг.урона (6 ходов)', 'price': 800, 'type': 'buff_potion', 'buff_type': 'intelligence', 'effect': 25, 'duration': 6, 'rank': 'A'},
+    'pot_lava_armor': {'name': '🧪 Лавовая броня', 'desc': '+60 Брони (6 ходов)', 'price': 900, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 60, 'duration': 6, 'rank': 'A'},
+    'pot_devil_agi': {'name': '🧪 Дьявольская ловкость', 'desc': '+10 Ловкости (6 ходов)', 'price': 900, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 10, 'duration': 6, 'rank': 'A'},
+    'pot_fire_aura': {'name': '🔥 Огненная аура', 'desc': '50 урона врагу каждый ход (3 хода)', 'price': 1000, 'type': 'buff_potion', 'buff_type': 'dot_aura', 'effect': 50, 'duration': 3, 'rank': 'A'},
+
+    # S Ранг
+    'pot_god_heal': {'name': '🧪 Божественное исцеление', 'desc': '+500 HP + Реген', 'price': 2000, 'type': 'potion', 'effect': 500, 'cat': 'food', 'rank': 'S'},
+    'pot_inf_mana': {'name': '🔮 Бесконечная мана', 'desc': '+300 MP + Реген', 'price': 2000, 'type': 'potion', 'effect': 300, 'cat': 'food', 'rank': 'S'},
+    'pot_chaos_pow': {'name': '🧪 Сила хаоса', 'desc': '+50 Физ.урона (8 ходов)', 'price': 2500, 'type': 'buff_potion', 'buff_type': 'strength', 'effect': 50, 'duration': 8, 'rank': 'S'},
+    'pot_void_mag': {'name': '🧪 Магия пустоты', 'desc': '+40 Маг.урона (8 ходов)', 'price': 2500, 'type': 'buff_potion', 'buff_type': 'intelligence', 'effect': 40, 'duration': 8, 'rank': 'S'},
+    'pot_chaos_def': {'name': '🧪 Твердыня хаоса', 'desc': '+100 Брони (8 ходов)', 'price': 3000, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 100, 'duration': 8, 'rank': 'S'},
+    'pot_inv_step': {'name': '🧪 Незримая поступь', 'desc': '+15 Ловкости (8 ходов)', 'price': 3000, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 15, 'duration': 8, 'rank': 'S'},
+    'pot_deadly_psn': {'name': '☠️ Смертельный яд', 'desc': '200 яда/ход', 'price': 3500, 'type': 'buff_potion', 'buff_type': 'poison_weapon', 'effect': 200, 'duration': 3, 'rank': 'S'},
+
+
+ 
 }
 
+
+# --- РЕЦЕПТЫ АЛХИМИИ ---
 ALCHEMY_RECIPES = {
-    # E Ранг
-    'pot_small_hp': {'result': 'small_hp', 'cost': 10, 'mats': {'moss_lichen': 2, 'ruin_wormwood': 1}},
-    'pot_small_mp': {'result': 'small_mp', 'cost': 10, 'mats': {'firefly_shard': 3, 'dust_ages': 1}},
+    # === E RANG ===
+    'pot_small_hp': {'result': 'pot_small_hp', 'cost': 10, 'mats': {'moss_lichen': 2, 'ruin_wormwood': 1}},
+    'pot_small_mp': {'result': 'pot_small_mp', 'cost': 10, 'mats': {'firefly_shard': 3, 'dust_ages': 1}},
     'pot_small_str': {'result': 'pot_small_str', 'cost': 15, 'mats': {'stone_beetle': 2, 'ancient_shard': 1}},
     'pot_stone_skin': {'result': 'pot_stone_skin', 'cost': 15, 'mats': {'ancient_shard': 2, 'moss_lichen': 1}},
-    'pot_poison': {'result': 'pot_poison_touch', 'cost': 20, 'mats': {'stone_berry': 2, 'dust_ages': 1}},
+    'pot_agility': {'result': 'pot_agility', 'cost': 20, 'mats': {'stone_beetle': 1, 'dust_ages': 2}},
+    'pot_poison_touch': {'result': 'pot_poison_touch', 'cost': 25, 'mats': {'stone_berry': 2, 'dust_ages': 1}},
+    'pot_wind_speed': {'result': 'pot_wind_speed', 'cost': 20, 'mats': {'ruin_wormwood': 2, 'stone_beetle': 1}},
 
-    # D Ранг
-    'pot_medium_hp': {'result': 'medium_hp', 'cost': 30, 'mats': {'life_root': 2, 'forest_fern': 1}},
+    # === D RANG ===
+    'pot_medium_hp': {'result': 'pot_medium_hp', 'cost': 30, 'mats': {'life_root': 2, 'forest_fern': 1}},
+    'pot_mana_rec': {'result': 'pot_mana_rec', 'cost': 30, 'mats': {'firefly_shard': 3, 'blueberry': 2}}, # firefly from E rank works too or define generic firefly
     'pot_forest_rage': {'result': 'pot_forest_rage', 'cost': 40, 'mats': {'leaf_beetle': 3, 'flint': 1}},
-    'pot_oak_skin': {'result': 'pot_oak_skin', 'cost': 40, 'mats': {'river_pebble': 3, 'life_root': 1}},
+    'pot_flower_magic': {'result': 'pot_flower_magic', 'cost': 40, 'mats': {'violet': 2, 'firefly_shard': 2}},
+    'pot_oak_skin': {'result': 'pot_oak_skin', 'cost': 45, 'mats': {'river_pebble': 3, 'life_root': 1}},
+    'pot_evasion': {'result': 'pot_evasion', 'cost': 45, 'mats': {'woodlice': 3, 'forest_fern': 2}},
     'pot_fire_cloak': {'result': 'pot_fire_cloak', 'cost': 50, 'mats': {'flint': 2, 'forest_raspberry': 3}},
+
+    # === C RANG ===
+    'pot_elixir_life': {'result': 'pot_elixir_life', 'cost': 60, 'mats': {'mycelium': 3, 'grave_moss': 2}},
+    'pot_necro': {'result': 'pot_necro', 'cost': 60, 'mats': {'glowing_larva': 3, 'bone_crumbs': 2}},
+    'pot_bone_str': {'result': 'pot_bone_str', 'cost': 70, 'mats': {'bone_beetle': 3, 'sarcophagus_shard': 2}},
+    'pot_ghost_pow': {'result': 'pot_ghost_pow', 'cost': 70, 'mats': {'ghost_orchid': 1, 'glowing_larva': 3}},
+    'pot_dead_armor': {'result': 'pot_dead_armor', 'cost': 80, 'mats': {'limestone': 3, 'bone_crumbs': 2}},
+    'pot_corpse_agi': {'result': 'pot_corpse_agi', 'cost': 80, 'mats': {'cave_cricket': 3, 'corpse_root': 2}},
+    'item_ice_spike': {'result': 'item_ice_spike', 'cost': 90, 'mats': {'limestone': 3, 'ghost_orchid': 1}},
+
+    # === B RANG ===
+    'pot_knight_hp': {'result': 'pot_knight_hp', 'cost': 100, 'mats': {'royal_thyme': 3, 'castle_ivy': 2, 'knight_cherry': 1}},
+    'pot_lord_mp': {'result': 'pot_lord_mp', 'cost': 100, 'mats': {'velvet_beetle': 3, 'precious_shard': 2}},
+    'pot_steel_pow': {'result': 'pot_steel_pow', 'cost': 120, 'mats': {'rusty_iron': 3, 'velvet_beetle': 2}},
+    'pot_duke_mag': {'result': 'pot_duke_mag', 'cost': 120, 'mats': {'duke_lily': 2, 'precious_shard': 2}},
+    'pot_bastion': {'result': 'pot_bastion', 'cost': 130, 'mats': {'marble_chips': 3, 'rusty_iron': 2}},
+    'pot_ghost_evasion': {'result': 'pot_ghost_evasion', 'cost': 130, 'mats': {'moth': 3, 'rosehip': 2}},
+    'pot_crit': {'result': 'pot_crit', 'cost': 150, 'mats': {'precious_shard': 3, 'duke_lily': 1}},
+
+    # === A RANG ===
+    'pot_demon_blood': {'result': 'pot_demon_blood', 'cost': 200, 'mats': {'hell_nettle': 3, 'devil_claw': 2, 'blood_berry': 1}},
+    'pot_void_nrg': {'result': 'pot_void_nrg', 'cost': 200, 'mats': {'fire_fly': 3, 'sinner_ash': 2}},
+    'pot_hell_fury': {'result': 'pot_hell_fury', 'cost': 250, 'mats': {'obsidian': 3, 'demon_roach': 2}},
+    'pot_mind_flame': {'result': 'pot_mind_flame', 'cost': 250, 'mats': {'hell_lily': 2, 'fire_fly': 3}},
+    'pot_lava_armor': {'result': 'pot_lava_armor', 'cost': 280, 'mats': {'lava_stone': 3, 'obsidian': 2}},
+    'pot_devil_agi': {'result': 'pot_devil_agi', 'cost': 280, 'mats': {'demon_roach': 3, 'hell_nettle': 2}},
+    'pot_fire_aura': {'result': 'pot_fire_aura', 'cost': 300, 'mats': {'lava_stone': 3, 'fire_rose': 2}},
+
+    # === S RANG ===
+    'pot_god_heal': {'result': 'pot_god_heal', 'cost': 500, 'mats': {'chaos_grass': 3, 'star_moss': 2, 'cosmic_berry': 1}},
+    'pot_inf_mana': {'result': 'pot_inf_mana', 'cost': 500, 'mats': {'crystal_dragonfly': 3, 'aether_crystal': 2}},
+    'pot_chaos_pow': {'result': 'pot_chaos_pow', 'cost': 600, 'mats': {'chaos_shard': 3, 'phantom_beetle': 2}},
+    'pot_void_mag': {'result': 'pot_void_mag', 'cost': 600, 'mats': {'void_flower': 2, 'crystal_dragonfly': 3}},
+    'pot_chaos_def': {'result': 'pot_chaos_def', 'cost': 700, 'mats': {'primordial_matter': 3, 'chaos_shard': 2}},
+    'pot_inv_step': {'result': 'pot_inv_step', 'cost': 700, 'mats': {'phantom_beetle': 3, 'chaos_grass': 2}},
+    'pot_deadly_psn': {'result': 'pot_deadly_psn', 'cost': 800, 'mats': {'void_berry': 3, 'star_moss': 2}},
 }
 # --- РЕЦЕПТЫ КРАФТА ---
 CRAFT_RECIPES = {
@@ -585,23 +726,38 @@ LOCATIONS = {
     'S': {'name': '🌌 Трон Хаоса', 'description': 'Пустота за пределами реальности.', 'image': IMAGE_URLS['throne_god'], 'min_level': 50, 'enemies': ['void_walker', 'dragon_ancient', 'final_god']}
 }
 # --- НАСТРОЙКИ ЭКСПЕДИЦИЙ ---
+# --- НАСТРОЙКИ ЭКСПЕДИЦИЙ (ТРАВНИК) ---
 EXPEDITION_CONFIG = {
     'E': {
-        'name': '🌿 Забытые руины', 
-        'time_minutes': 15,  # Время похода
-        'loot': ['moss_lichen', 'ruin_wormwood', 'stone_beetle', 'firefly_shard', 'ancient_shard', 'stone_berry']
+        'name': '🌿 Забытые руины (E)', 
+        'time_minutes': 15, 
+        'loot': ['moss_lichen', 'ruin_wormwood', 'stone_beetle', 'firefly_shard', 'ancient_shard', 'dust_ages', 'stone_berry', 'ruin_rose']
     },
     'D': {
-        'name': '🌲 Тенистый лес', 
+        'name': '🌲 Тенистый лес (D)', 
         'time_minutes': 30, 
-        'loot': ['forest_fern', 'life_root', 'forest_raspberry', 'leaf_beetle', 'woodlice', 'river_pebble']
+        'loot': ['forest_fern', 'life_root', 'hypericum', 'forest_raspberry', 'blueberry', 'wolf_berry', 'leaf_beetle', 'woodlice', 'river_pebble', 'flint', 'violet']
     },
     'C': {
-        'name': '☠️ Катакомбы', 
+        'name': '☠️ Мрачные катакомбы (C)', 
         'time_minutes': 60, 
-        'loot': ['grave_moss', 'corpse_root', 'bone_beetle', 'glowing_larva', 'bone_dust', 'limestone']
+        'loot': ['mycelium', 'grave_moss', 'corpse_root', 'cave_cricket', 'bone_beetle', 'glowing_larva', 'bone_crumbs', 'limestone', 'sarcophagus_shard', 'ghost_orchid', 'bone_berry']
     },
-    # Можно добавить B, A, S позже
+    'B': {
+        'name': '🏰 Старый замок (B)', 
+        'time_minutes': 90, 
+        'loot': ['royal_thyme', 'castle_ivy', 'knight_cherry', 'baron_currant', 'velvet_beetle', 'moth', 'duke_lily', 'rosehip', 'marble_chips', 'rusty_iron', 'precious_shard']
+    },
+    'A': {
+        'name': '🔥 Пекло (A)', 
+        'time_minutes': 120, 
+        'loot': ['hell_nettle', 'devil_claw', 'flame_berry', 'blood_berry', 'fire_fly', 'demon_roach', 'lava_stone', 'sinner_ash', 'obsidian', 'fire_rose', 'hell_lily']
+    },
+    'S': {
+        'name': '⚡ Искажённые земли (S)', 
+        'time_minutes': 180, 
+        'loot': ['chaos_grass', 'star_moss', 'cosmic_berry', 'void_berry', 'crystal_dragonfly', 'phantom_beetle', 'chaos_shard', 'aether_crystal', 'primordial_matter', 'void_flower', 'chaos_nectarine']
+    }
 }
 # --- ФУНКЦИИ ---
 async def herbalist_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2686,15 +2842,23 @@ async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    # 1. Инициализируем базу данных
+    # 1. Инициализируем БД
     database.init_db()
+    # ВАЖНО: Инициализируем таблицу экспедиций!
+    if hasattr(database, 'init_companion_table'):
+        database.init_companion_table()
     
-    # 2. Создаем приложение БЕЗ JobQueue
-    # Это уберет ошибку "No JobQueue set up"
     app = Application.builder().token(TOKEN).build()
     
-    # 3. Настраиваем диалоги
-    # Мы УБРАЛИ per_message=True, так как это ломает кнопку /start
+    # --- ХЕНДЛЕРЫ ТРАВНИКА И АЛХИМИИ (Глобальные) ---
+    app.add_handler(CommandHandler('alchemy', alchemy_command))
+    app.add_handler(CallbackQueryHandler(build_alchemy_handler, pattern='^build_alchemy$'))
+    app.add_handler(CallbackQueryHandler(brew_handler, pattern='^brew_'))
+    app.add_handler(CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'))
+    app.add_handler(CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'))
+    app.add_handler(CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'))
+
+    # --- ДИАЛОГИ ---
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
@@ -2708,27 +2872,19 @@ def main():
             CRAFT_MENU: [CallbackQueryHandler(craft_handler)],
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
-            CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'),
-            CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'),
-            CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'),
-            
+            # Убрал ошибочные строки отсюда
         },
         fallbacks=[CommandHandler('start', start)]
     )
     
     app.add_handler(conv)
     app.add_handler(CommandHandler('help', help_command))
-    
-    # Хендлер для неизвестного текста
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
-    
-    # Хендлер для старых кнопок
     app.add_handler(CallbackQueryHandler(unknown_callback))
     
     print("⚔️ Бот Темного Фентези перезапущен! Нажмите /start")
-    
-    # Запуск (блокирующий процесс)
-    # Запуск
     app.run_polling()
+
+
 if __name__ == '__main__':
     main()
