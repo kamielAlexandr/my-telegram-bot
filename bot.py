@@ -157,13 +157,26 @@ ITEMS_DB = {
     'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
      # --- БРОНЯ ---
-    'leather_vest': {'name': '🛡️ Шкура волка', 'desc': 'Греет. (+3 ХП)', 'price': 120, 'type': 'armor', 'effect': 3, 'cat': 'armor', 'rank': 'E'},
-    'chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Надежная. (+8 ХП)', 'price': 350, 'type': 'armor', 'effect': 8, 'cat': 'armor', 'rank': 'D'},
-    'plate_armor': {'name': '🛡️ Латы Крестоносца', 'desc': 'Освященная сталь. (+15 ХП)', 'price': 850, 'type': 'armor', 'effect': 15, 'cat': 'armor', 'rank': 'C'},
-    'mithril_armor': {'name': '💠 Доспех Ночи', 'desc': 'Сливается с тенями. (+25 ХП)', 'price': 2200, 'type': 'armor', 'effect': 25, 'cat': 'armor', 'rank': 'B'},
-    'dragon_mail': {'name': '🐉 Чешуя Дракона', 'desc': 'Легендарная. (+40 ХП)', 'price': 5500, 'type': 'armor', 'effect': 40, 'cat': 'armor', 'rank': 'A'},
-    'void_plate': {'name': '🌌 Доспех Пустоты', 'desc': 'Сама тьма. (+70 ХП)', 'price': 12000, 'type': 'armor', 'effect': 70, 'cat': 'armor', 'rank': 'S'},
+    'leather_vest': {'name': '🛡️ Шкура волка', 'desc': 'Греет. (+3 ХП)', 'price': 120, 'heavy_armor': 'armor', 'effect': 3, 'cat': 'armor', 'rank': 'E'},
+     # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф) ---
+    'rusty_chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Тяжелая и дырявая.', 'price': 250, 'type': 'heavy_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'}, 
+    # effect 10 -> +10 HP, +5% Физ.Защиты
+    'knight_plate': {'name': '🛡️ Латы Рыцаря', 'desc': 'Стальная стена.', 'price': 800, 'type': 'heavy_armor', 'effect': 25, 'cat': 'armor', 'rank': 'D'},
+    # effect 25 -> +25 HP, +12.5% Физ.Защиты
+    'dragon_scale': {'name': '🛡️ Драконьи латы', 'desc': 'Непробиваемая чешуя.', 'price': 3000, 'type': 'heavy_armor', 'effect': 60, 'cat': 'armor', 'rank': 'B'},
 
+    # --- ЛЕГКАЯ БРОНЯ (Эльф/Вор) ---
+    'leather_vest': {'name': '💨 Кожанка вора', 'desc': 'Не сковывает движения.', 'price': 200, 'type': 'light_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
+    # effect 10 -> +6 HP, +5 Ловкости
+    'hunter_gear': {'name': '🌿 Плащ следопыта', 'desc': 'Сливается с лесом.', 'price': 750, 'type': 'light_armor', 'effect': 24, 'cat': 'armor', 'rank': 'D'},
+    # effect 24 -> +14 HP, +12 Ловкости
+    'shadow_cloak': {'name': '🌑 Плащ Теней', 'desc': 'Вы становитесь призраком.', 'price': 2800, 'type': 'light_armor', 'effect': 50, 'cat': 'armor', 'rank': 'B'},
+
+    # --- МАГИЧЕСКИЕ РОБЫ (Маг/Эльф) ---
+    'apprentice_robe': {'name': '🔮 Роба ученика', 'desc': 'Пахнет старыми книгами.', 'price': 200, 'type': 'magic_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
+    # effect 10 -> +20 Mana, +5% Маг.Защиты
+    'archmage_robe': {'name': '🌟 Звездная мантия', 'desc': 'Сияет магией.', 'price': 800, 'type': 'magic_armor', 'effect': 25, 'cat': 'armor', 'rank': 'D'},
+    'void_robe': {'name': '🌌 Покров Пустоты', 'desc': 'Поглощает заклинания.', 'price': 3000, 'type': 'magic_armor', 'effect': 60, 'cat': 'armor', 'rank': 'B'},
     # --- АКСЕССУАРЫ ---
     'wooden_ring': {'name': '💍 Кольцо из корня', 'desc': 'Слабый оберег. (+2 Инт)', 'price': 200, 'type': 'artifact', 'effect': 2, 'cat': 'acc', 'rank': 'E'},
     'silver_amulet': {'name': '🧿 Глаз Ведьмы', 'desc': 'Смотрит в душу. (+5 Инт)', 'price': 500, 'type': 'artifact', 'effect': 5, 'cat': 'acc', 'rank': 'D'},
@@ -1814,10 +1827,26 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stat_changes['intelligence'] = -eff
                 stat_changes['max_mana'] = -(eff * 3)
                 stat_changes['mana'] = -(eff * 3)
-            elif item_info['type'] == 'armor':
+            # --- НОВАЯ ЛОГИКА ПРОДАЖИ БРОНИ ---
+            elif item_info['type'] == 'heavy_armor':
                 stat_changes['max_health'] = -eff
                 stat_changes['health'] = -eff
-                stat_changes['vitality'] = -max(1, int(eff / 10))
+                # Снимаем физ резист (обратная операция покупки: effect / 200)
+                stat_changes['physical_resistance'] = -(eff / 200.0)
+
+            elif item_info['type'] == 'light_armor':
+                hp_lost = int(eff * 0.6)
+                agi_lost = int(eff / 2)
+                stat_changes['max_health'] = -hp_lost
+                stat_changes['health'] = -hp_lost
+                stat_changes['agility'] = -agi_lost
+
+            elif item_info['type'] == 'magic_armor':
+                mp_lost = eff * 2
+                stat_changes['max_mana'] = -mp_lost
+                stat_changes['mana'] = -mp_lost
+                stat_changes['magic_resistance'] = -(eff / 200.0)
+                
             elif item_info['type'] in ['artifact', 'acc']:
                 stat_changes['intelligence'] = -eff
                 stat_changes['max_mana'] = -(eff * 5)
