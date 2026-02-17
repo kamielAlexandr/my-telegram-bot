@@ -44,6 +44,10 @@ IMAGE_URLS = {
     'dragon_ancient': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
     'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
     'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
+    'forest_spider':'https://i.pinimg.com/1200x/6b/17/a8/6b17a8e5f64f24e2eae2ae468840de76.jpg',
+    'wild_boar':'https://i.pinimg.com/736x/cf/8f/57/cf8f57e07d4a1b2a468fa90f8ca0e083.jpg',
+    'forest_troll':'https://i.pinimg.com/736x/ae/80/26/ae8026a1ec5a321226c0d2edea140840.jpg',
+    'forest_guardian':'https://i.pinimg.com/1200x/50/dd/fa/50ddfa68afdc12925fbd2fb3140fe8f7.jpg',
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
@@ -303,7 +307,7 @@ BASE_ENEMIES = {
         'name': '🕷️ Арахнид', 
         'base_health': 60, 'base_min_physical_damage': 7, 'base_max_physical_damage': 14, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 
         'base_exp': 25, 'base_gold': 16, 'rank': 'D', 
-        'description': 'Восьмилапый кошмар.', 'image': IMAGE_URLS['dragon'], 'difficulty': 'medium', 
+        'description': 'Восьмилапый кошмар.', 'image': IMAGE_URLS['forest_spider'], 'difficulty': 'medium', 
         'abilities': ['basic_attack', 'web_shot'], 'damage_type': 'physical', 'dodge_chance': 0.15, 
         'drops': ['spider_silk']
     },
@@ -319,7 +323,7 @@ BASE_ENEMIES = {
         'name': '🐗 Секач-Людоед', 
         'base_health': 85, 'base_min_physical_damage': 10, 'base_max_physical_damage': 20, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 
         'base_exp': 32, 'base_gold': 24, 'rank': 'D', 
-        'description': 'Массивная туша.', 'image': IMAGE_URLS['wolf'], 'difficulty': 'medium', 
+        'description': 'Массивная туша.', 'image': IMAGE_URLS['wild_boar'], 'difficulty': 'medium', 
         'abilities': ['basic_attack', 'charge'], 'damage_type': 'physical', 'dodge_chance': 0.08, 
         'drops': ['wolf_pelt', 'meat_stew']
     },
@@ -327,7 +331,7 @@ BASE_ENEMIES = {
         'name': '🌳 Болотный Тролль', 
         'base_health': 110, 'base_min_physical_damage': 15, 'base_max_physical_damage': 23, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 
         'base_exp': 48, 'base_gold': 36, 'rank': 'D', 
-        'description': 'Тупая гора мышц.', 'image': IMAGE_URLS['orc'], 'difficulty': 'mini_boss', 
+        'description': 'Тупая гора мышц.', 'image': IMAGE_URLS['forest_troll'], 'difficulty': 'mini_boss', 
         'abilities': ['basic_attack', 'regeneration'], 'damage_type': 'physical', 'dodge_chance': 0.12, 
         'drops': ['iron_ore', 'roast_boar']
     },
@@ -335,7 +339,7 @@ BASE_ENEMIES = {
         'name': '🌳 Проклятый Энт', 
         'base_health': 150, 'base_min_physical_damage': 13, 'base_max_physical_damage': 25, 'base_min_magic_damage': 7, 'base_max_magic_damage': 13, 
         'base_exp': 80, 'base_gold': 64, 'rank': 'D', 
-        'description': 'Древний страж леса.', 'image': IMAGE_URLS['titan'], 'difficulty': 'boss', 
+        'description': 'Древний страж леса.', 'image': IMAGE_URLS['forest_guardian'], 'difficulty': 'boss', 
         'abilities': ['basic_attack', 'root_grab'], 'damage_type': 'mixed', 'dodge_chance': 0.08, 
         'drops': ['medium_hp', 'apple'] # Убрано кольцо
     },
