@@ -1914,6 +1914,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SHOP_MENU
     
     # 6. ПОКУПКА (ИСПРАВЛЕНО: ВЕРНУЛИ ПРОВЕРКУ РАНГА)
+    # 6. ПОКУПКА (ИСПРАВЛЕНО: НОВЫЕ ТИПЫ БРОНИ + РАНГИ)
     elif data.startswith('buy_'):
         item_key = data.split('_', 1)[1]
         item = ITEMS_DB.get(item_key)
@@ -1922,46 +1923,62 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Товар не найден.")
             return SHOP_MENU
 
-        # --- [ВЕРНУЛИ ЭТОТ БЛОК] ПРОВЕРКА РАНГА ---
+        # --- 1. ПРОВЕРКА РАНГА ---
         if item.get('rank'):
             ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
             try:
                 p_rank_idx = ranks_order.index(char['rank'])
                 i_rank_idx = ranks_order.index(item['rank'])
                 
-                # Если ранг игрока (например E=0) меньше ранга предмета (например D=1)
                 if p_rank_idx < i_rank_idx:
                     await query.answer(f"🔒 Недоступно! Нужен ранг {item['rank']}", show_alert=True)
                     return SHOP_MENU
             except ValueError:
-                pass # Если ранга нет в списке, разрешаем
-        # ------------------------------------------
+                pass 
 
-        # Проверка лимита инвентаря
-        if item['type'] in ['weapon', 'magic_weapon', 'armor']:
+        # --- 2. ПРОВЕРКА ЛИМИТА ИНВЕНТАРЯ (5 шт) ---
+        # Списки типов для проверки
+        weapon_types = ['weapon', 'magic_weapon']
+        armor_types = ['armor', 'heavy_armor', 'light_armor', 'magic_armor'] # Добавили новые типы!
+        
+        itype = item['type']
+        
+        # Если покупаем оружие или броню — считаем место
+        if itype in weapon_types or itype in armor_types:
              items = database.get_inventory(user_id)
-             target_types = ['weapon', 'magic_weapon'] if item['type'] in ['weapon', 'magic_weapon'] else ['armor']
              count = 0
+             
+             # Определяем, что считать (если покупаем меч — считаем оружие, если латы — броню)
+             target_list = weapon_types if itype in weapon_types else armor_types
+             
              for i in items:
                  info = ITEMS_DB.get(i['item_key'])
-                 if info and info['type'] in target_types:
+                 # Если предмет в инвентаре относится к той же категории
+                 if info and info['type'] in target_list:
                      count += i['quantity']
+                     
              if count >= 5:
-                 await query.answer("🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
+                 await query.answer(f"🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
                  return SHOP_MENU
 
-        # Проверка золота
+        # --- 3. СПИСАНИЕ ДЕНЕГ И ВЫДАЧА ---
         if char['gold'] >= item['price']:
-            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
+            res, msg = database.buy_item(
+                user_id, 
+                item_key, 
+                item['type'], 
+                item['name'], 
+                item['price'], 
+                item.get('effect', 0)
+            )
             await query.answer(msg, show_alert=True)
             
-            # Обновляем категорию
-            query.data = f"shop_cat_{item['cat']}"
-            await shop_handler(update, context)
+            # Обновляем меню, чтобы перерисовался баланс
+            if 'cat' in item:
+                query.data = f"shop_cat_{item['cat']}"
+                await shop_handler(update, context)
         else:
             await query.answer("💸 Не хватает золота!", show_alert=True)
-            
-    return SHOP_MENU
 
 
 async def show_craft_menu(query, user_id):
