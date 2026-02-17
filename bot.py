@@ -31,6 +31,7 @@ IMAGE_URLS = {
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
+    'mag_goblin': 'https://i.pinimg.com/736x/00/75/fd/0075fdfce906f756ef6174aa8afc5401.jpg' ,
     'hot_goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXgGesfRif8L7MrmHFJruGNuxRWf3G_SFgTw&s', 
     'zombie': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRBEAcmeuf4tt0xnFUG1E8wcvZlSkLQcZkUw&s',
     'skeleton': 'https://img.freepik.com/free-photo/skeleton-warrior_23-2150911306.jpg',
@@ -232,6 +233,24 @@ BASE_ENEMIES = {
         'damage_type': 'mixed', 
         'dodge_chance': 0.02, 
         'drops': ['slime_goo', 'small_hp'] # Добавили шанс на хилку
+    },
+    'goblin_shaman': {
+        'name': '🔥 Гоблин-Шаман', 
+        'base_health': 55, # Чуть сильнее слизи (45)
+        'base_min_physical_damage': 2, # Слабый физически
+        'base_max_physical_damage': 4, 
+        'base_min_magic_damage': 6,    # Сильная магия
+        'base_max_magic_damage': 10, 
+        'base_exp': 22, 
+        'base_gold': 18, 
+        'rank': 'E', 
+        'description': 'Бормочет заклинания и кидает огненные шары.', 
+        'image':  IMAGE_URLS['mag_goblin']', 
+        'difficulty': 'medium', 
+        'abilities': ['basic_attack', 'ignite'], 
+        'damage_type': 'magic', # Бьет магией!
+        'dodge_chance': 0.10, 
+        'drops': ['goblin_ear', 'small_mp'] # Ухо и зелье маны
     },
     'goblin_elite': {
         'name': '👹 Вожак Гоблинов', 
@@ -447,7 +466,7 @@ BASE_ENEMIES = {
 
 # --- ЛОКАЦИИ ---
 LOCATIONS = {
-    'E': {'name': '🏚️ Руины Деревни', 'description': 'Здесь лишь пепел и безумцы.', 'image': IMAGE_URLS['village'], 'min_level': 1, 'enemies': ['wolf', 'goblin', 'slime', 'goblin_elite', 'training_master']},
+    'E': {'name': '🏚️ Руины Деревни', 'description': 'Здесь лишь пепел и безумцы.', 'image': IMAGE_URLS['village'], 'min_level': 1, 'enemies': ['wolf', 'goblin', 'slime','goblin_shaman' ,'goblin_elite','training_master']},
     'D': {'name': '🌲 Шепчущий Лес', 'description': 'Тени здесь длиннее, чем кажется.', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'forest_troll', 'forest_guardian']},
     'C': {'name': '☠️ Катакомбы Скорби', 'description': 'Подземелья, пропахшие гнилью.', 'image': IMAGE_URLS['dungeon'], 'min_level': 20, 'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord']},
     'B': {'name': '🏰 Проклятая Цитадель', 'description': 'Обитель вампиров.', 'image': IMAGE_URLS['castle'], 'min_level': 30, 'enemies': ['dark_knight', 'vampire', 'gargoyle', 'death_knight', 'castle_overlord']},
@@ -970,7 +989,8 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'cooldowns': {},
             'last_image': None,
             'processing': False,
-            'slime_stacks': 0
+            'slime_stacks': 0,
+            'burn_stacks': 0
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -1313,7 +1333,21 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             log.append(f"🦠 Слизь поглощает плоть и лечится на +{heal_amount} HP.")
         # ===============================================
 
-     
+        # === СПЕЦ. МЕХАНИКА ШАМАНА (Накопление огня) ===
+        if s['enemy_key'] == 'goblin_shaman':
+            # Увеличиваем счетчик горения
+            s['burn_stacks'] = s.get('burn_stacks', 0) + 1
+            stack = s['burn_stacks']
+            
+            # Формула урона огнем: Стак * 4 (4, 8, 12...)
+            # Огонь больнее яда, но Шаман не лечится, в отличие от Слизи
+            fire_dmg = stack * 4
+            
+            # Наносим урон (игнорирует броню, так как это магия/дот)
+            c['health'] -= fire_dmg
+            
+            log.append(f"🔥 *ОЖОГ!* Ваша кожа горит: -{fire_dmg} HP (Стак {stack})")
+        # ===============================================
         # Если враг не в стане (модификатор 0.0 ставится способностью оглушения)
         if enemy_damage_mod == 0.0:
              log.append("💫 Враг оглушен и пропускает ход!")
