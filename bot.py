@@ -2562,70 +2562,66 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 async def render_inventory_category(query, user_id, cat):
     """Отрисовывает конкретную вкладку инвентаря"""
-    items = database.get_inventory(user_id)
-    
-    # Заголовки
-    headers = {
-        'equip': "⚔️ ВАШЕ СНАРЯЖЕНИЕ",
-        'food': "🧪 ПРИПАСЫ (ЕДА И ЗЕЛЬЯ)",
-        'mat': "🧱 МАТЕРИАЛЫ И РЕСУРСЫ",
-        'acc': "💍 АКСЕССУАРЫ И ПРОЧЕЕ"
-    }
-    
-    txt = f"*{headers.get(cat, 'РЮКЗАК')}*\n━━━━━━━━━━━━━━━━\n"
-    kb = []
-    has_items = False
-    
-    # Группы типов для фильтрации
-    types_map = {
-        'equip': ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor'],
-        'food': ['food', 'potion', 'buff_potion'],
-        'mat': ['material'],
-        'acc': ['artifact', 'acc', 'combat_item']
-    }
-    
-    target_types = types_map.get(cat, [])
-
-    for i in items:
-        info = ITEMS_DB.get(i['item_key'])
-        if not info: continue
-        
-        # Фильтрация
-        if info.get('type') not in target_types:
-            continue
-            
-        has_items = True
-        
-        # Формируем строку и кнопку
-        # Если это еда/зелье - добавляем кнопку "Использовать"
-        if cat == 'food':
-            btn_txt = f"{info['name']} (x{i['quantity']})"
-            kb.append([InlineKeyboardButton(f"🍽 {btn_txt}", callback_data=f"use_{i['item_key']}")])
-        else:
-            # Для остальных просто список текстом (чтобы не забивать клавиатуру)
-            # Или можно сделать кнопку "Осмотреть", но пока просто текст красивее
-            txt += f"▪️ *{info['name']}* (x{i['quantity']})\n"
-
-    if not has_items:
-        txt += "\n_(В этом кармане пусто)_"
-    
-    # Если это категория Еды, добавляем текст-подсказку, так как предметы в кнопках
-    if cat == 'food' and has_items:
-        txt += "\n_Нажмите на предмет, чтобы использовать:_"
-
-    kb.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data='inventory')])
-    
-    # Используем edit_message_text, чтобы не скакать картинке, 
-    # но если нужно сменить картинку на тематическую - можно edit_media
-    # Для простоты оставим картинку инвентаря
-    
     try:
+        items = database.get_inventory(user_id)
+        
+        # Заголовки
+        headers = {
+            'equip': "⚔️ ВАШЕ СНАРЯЖЕНИЕ",
+            'food': "🧪 ПРИПАСЫ (ЕДА И ЗЕЛЬЯ)",
+            'mat': "🧱 МАТЕРИАЛЫ И РЕСУРСЫ",
+            'acc': "💍 АКСЕССУАРЫ И ПРОЧЕЕ"
+        }
+        
+        txt = f"*{headers.get(cat, 'РЮКЗАК')}*\n━━━━━━━━━━━━━━━━\n"
+        kb = []
+        has_items = False
+        
+        # Группы типов для фильтрации
+        types_map = {
+            'equip': ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor'],
+            'food': ['food', 'potion', 'buff_potion'],
+            'mat': ['material'],
+            'acc': ['artifact', 'acc', 'combat_item']
+        }
+        
+        target_types = types_map.get(cat, [])
+
+        for i in items:
+            info = ITEMS_DB.get(i['item_key'])
+            if not info: continue
+            
+            # Фильтрация
+            if info.get('type') not in target_types:
+                continue
+                
+            has_items = True
+            
+            # Формируем строку и кнопку
+            # Если это еда/зелье - добавляем кнопку "Использовать"
+            if cat == 'food':
+                btn_txt = f"{info['name']} (x{i['quantity']})"
+                kb.append([InlineKeyboardButton(f"🍽 {btn_txt}", callback_data=f"use_{i['item_key']}")])
+            else:
+                # Для остальных просто список текстом
+                txt += f"▪️ *{info['name']}* (x{i['quantity']})\n"
+
+        if not has_items:
+            txt += "\n_(В этом кармане пусто)_"
+        
+        if cat == 'food' and has_items:
+            txt += "\n_Нажмите на предмет, чтобы использовать:_"
+
+        kb.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data='inventory')])
+        
+        # Используем edit_message_text (без картинки, чтобы не скакало, или media если хотите оставить картинку)
+        # Здесь оставляем картинку для красоты
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['inventory'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    
     except Exception as e:
-        # Fallback если текст слишком длинный для подписи (caption limit 1024)
-        # Отправляем текстом
-        await query.delete_message()
-        await query.message.reply_text(txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))    
+        print(f"Inv Render Error: {e}")
+
+
 async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -2642,8 +2638,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer()
         txt = "🎒 *РЮКЗАК ГЕРОЯ*\n\nВ вашем мешке слишком много всего. Какой карман проверить?"
         
-        # Считаем количество предметов (для красоты на кнопках)
-        # Это не обязательно, но выглядит круто
+        # Считаем количество предметов для красоты
         items = database.get_inventory(user_id)
         c_equip = 0
         c_food = 0
@@ -2655,7 +2650,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
             if itype in ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor']: c_equip += 1
             elif itype in ['food', 'potion', 'buff_potion']: c_food += 1
             elif itype == 'material': c_mat += 1
-            elif itype in ['artifact', 'acc']: c_acc += 1
+            elif itype in ['artifact', 'acc', 'combat_item']: c_acc += 1
 
         kb = [
             [InlineKeyboardButton(f"⚔️ Снаряжение ({c_equip})", callback_data='inv_cat_equip')],
@@ -2675,7 +2670,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await render_inventory_category(query, user_id, cat)
         return INVENTORY_MENU
 
-    # 4. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (Оставляем вашу логику)
+    # 4. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА
     elif data.startswith('use_'):
         try:
             item_key = data.split('_', 1)[1]
@@ -2688,42 +2683,38 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
                 await query.answer("Это нельзя использовать здесь.", show_alert=True)
             
             else:
-                # ЛОГИКА ИСПОЛЬЗОВАНИЯ (Как у вас было, плюс баффы)
-                success, msg = False, "Ошибка"
-                
-                # Если это обычная еда/зелье
-                if item_info['type'] in ['potion', 'food']:
-                    char = database.get_character(user_id)
-                    effect = item_info.get('effect', 0)
-                    
-                    is_mana = 'mana' in item_key or 'mp' in item_key
-                    
-                    if is_mana:
-                        if char['mana'] >= char['max_mana']:
-                            await query.answer("Мана полная!", show_alert=True)
-                            return INVENTORY_MENU
-                        else:
-                            new_mp = min(char['max_mana'], char['mana'] + effect)
-                            database.update_character_stats(user_id, mana=new_mp)
-                            database.remove_item(user_id, item_key, 1)
-                            await query.answer(f"🌀 Выпито: {item_info['name']} (+{effect} MP)", show_alert=True)
-                    else:
-                        if char['health'] >= char['max_health']:
-                            await query.answer("Здоровье полное!", show_alert=True)
-                            return INVENTORY_MENU
-                        else:
-                            new_hp = min(char['max_health'], char['health'] + effect)
-                            database.update_character_stats(user_id, health=new_hp)
-                            database.remove_item(user_id, item_key, 1)
-                            await query.answer(f"❤️ Съедено: {item_info['name']} (+{effect} HP)", show_alert=True)
-
-                # Если это бафф-зелье (его лучше пить в бою, но можно и тут добавить логику, если хотите)
-                elif item_info['type'] == 'buff_potion':
-                     await query.answer("⚠️ Баффы лучше пить прямо в бою!", show_alert=True)
+                # Если это бафф — предупреждаем
+                if item_info['type'] == 'buff_potion':
+                     await query.answer("⚠️ Зелья силы/защиты лучше пить в бою!", show_alert=True)
                      return INVENTORY_MENU
 
-                # Обновляем категорию 'food' после использования
-                await render_inventory_category(query, user_id, 'food')
+                # Если это лечение/мана
+                char = database.get_character(user_id)
+                effect = item_info.get('effect', 0)
+                is_mana = 'mana' in item_key or 'mp' in item_key or 'void_nrg' in item_key
+                
+                used = False
+                if is_mana:
+                    if char['mana'] >= char['max_mana']:
+                        await query.answer("Мана полная!", show_alert=True)
+                    else:
+                        new_mp = min(char['max_mana'], char['mana'] + effect)
+                        database.update_character_stats(user_id, mana=new_mp)
+                        used = True
+                        await query.answer(f"🌀 Выпито: {item_info['name']} (+{effect} MP)", show_alert=True)
+                else:
+                    if char['health'] >= char['max_health']:
+                        await query.answer("Здоровье полное!", show_alert=True)
+                    else:
+                        new_hp = min(char['max_health'], char['health'] + effect)
+                        database.update_character_stats(user_id, health=new_hp)
+                        used = True
+                        await query.answer(f"❤️ Съедено: {item_info['name']} (+{effect} HP)", show_alert=True)
+
+                if used:
+                    database.remove_item(user_id, item_key, 1)
+                    # Обновляем страницу еды
+                    await render_inventory_category(query, user_id, 'food')
 
         except Exception as e:
             print(f"Use Item Error: {e}")
