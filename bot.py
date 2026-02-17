@@ -1811,27 +1811,25 @@ async def render_shop_category(query, user_id, cat):
         items_found = False
         
         for key, item in ITEMS_DB.items():
-            # Проверяем категорию (исправлено для брони)
-            # Вся броня (heavy/light/magic) имеет cat='armor', так что это условие сработает верно
+            # ВАЖНОЕ ИСПРАВЛЕНИЕ: Мы проверяем item['cat'], а не item['type']
+            # Вся броня (heavy/light/magic) имеет cat='armor', так что это сработает
             if item.get('cat') == cat:
                 items_found = True
                 effect_str = ""
                 
-                # Логика отображения эффектов
                 itype = item.get('type', 'unknown')
                 ieffect = item.get('effect', 0)
                 
                 if ieffect:
-                    if itype == 'weapon':        effect_str = f" (+{ieffect} ⚔️)"
+                    if itype == 'weapon':         effect_str = f" (+{ieffect} ⚔️)"
                     elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
                     
-                    # Отображение для разных типов брони
+                    # --- ТИПЫ БРОНИ ---
                     elif itype == 'heavy_armor':  effect_str = f" (+{ieffect} HP/Физ)"
                     elif itype == 'light_armor':  effect_str = f" (+{int(ieffect*0.6)} HP/Ловк)"
                     elif itype == 'magic_armor':  effect_str = f" (+{ieffect*2} MP/Маг)"
-                    
-                    # Старая броня (на всякий случай, если осталась)
-                    elif itype == 'armor':        effect_str = f" (+{ieffect} HP)"
+                    elif itype == 'armor':        effect_str = f" (+{ieffect} HP)" # Для старых вещей
+                    # ------------------
                     
                     elif itype == 'artifact':     effect_str = f" (+{ieffect} 🧠)"
                     elif itype == 'food':         effect_str = f" (+{ieffect} ❤️)"
@@ -1839,13 +1837,13 @@ async def render_shop_category(query, user_id, cat):
 
                 rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
                 
-                # Добавляем эмодзи типа брони для красоты
-                type_icon = ""
-                if itype == 'heavy_armor': type_icon = "🛡"
-                elif itype == 'light_armor': type_icon = "💨"
-                elif itype == 'magic_armor': type_icon = "🔮"
-
-                txt += f"{type_icon} *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
+                # Иконки для красоты
+                icon = "▪️"
+                if itype == 'heavy_armor': icon = "🛡"
+                elif itype == 'light_armor': icon = "💨"
+                elif itype == 'magic_armor': icon = "🔮"
+                
+                txt += f"{icon} *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
 
         if not items_found: txt += "В этой категории пока пусто..."
         if len(txt) > 1000: txt = txt[:1000] + "..."
@@ -1855,8 +1853,9 @@ async def render_shop_category(query, user_id, cat):
         
     except Exception as e:
         print(f"Error rendering category: {e}")
-        # Если ошибка (например, картинка не грузится), пробуем отправить без картинки
-        await safe_edit(query, text="Ошибка магазина (см. консоль).", keyboard=get_main_menu_keyboard(user_id))
+        # Если ошибка (например, картинка), шлем текст
+        await safe_edit(query, text="Ошибка магазина.", keyboard=get_main_menu_keyboard(user_id))
+        
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
