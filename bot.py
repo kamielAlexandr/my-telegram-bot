@@ -122,6 +122,7 @@ ELF_SPELLS = {
 }
 # --- БАЗА ПРЕДМЕТОВ ---
 # --- БАЗА ПРЕДМЕТОВ ---
+# --- БАЗА ПРЕДМЕТОВ ---
 ITEMS_DB = {
     # --- ЕДА И ЗЕЛЬЯ ---
     'bread': {'name': '🍞 Заплесневелый хлеб', 'desc': 'На вкус как пыль.', 'price': 15, 'type': 'food', 'effect': 10, 'cat': 'food', 'rank': 'E'},
@@ -139,7 +140,7 @@ ITEMS_DB = {
     'small_mp': {'name': '🔮 Отвар ясности', 'desc': 'Просветляет разум.', 'price': 40, 'type': 'potion', 'effect': 20, 'cat': 'food', 'rank': 'E'},
     'large_mp': {'name': '🔮 Эликсир Бездны', 'desc': 'Наполняет вены магией.', 'price': 200, 'type': 'potion', 'effect': 100, 'cat': 'food', 'rank': 'B'},
 
-    # --- ОРУЖИЕ ---
+    # --- ОРУЖИЕ (ФИЗИЧЕСКОЕ) ---
     'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца.', 'price': 150, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
     'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови.', 'price': 400, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
     'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря.', 'price': 900, 'type': 'weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
@@ -155,8 +156,7 @@ ITEMS_DB = {
     'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
 
-    # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф/Орк) ---
-    # ВАЖНО: Ключи здесь должны совпадать с result в CRAFT_RECIPES
+    # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф) ---
     'rusty_chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Тяжелая и дырявая.', 'price': 250, 'type': 'heavy_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'}, 
     'chainmail': {'name': '🛡️ Кольчуга стража', 'desc': 'Надежная сталь.', 'price': 350, 'type': 'heavy_armor', 'effect': 15, 'cat': 'armor', 'rank': 'D'},
     'plate_armor': {'name': '🛡️ Латы Рыцаря', 'desc': 'Стальная стена.', 'price': 800, 'type': 'heavy_armor', 'effect': 25, 'cat': 'armor', 'rank': 'C'},
@@ -176,11 +176,11 @@ ITEMS_DB = {
     'void_plate': {'name': '🌌 Доспех Пустоты (Маг)', 'desc': 'Абсолютная защита.', 'price': 12000, 'type': 'magic_armor', 'effect': 100, 'cat': 'armor', 'rank': 'S'},
 
     # --- АКСЕССУАРЫ ---
-    'wooden_ring': {'name': '💍 Кольцо из корня', 'desc': 'Слабый оберег. (+2 Инт)', 'price': 200, 'type': 'artifact', 'effect': 2, 'cat': 'acc', 'rank': 'E'},
-    'silver_amulet': {'name': '🧿 Глаз Ведьмы', 'desc': 'Смотрит в душу. (+5 Инт)', 'price': 500, 'type': 'artifact', 'effect': 5, 'cat': 'acc', 'rank': 'D'},
-    'gold_ring': {'name': '💍 Перстень Барона', 'desc': 'Украден с трупа. (+10 Инт)', 'price': 1200, 'type': 'artifact', 'effect': 10, 'cat': 'acc', 'rank': 'C'},
-    'skull_necklace': {'name': '💀 Лик Смерти', 'desc': 'Усиливает магию. (+20 Инт)', 'price': 3000, 'type': 'artifact', 'effect': 20, 'cat': 'acc', 'rank': 'B'},
-    'demon_eye': {'name': '👁️ Око Бездны', 'desc': 'Запретные знания. (+35 Инт)', 'price': 7000, 'type': 'artifact', 'effect': 35, 'cat': 'acc', 'rank': 'A'},
+    'wooden_ring': {'name': '💍 Кольцо из корня', 'desc': 'Слабый оберег.', 'price': 200, 'type': 'artifact', 'effect': 2, 'cat': 'acc', 'rank': 'E'},
+    'silver_amulet': {'name': '🧿 Глаз Ведьмы', 'desc': 'Смотрит в душу.', 'price': 500, 'type': 'artifact', 'effect': 5, 'cat': 'acc', 'rank': 'D'},
+    'gold_ring': {'name': '💍 Перстень Барона', 'desc': 'Украден с трупа.', 'price': 1200, 'type': 'artifact', 'effect': 10, 'cat': 'acc', 'rank': 'C'},
+    'skull_necklace': {'name': '💀 Лик Смерти', 'desc': 'Усиливает магию.', 'price': 3000, 'type': 'artifact', 'effect': 20, 'cat': 'acc', 'rank': 'B'},
+    'demon_eye': {'name': '👁️ Око Бездны', 'desc': 'Запретные знания.', 'price': 7000, 'type': 'artifact', 'effect': 35, 'cat': 'acc', 'rank': 'A'},
 
     # --- МАТЕРИАЛЫ ---
     'wolf_pelt': {'name': '🐺 Волчья шкура', 'desc': 'Жесткая шерсть.', 'price': 5, 'type': 'material', 'cat': 'mat', 'rank': 'E'},
@@ -195,16 +195,24 @@ ITEMS_DB = {
 }
 
 # --- РЕЦЕПТЫ КРАФТА ---
+# --- РЕЦЕПТЫ КРАФТА ---
 CRAFT_RECIPES = {
     # --- РАСХОДНИКИ ---
     'small_hp': {'result': 'small_hp', 'cost': 10, 'mats': {'slime_goo': 2, 'wolf_pelt': 1}},
     'medium_hp': {'result': 'medium_hp', 'cost': 30, 'mats': {'small_hp': 2, 'spider_silk': 1}},
     
-    # --- ОРУЖИЕ ---
+    # --- ОРУЖИЕ (МЕЧИ И ТОПОРЫ) ---
     'rusty_sword': {'result': 'rusty_sword', 'cost': 60, 'mats': {'goblin_ear': 5, 'wolf_pelt': 2}},
     'iron_axe': {'result': 'iron_axe', 'cost': 150, 'mats': {'iron_ore': 5, 'wolf_pelt': 3}},
     'dark_blade': {'result': 'dark_blade', 'cost': 1000, 'mats': {'demon_horn': 1, 'bone_dust': 10, 'iron_ore': 20}},
     'god_killer': {'result': 'god_killer', 'cost': 5000, 'mats': {'void_crystal': 5, 'demon_horn': 20, 'dragon_mail': 1}},
+
+    # --- МАГИЧЕСКОЕ ОРУЖИЕ (ПОСОХИ - ДОБАВЛЕНО) ---
+    'wooden_staff': {'result': 'wooden_staff', 'cost': 60, 'mats': {'wolf_pelt': 3, 'slime_goo': 2}},
+    'acolyte_wand': {'result': 'acolyte_wand', 'cost': 200, 'mats': {'spider_silk': 5, 'small_mp': 2}},
+    'crystal_staff': {'result': 'crystal_staff', 'cost': 500, 'mats': {'iron_ore': 10, 'spider_silk': 10}},
+    'void_scepter': {'result': 'void_scepter', 'cost': 1500, 'mats': {'demon_horn': 2, 'bone_dust': 10}},
+    'archmage_staff': {'result': 'archmage_staff', 'cost': 4000, 'mats': {'demon_horn': 10, 'void_crystal': 1}},
 
     # --- ЛЕГКАЯ БРОНЯ (ЛОВКОСТЬ) ---
     'leather_vest': {'result': 'leather_vest', 'cost': 50, 'mats': {'wolf_pelt': 5}},
@@ -218,14 +226,10 @@ CRAFT_RECIPES = {
 
     # --- МАГИЧЕСКАЯ БРОНЯ (МАНА) ---
     'apprentice_robe': {'result': 'apprentice_robe', 'cost': 80, 'mats': {'spider_silk': 5, 'slime_goo': 5}},
-    
-    # ✅ ВОТ ОНА - ЗВЕЗДНАЯ МАНТИЯ (ДОБАВЛЕНО)
     'archmage_robe': {'result': 'archmage_robe', 'cost': 300, 'mats': {'spider_silk': 15, 'small_mp': 5}},
-    
     'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
     'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
 }
-
 # --- БЕСТИАРИЙ (Только материалы и расходники) ---
 BASE_ENEMIES = {
     # РАНГ E (1-14 ур)
