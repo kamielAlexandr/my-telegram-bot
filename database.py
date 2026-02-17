@@ -294,12 +294,57 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
                 cursor.execute("UPDATE player_characters SET intelligence = intelligence + %s, max_mana = max_mana + %s, mana = mana + %s WHERE user_id=%s", (int_bonus, mp_bonus, mp_bonus, user_id))
                 msg_extra = f"\n🔮 Интеллект +{int_bonus} / Мана +{mp_bonus}"
             # ----------------------------
-            elif item_type == 'armor':
+            # ... (предыдущий код для weapon/magic_weapon осталcя без изменений) ...
+
+            # --- НОВАЯ ЛОГИКА БРОНИ ---
+            
+            # 1. ТЯЖЕЛАЯ БРОНЯ (Для Танков) -> Дает ХП и Физ. Защиту
+            elif item_type == 'heavy_armor':
                 hp_bonus = effect_amount
-                vit_bonus = max(1, int(effect_amount / 10))
-                # ВАЖНО: Увеличиваем И max_health, И текущее health
-                cursor.execute("UPDATE player_characters SET max_health = max_health + %s, health = health + %s, vitality = vitality + %s WHERE user_id=%s", (hp_bonus, hp_bonus, vit_bonus, user_id))
-                msg_extra = f"\n🛡️ HP увеличено на +{hp_bonus}!"
+                # Каждые 10 ед. эффекта = 1% защиты (примерно)
+                p_res_bonus = effect_amount / 200.0 # 20 ед = 0.1 (10%)
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET max_health = max_health + %s, 
+                        health = health + %s, 
+                        physical_resistance = LEAST(0.75, physical_resistance + %s)
+                    WHERE user_id=%s
+                """, (hp_bonus, hp_bonus, p_res_bonus, user_id))
+                
+                msg_extra = f"\n🛡 HP +{hp_bonus} | Физ. защита +{int(p_res_bonus*100)}%"
+
+            # 2. ЛЕГКАЯ БРОНЯ (Для Ловкачей) -> Дает ХП и Ловкость (Уворот/Крит)
+            elif item_type == 'light_armor':
+                hp_bonus = int(effect_amount * 0.6) # Меньше ХП чем у тяжелой
+                agi_bonus = int(effect_amount / 2)  # Дает ловкость
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET max_health = max_health + %s, 
+                        health = health + %s, 
+                        agility = agility + %s
+                    WHERE user_id=%s
+                """, (hp_bonus, hp_bonus, agi_bonus, user_id))
+                
+                msg_extra = f"\n💨 HP +{hp_bonus} | Ловкость +{agi_bonus}"
+
+            # 3. МАГИЧЕСКАЯ РОБА (Для Магов) -> Дает Ману и Маг. Защиту
+            elif item_type == 'magic_armor':
+                mp_bonus = effect_amount * 2
+                m_res_bonus = effect_amount / 200.0 # Маг защита
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET max_mana = max_mana + %s, 
+                        mana = mana + %s, 
+                        magic_resistance = LEAST(0.75, magic_resistance + %s)
+                    WHERE user_id=%s
+                """, (mp_bonus, mp_bonus, m_res_bonus, user_id))
+                
+                msg_extra = f"\n🔮 Мана +{mp_bonus} | Маг. защита +{int(m_res_bonus*100)}%"
+
+            # --------------------------
             elif item_type in ['artifact', 'acc']:
                 int_bonus = effect_amount
                 mp_bonus = int_bonus * 5
