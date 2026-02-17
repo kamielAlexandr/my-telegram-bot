@@ -2633,7 +2633,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # 2. ГЛАВНОЕ МЕНЮ ИНВЕНТАРЯ (ВЫБОР КАТЕГОРИИ)
+    # 2. ГЛАВНОЕ МЕНЮ ИНВЕНТАРЯ (ВЫБОР КАТЕГОРИИ) - ВОТ ЭТОГО НЕ ХВАТАЛО
     elif data == 'inventory':
         await query.answer()
         txt = "🎒 *РЮКЗАК ГЕРОЯ*\n\nВ вашем мешке слишком много всего. Какой карман проверить?"
@@ -2663,7 +2663,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['inventory'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return INVENTORY_MENU
 
-    # 3. ПРОСМОТР КАТЕГОРИИ
+    # 3. ПРОСМОТР КАТЕГОРИИ (ПЕРЕХОД В СПИСОК)
     elif data.startswith('inv_cat_'):
         await query.answer()
         cat = data.split('_')[2] # equip, food, mat, acc
@@ -2713,7 +2713,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 
                 if used:
                     database.remove_item(user_id, item_key, 1)
-                    # Обновляем страницу еды
+                    # Обновляем страницу еды (остаемся в той же категории)
                     await render_inventory_category(query, user_id, 'food')
 
         except Exception as e:
@@ -2721,7 +2721,6 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("Произошла ошибка.", show_alert=True)
             
     return INVENTORY_MENU
-
 
 async def show_inventory_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if update.callback_query else update
