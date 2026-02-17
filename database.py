@@ -109,7 +109,8 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)",
                 # В списке columns_to_add:
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)",
-                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS guild_reputation INTEGER DEFAULT 0"
             ]
             
             for sql in columns_to_add:
@@ -562,78 +563,94 @@ def update_quest_progress(user_id, amount=1):
         conn.close()
 
 def complete_quest(user_id):
-    """Завершаем квест с учетом лимита и ПРАВИЛЬНЫМ начислением опыта"""
+    """Завершение квеста с Репутацией и Бонусами"""
     conn = get_connection()
     if not conn: return False, "Ошибка БД"
+    
     try:
         with conn.cursor() as cursor:
-            # 1. Получаем данные
-            try:
-                cursor.execute("""
-                    SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, last_quest_date, quests_completed_today
-                    FROM player_characters 
-                    WHERE user_id=%s
-                """, (user_id,))
-                res = cursor.fetchone()
-            except Exception as e:
-                conn.rollback()
-                return False, "Ошибка структуры БД (init_db)."
-
-            if not res or not res[2]: 
-                return False, "У вас нет активного задания."
+            # Получаем данные квеста и репутацию
+            cursor.execute("""
+                SELECT quest_reward_gold, quest_reward_exp, quest_type, quest_target, quest_goal, quest_progress, 
+                       last_quest_date, quests_completed_today, guild_reputation
+                FROM player_characters 
+                WHERE user_id=%s
+            """, (user_id,))
             
-            gold, exp, q_type, target, goal, progress, last_date, daily_count = res
+            res = cursor.fetchone()
+            if not res or not res[2]: return False, "Нет активного задания."
             
-            # --- ПРОВЕРКА ВЫПОЛНЕНИЯ ---
+            gold, exp, q_type, target, goal, progress, last_date, daily_count, rep = res
+            rep = rep if rep else 0
+            
+            # --- ПРОВЕРКА ВЫПОЛНЕНИЯ (Как и раньше) ---
             if q_type == 'kill':
-                if progress < goal:
-                    return False, f"Еще не выполнено! Убито: {progress}/{goal}"
-
+                if progress < goal: return False, f"Не выполнено! Убито: {progress}/{goal}"
             elif q_type == 'collect':
                 cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, target))
                 inv_res = cursor.fetchone()
                 current_qty = inv_res[1] if inv_res else 0
-                
-                if current_qty < goal:
-                    return False, f"Не хватает предметов! ({current_qty}/{goal})"
-                
+                if current_qty < goal: return False, f"Не хватает предметов! ({current_qty}/{goal})"
+                # Удаляем предметы
                 item_id = inv_res[0]
-                if current_qty == goal:
-                    cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
-                else:
-                    cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
-            
-            # --- РАСЧЕТ ДНЕВНОГО ЛИМИТА ---
+                if current_qty == goal: cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
+                else: cursor.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE id=%s", (goal, item_id))
+
+            # --- ЛОГИКА ДНЕВНОГО ЛИМИТА ---
             today = datetime.now().date()
             if isinstance(last_date, str):
                 try: last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
                 except: pass
+            
+            new_count = (daily_count + 1) if last_date == today else 1
 
-            new_count = 1
-            if last_date == today:
-                new_count = (daily_count or 0) + 1
-            else:
-                new_count = 1
+            # --- ЛОГИКА РЕПУТАЦИИ И БОНУСОВ ---
+            new_rep = rep + 10
+            bonus_msg = ""
+            
+            # Шанс на дополнительную награду
+            bonus_item = None
+            import random
+            chance = random.random()
+            
+            if rep >= 100: # ПОЧЕТ
+                if chance < 0.30: # 30% шанс
+                    bonus_item = random.choice(['medium_hp', 'iron_ore', 'small_mp'])
+            elif rep >= 50: # УВАЖЕНИЕ
+                if chance < 0.20: # 20% шанс
+                    bonus_item = 'small_hp'
+            
+            # Выдача бонусного предмета
+            if bonus_item:
+                # Простейшая вставка в инвентарь (копируем логику buy_item или пишем SQL)
+                cursor.execute("SELECT id FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, bonus_item))
+                exist = cursor.fetchone()
+                if exist:
+                    cursor.execute("UPDATE player_inventory SET quantity = quantity + 1 WHERE id=%s", (exist[0],))
+                else:
+                    # Нам нужно имя и тип предмета, но здесь мы упростим
+                    # В идеале нужно подтянуть из ITEMS_DB, но database не видит bot.py
+                    # Поэтому запишем "Бонус гильдии" как имя
+                    cursor.execute("INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity) VALUES (%s, %s, 'potion', '🎁 Награда Гильдии', 1)", (user_id, bonus_item))
+                bonus_msg = "\n🎁 Гильдия выдала вам доп. припасы!"
 
-            # 3. ОБНОВЛЕНИЕ (ИСПРАВЛЕНО!)
-            # Мы убрали "experience = experience + %s" отсюда.
-            # Опыт начислим через add_experience ниже.
+            # ОБНОВЛЕНИЕ ПЕРСОНАЖА
             cursor.execute("""
                 UPDATE player_characters 
-                SET gold = gold + %s,
+                SET gold = gold + %s, 
+                    guild_reputation = %s,
                     quest_type = NULL, quest_target = NULL, quest_goal = 0, quest_progress = 0,
                     last_quest_date = CURRENT_DATE,
                     quests_completed_today = %s
                 WHERE user_id=%s
-            """, (gold, new_count, user_id))
+            """, (gold, new_rep, new_count, user_id))
             
             conn.commit()
             
-            # --- 4. НАЧИСЛЕНИЕ ОПЫТА (ВАЖНО) ---
-            # Вызываем функцию, которая умеет повышать уровень
+            # Начисляем опыт через функцию уровня
             add_experience(user_id, exp)
-
-            return True, f"✅ Задание выполнено! ({new_count}/2 за сегодня)\nНаграда: {gold}g и {exp}xp"
+            
+            return True, f"✅ Задание выполнено!\nНаграда: {gold}g и {exp}xp\n🤝 Репутация: {new_rep} (+10){bonus_msg}\n({new_count}/2 за сегодня)"
             
     except Exception as e:
         print(f"Quest Error: {e}")
@@ -787,5 +804,31 @@ def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
     except Exception as e:
         print(f"Sell error: {e}")
         return False, f"Ошибка: {e}"
+    finally:
+        conn.close()
+def cancel_quest(user_id):
+    """Отказ от задания (штраф репутации)"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            # Проверяем, есть ли квест
+            cursor.execute("SELECT quest_type, guild_reputation FROM player_characters WHERE user_id=%s", (user_id,))
+            res = cursor.fetchone()
+            if not res or not res[0]: return False, "Нет задания."
+            
+            current_rep = res[1] if res[1] else 0
+            new_rep = current_rep - 10
+            
+            # Сбрасываем квест и отнимаем репутацию
+            cursor.execute("""
+                UPDATE player_characters 
+                SET quest_type = NULL, quest_target = NULL, quest_goal = 0, quest_progress = 0,
+                    guild_reputation = %s
+                WHERE user_id=%s
+            """, (new_rep, user_id))
+            
+            conn.commit()
+            return True, f"Задание отменено.\n📉 Репутация: {new_rep} (-10)"
     finally:
         conn.close()
