@@ -537,7 +537,7 @@ def get_mana_bar(current, maximum, length=10):
     empty = length - filled
     return "🟦" * filled + "⬜" * empty + f" {current}/{maximum}"
 
-def def calculate_player_dodge_chance(agility, race='human'):
+def calculate_player_dodge_chance(agility, race='human'):
     base_cap = 0.25
     if race == 'elf': base_cap = 0.40 # Эльфы могут увернуться в 40% случаев
     return min(0.03 + (agility * 0.003), base_cap)
