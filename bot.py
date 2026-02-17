@@ -65,7 +65,7 @@ RACE_ABILITIES = {
         40: {'key': 'h3', 'name': '🛡️ Божественный щит', 'mana': 60, 'cd': 6, 'type': 'buff_def', 'val': 500, 'desc': 'Полная защита на 1 ход.'}
     },
     'elf': {
-        10: {'key': 'e1', 'name': '🏹 Точный выстрел', 'mana': 15, 'cd': 2, 'type': 'dmg', 'val': 1.8, 'desc': 'Быстрый выстрел (180% урона).'},
+        10: {'key': 'e1', 'name': '🏹 Точный выстрел', 'mana': 15, 'cd': 2, 'type': 'dmg_agi', 'val': 2.2, 'desc': 'Быстрый выстрел (зависит от Ловкости).'},
         25: {'key': 'e2', 'name': '🍃 Сила Леса', 'mana': 45, 'cd': 4, 'type': 'heal_mana', 'val': 0.5, 'desc': 'Лечит 50% HP и снимает эффекты.'},
         40: {'key': 'e3', 'name': '⚡ Гроза', 'mana': 80, 'cd': 5, 'type': 'magic_nuke', 'val': 3.5, 'desc': 'Магический взрыв (350% маг. урона).'}
     },
@@ -537,7 +537,10 @@ def get_mana_bar(current, maximum, length=10):
     empty = length - filled
     return "🟦" * filled + "⬜" * empty + f" {current}/{maximum}"
 
-def calculate_player_dodge_chance(agility): return min(0.03 + (agility * 0.003), 0.25)
+def def calculate_player_dodge_chance(agility, race='human'):
+    base_cap = 0.25
+    if race == 'elf': base_cap = 0.40 # Эльфы могут увернуться в 40% случаев
+    return min(0.03 + (agility * 0.003), base_cap)
 def calculate_crit_chance(agility): return min(0.03 + (agility * 0.002), 0.15)
 
 def calculate_damage(character, enemy, damage_type='physical'):
@@ -1111,6 +1114,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             elif skill['type'] == 'dmg':
                 player_damage = int(c['strength'] * skill['val'])
                 log.append(f"⚔️ *{skill['name']}* нанес {player_damage} урона!")
+            elif skill['type'] == 'dmg_agi':
+                # Урон от ловкости для эльфов
+                player_damage = int(c['agility'] * skill['val'])
+                log.append(f"🏹 *{skill['name']}* нанес {player_damage} урона!")
 
             elif skill['type'] == 'magic_nuke':
                 player_damage = int(c['intelligence'] * skill['val'])
