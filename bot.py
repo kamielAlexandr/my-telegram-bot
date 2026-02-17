@@ -2023,12 +2023,12 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SHOP_MENU
 
 async def show_craft_category(query, user_id, category_filter):
-    """Показывает рецепты только выбранной категории"""
+    """Показывает рецепты только выбранной категории (БЕЗ КАРТИНКИ, ЧТОБЫ ВЛЕЗЛО)"""
     try:
         items = database.get_inventory(user_id)
         inv_dict = {i['item_key']: i['quantity'] for i in items}
         
-        # Заголовки для красоты
+        # Заголовки
         headers = {
             'weapon': "⚔️ КУЗНИЦА: ОРУЖИЕ",
             'armor': "🛡️ КУЗНИЦА: БРОНЯ",
@@ -2044,7 +2044,7 @@ async def show_craft_category(query, user_id, category_filter):
             result_item = ITEMS_DB.get(recipe['result'])
             if not result_item: continue
             
-            # --- ФИЛЬТРАЦИЯ (ИСПРАВЛЕНО) ---
+            # --- ФИЛЬТРАЦИЯ ---
             itype = result_item['type']
             is_match = False
             
@@ -2052,7 +2052,6 @@ async def show_craft_category(query, user_id, category_filter):
                 if itype in ['weapon', 'magic_weapon']: is_match = True
             
             elif category_filter == 'armor':
-                # Добавляем ВСЕ типы брони
                 if itype in ['heavy_armor', 'light_armor', 'magic_armor', 'armor']: is_match = True
             
             elif category_filter == 'consumables':
@@ -2064,7 +2063,15 @@ async def show_craft_category(query, user_id, category_filter):
             found_recipes = True
             
             # Текст рецепта
-            txt += f"🔸 *{result_item['name']}* (💰 {recipe['cost']}g)\n"
+            # Используем эмодзи для типа
+            type_icon = "🔸"
+            if itype == 'heavy_armor': type_icon = "🛡"
+            elif itype == 'light_armor': type_icon = "💨"
+            elif itype == 'magic_armor': type_icon = "🔮"
+            elif itype == 'magic_weapon': type_icon = "🪄"
+            elif itype == 'weapon': type_icon = "⚔️"
+
+            txt += f"{type_icon} *{result_item['name']}* (💰 {recipe['cost']}g)\n"
             if result_item.get('desc'): txt += f"_{result_item['desc']}_\n"
             
             mats_txt = []
@@ -2077,17 +2084,25 @@ async def show_craft_category(query, user_id, category_filter):
             
             txt += " + ".join(mats_txt) + "\n\n"
             
-            # Кнопка крафта для этого предмета
+            # Кнопка крафта
             kb.append([InlineKeyboardButton(f"🔨 Создать {result_item['name']}", callback_data=f"craft_{key}")])
 
         if not found_recipes:
             txt += "В этой категории пока нет рецептов."
 
-        if len(txt) > 1000: txt = txt[:1000] + "..."
+        # Лимит текста 4096, это очень много, обрезать скорее всего не придется
+        if len(txt) > 4000: txt = txt[:4000] + "..."
         
         kb.append([InlineKeyboardButton("🔙 Назад к категориям", callback_data='craft_menu')])
 
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['craft'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        # ВАЖНО: Используем edit_message_text вместо edit_message_media
+        # Сначала пробуем удалить медиа (если предыдущее сообщение было с картинкой)
+        try:
+            await query.edit_message_text(text=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
+        except BadRequest:
+            # Если не получилось изменить (например, была картинка), шлем новое сообщение
+            await query.delete_message()
+            await query.message.reply_text(text=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
 
     except Exception as e:
         import traceback
