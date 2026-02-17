@@ -157,7 +157,6 @@ ITEMS_DB = {
     'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
      # --- БРОНЯ ---
-    'leather_vest': {'name': '🛡️ Шкура волка', 'desc': 'Греет. (+3 ХП)', 'price': 120, 'heavy_armor': 'armor', 'effect': 3, 'cat': 'armor', 'rank': 'E'},
      # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф) ---
     'rusty_chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Тяжелая и дырявая.', 'price': 250, 'type': 'heavy_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'}, 
     # effect 10 -> +10 HP, +5% Физ.Защиты
