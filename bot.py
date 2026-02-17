@@ -117,6 +117,7 @@ ELF_SPELLS = {
     }
 }
 # --- БАЗА ПРЕДМЕТОВ ---
+# --- БАЗА ПРЕДМЕТОВ ---
 ITEMS_DB = {
     # --- ЕДА И ЗЕЛЬЯ ---
     'bread': {'name': '🍞 Заплесневелый хлеб', 'desc': 'На вкус как пыль.', 'price': 15, 'type': 'food', 'effect': 10, 'cat': 'food', 'rank': 'E'},
@@ -135,13 +136,6 @@ ITEMS_DB = {
     'large_mp': {'name': '🔮 Эликсир Бездны', 'desc': 'Наполняет вены магией.', 'price': 200, 'type': 'potion', 'effect': 100, 'cat': 'food', 'rank': 'B'},
 
     # --- ОРУЖИЕ ---
-    'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца. (+5 Силы)', 'price': 150, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
-    'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови. (+10 Силы)', 'price': 400, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
-    'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря. (+15 Силы)', 'price': 900, 'type': 'weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
-    'dark_blade': {'name': '🗡️ Клинок Скорби', 'desc': 'Шепчет проклятия. (+20 Силы)', 'price': 2500, 'type': 'weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
-    'demon_slayer': {'name': '🔥 Убийца Демонов', 'desc': 'Пылает яростью. (+30 Силы)', 'price': 6000, 'type': 'weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
-    'god_killer': {'name': '⚡ Гнев Титана', 'desc': 'Раскалывает небо. (+50 Силы)', 'price': 15000, 'type': 'weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
-    # --- ОРУЖИЕ ---
     'rusty_sword': {'name': '⚔️ Ржавый клинок', 'desc': 'Оружие мертвеца.', 'price': 150, 'type': 'weapon', 'effect': 5, 'cat': 'weapon', 'rank': 'E'},
     'iron_axe': {'name': '🪓 Топор палача', 'desc': 'Тяжелый, в крови.', 'price': 400, 'type': 'weapon', 'effect': 10, 'cat': 'weapon', 'rank': 'D'},
     'steel_saber': {'name': '⚔️ Гвардейская сабля', 'desc': 'Оружие рыцаря.', 'price': 900, 'type': 'weapon', 'effect': 15, 'cat': 'weapon', 'rank': 'C'},
@@ -156,27 +150,27 @@ ITEMS_DB = {
     'void_scepter': {'name': '🌑 Скипетр Пустоты', 'desc': 'Излучает тьму.', 'price': 2500, 'type': 'magic_weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
     'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
-     # --- БРОНЯ ---
-     # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф) ---
+
+    # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф/Орк) ---
+    # ВАЖНО: Ключи здесь должны совпадать с result в CRAFT_RECIPES
     'rusty_chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Тяжелая и дырявая.', 'price': 250, 'type': 'heavy_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'}, 
-    # effect 10 -> +10 HP, +5% Физ.Защиты
-    'knight_plate': {'name': '🛡️ Латы Рыцаря', 'desc': 'Стальная стена.', 'price': 800, 'type': 'heavy_armor', 'effect': 25, 'cat': 'armor', 'rank': 'D'},
-    # effect 25 -> +25 HP, +12.5% Физ.Защиты
+    'chainmail': {'name': '🛡️ Кольчуга стража', 'desc': 'Надежная сталь.', 'price': 350, 'type': 'heavy_armor', 'effect': 15, 'cat': 'armor', 'rank': 'D'},
+    'plate_armor': {'name': '🛡️ Латы Рыцаря', 'desc': 'Стальная стена.', 'price': 800, 'type': 'heavy_armor', 'effect': 25, 'cat': 'armor', 'rank': 'C'},
     'dragon_scale': {'name': '🛡️ Драконьи латы', 'desc': 'Непробиваемая чешуя.', 'price': 3000, 'type': 'heavy_armor', 'effect': 60, 'cat': 'armor', 'rank': 'B'},
+    'dragon_mail': {'name': '🐉 Доспех Дракона', 'desc': 'Легендарная защита.', 'price': 5500, 'type': 'heavy_armor', 'effect': 70, 'cat': 'armor', 'rank': 'A'},
 
     # --- ЛЕГКАЯ БРОНЯ (Эльф/Вор) ---
     'leather_vest': {'name': '💨 Кожанка вора', 'desc': 'Не сковывает движения.', 'price': 200, 'type': 'light_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
-    # effect 10 -> +6 HP, +5 Ловкости
     'hunter_gear': {'name': '🌿 Плащ следопыта', 'desc': 'Сливается с лесом.', 'price': 750, 'type': 'light_armor', 'effect': 24, 'cat': 'armor', 'rank': 'D'},
-    # effect 24 -> +14 HP, +12 Ловкости
     'shadow_cloak': {'name': '🌑 Плащ Теней', 'desc': 'Вы становитесь призраком.', 'price': 2800, 'type': 'light_armor', 'effect': 50, 'cat': 'armor', 'rank': 'B'},
 
     # --- МАГИЧЕСКИЕ РОБЫ (Маг/Эльф) ---
     'apprentice_robe': {'name': '🔮 Роба ученика', 'desc': 'Пахнет старыми книгами.', 'price': 200, 'type': 'magic_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
-    # effect 10 -> +20 Mana, +5% Маг.Защиты
     'archmage_robe': {'name': '🌟 Звездная мантия', 'desc': 'Сияет магией.', 'price': 800, 'type': 'magic_armor', 'effect': 25, 'cat': 'armor', 'rank': 'D'},
+    'mithril_armor': {'name': '💠 Мифриловая роба', 'desc': 'Легкая как перо.', 'price': 2200, 'type': 'magic_armor', 'effect': 40, 'cat': 'armor', 'rank': 'B'},
     'void_robe': {'name': '🌌 Покров Пустоты', 'desc': 'Поглощает заклинания.', 'price': 3000, 'type': 'magic_armor', 'effect': 60, 'cat': 'armor', 'rank': 'B'},
-   
+    'void_plate': {'name': '🌌 Доспех Пустоты (Маг)', 'desc': 'Абсолютная защита.', 'price': 12000, 'type': 'magic_armor', 'effect': 100, 'cat': 'armor', 'rank': 'S'},
+
     # --- АКСЕССУАРЫ ---
     'wooden_ring': {'name': '💍 Кольцо из корня', 'desc': 'Слабый оберег. (+2 Инт)', 'price': 200, 'type': 'artifact', 'effect': 2, 'cat': 'acc', 'rank': 'E'},
     'silver_amulet': {'name': '🧿 Глаз Ведьмы', 'desc': 'Смотрит в душу. (+5 Инт)', 'price': 500, 'type': 'artifact', 'effect': 5, 'cat': 'acc', 'rank': 'D'},
@@ -1979,9 +1973,9 @@ async def show_craft_menu(query, user_id):
             # 1. Получаем предмет результата
             result_item = ITEMS_DB.get(recipe['result'])
             
-            # Если предмета нет в базе (например, опечатка), пропускаем, чтобы не ломать меню
+            # Если предмета нет в базе (например, опечатка), пропускаем
             if not result_item:
-                print(f"⚠️ Ошибка крафта: Рецепт ссылается на несуществующий предмет '{recipe['result']}'")
+                print(f"⚠️ Ошибка крафта: В ITEMS_DB нет предмета '{recipe['result']}'")
                 continue
             
             # Заголовок рецепта
@@ -2010,8 +2004,8 @@ async def show_craft_menu(query, user_id):
     except Exception as e:
         import traceback
         print("❌ КРИТИЧЕСКАЯ ОШИБКА В МЕНЮ КРАФТА:")
-        print(traceback.format_exc()) # Это покажет полную ошибку в консоли
-        await query.answer("Кузница закрыта на ремонт (Ошибка кода).", show_alert=True)
+        print(traceback.format_exc()) 
+        await query.answer("Кузница закрыта на ремонт (Сбой).", show_alert=True)
         
 async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
