@@ -47,7 +47,7 @@ IMAGE_URLS = {
     'forest_spider':'https://i.pinimg.com/1200x/6b/17/a8/6b17a8e5f64f24e2eae2ae468840de76.jpg',
     'wild_boar':'https://i.pinimg.com/736x/cf/8f/57/cf8f57e07d4a1b2a468fa90f8ca0e083.jpg',
     'forest_troll':'https://i.pinimg.com/736x/ae/80/26/ae8026a1ec5a321226c0d2edea140840.jpg',
-    'frost_spider': 'https://i.pinimg.com/736x/0a/60/93/0a60932d84db8392fb138096f9202517.jpg',
+    'frost_spider': 'https://i.pinimg.com/1200x/f4/7e/d5/f47ed5b2672fc9b63acab360f3464c6d.jpg',
     'forest_guardian':'https://i.pinimg.com/1200x/50/dd/fa/50ddfa68afdc12925fbd2fb3140fe8f7.jpg',
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
