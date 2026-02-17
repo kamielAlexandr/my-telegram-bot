@@ -1088,14 +1088,16 @@ def get_shop_categories_keyboard():
 def get_shop_items_keyboard(category, user_gold):
     kb = []
     for k, v in ITEMS_DB.items():
-        # Проверяем категорию
         if v.get('cat') == category:
             
-            # ФИЛЬТР: Не показываем кнопки для buff_potion в обычном магазине
-            if category == 'food' and v.get('type') == 'buff_potion':
+            # ФИЛЬТР: Не показываем алхимию в магазине
+            if category == 'food':
+                if v.get('type') == 'buff_potion': continue
+                if k.startswith('pot_'): continue # Скрываем новые крафтовые зелья
+            
+            if v.get('is_test', False):
                 continue
                 
-            # Иконка цены
             icon = "💰" if user_gold >= v['price'] else "🔒"
             kb.append([InlineKeyboardButton(f"{v['name']} ({v['price']}g) {icon}", callback_data=f"buy_{k}")])
             
@@ -2183,10 +2185,9 @@ async def render_sell_menu(query, user_id):
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
 
 async def render_shop_category(query, user_id, cat):
-    """Вспомогательная функция для отрисовки страницы категории"""
+    """Вспомогательная функция для отрисовки страницы категории (ТЕКСТОВАЯ ВЕРСИЯ)"""
     try:
         char = database.get_character(user_id)
-        # Названия категорий
         cat_names = {
             'food': '🍖 Еда и Напитки', 
             'mat': '🧱 Ресурсы', 
@@ -2199,28 +2200,26 @@ async def render_shop_category(query, user_id, cat):
         items_found = False
         
         for key, item in ITEMS_DB.items():
-            # 1. Проверяем категорию (должна совпадать)
+            # 1. Проверяем категорию
             if item.get('cat') != cat:
                 continue
 
-            # 2. ИСКЛЮЧЕНИЕ ДЛЯ ЕДЫ/ЗЕЛИЙ
-            # Если мы в разделе еды, мы НЕ показываем 'buff_potion'
-            # (они только для крафта у Травника)
-            itype = item.get('type', 'unknown')
-            if cat == 'food' and itype == 'buff_potion':
-                continue
-                
-            # 3. ПРОВЕРКА НА ТЕСТОВЫЕ ПРЕДМЕТЫ (если есть админка)
+            # 2. ФИЛЬТР: Скрываем всё, что для Алхимии (начинается на pot_ или это бафф)
+            if cat == 'food':
+                # Если это новое зелье (крафтовое) — пропускаем
+                if key.startswith('pot_'): continue
+                # Если это бафф — пропускаем
+                if item.get('type') == 'buff_potion': continue 
+
+            # 3. Скрываем тестовые предметы
             if item.get('is_test', False):
-                # Здесь можно добавить проверку на ID админа, если нужно
-                # if user_id not in ADMIN_IDS: continue
-                pass
+                pass 
 
             items_found = True
             effect_str = ""
+            itype = item.get('type', 'unknown')
             ieffect = item.get('effect', 0)
             
-            # Логика текста эффектов
             if ieffect:
                 if itype == 'weapon':         effect_str = f" (+{ieffect} ⚔️)"
                 elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
@@ -2231,11 +2230,8 @@ async def render_shop_category(query, user_id, cat):
                 elif itype == 'artifact':     effect_str = f" (+{ieffect} 🧠)"
                 elif itype == 'food':         effect_str = f" (+{ieffect} ❤️)"
                 elif itype == 'potion':       
-                    # Различаем ману и здоровье по названию или эффекту
-                    if 'mp' in key or 'mana' in key:
-                         effect_str = f" (+{ieffect} MP)"
-                    else:
-                         effect_str = f" (+{ieffect} HP)"
+                    if 'mp' in key or 'mana' in key: effect_str = f" (+{ieffect} MP)"
+                    else: effect_str = f" (+{ieffect} HP)"
 
             rank_str = f" [Ранг {item['rank']}]" if item.get('rank') else ""
             
@@ -2247,23 +2243,23 @@ async def render_shop_category(query, user_id, cat):
             elif itype == 'food': icon = "🍖"
             elif itype == 'potion': icon = "🧪"
             
-            # Добавляем товар в список
             txt += f"{icon} *{item['name']}* {rank_str} — {item['price']}g\n   _{item['desc']}_{effect_str}\n\n"
 
         if not items_found: 
-            txt += "В этой категории пока пусто или товары закончились."
+            txt += "В этой категории пока пусто."
         
-        if len(txt) > 1000: txt = txt[:1000] + "..."
+        if len(txt) > 4000: txt = txt[:4000] + "..."
 
-        # Отрисовка
-        media = InputMediaPhoto(IMAGE_URLS['shop'], caption=txt, parse_mode='Markdown')
-        await safe_edit(query, text=txt, media=media, keyboard=get_shop_items_keyboard(cat, char['gold']))
+        try:
+            await query.edit_message_text(text=txt, parse_mode='Markdown', reply_markup=get_shop_items_keyboard(cat, char['gold']))
+        except BadRequest:
+            await query.delete_message()
+            await query.message.reply_text(text=txt, parse_mode='Markdown', reply_markup=get_shop_items_keyboard(cat, char['gold']))
         
     except Exception as e:
         import traceback
         print(f"Shop Render Error: {e}")
-        print(traceback.format_exc())
-        await safe_edit(query, text="Ошибка магазина. Попробуйте позже.", keyboard=get_main_menu_keyboard(user_id))
+        await safe_edit(query, text="Ошибка магазина.", keyboard=get_main_menu_keyboard(user_id))
 
 
 async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
