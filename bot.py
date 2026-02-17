@@ -195,7 +195,6 @@ ITEMS_DB = {
 }
 
 # --- РЕЦЕПТЫ КРАФТА ---
-# --- РЕЦЕПТЫ КРАФТА ---
 CRAFT_RECIPES = {
     # --- РАСХОДНИКИ ---
     'small_hp': {'result': 'small_hp', 'cost': 10, 'mats': {'slime_goo': 2, 'wolf_pelt': 1}},
@@ -209,28 +208,23 @@ CRAFT_RECIPES = {
 
     # --- ЛЕГКАЯ БРОНЯ (ЛОВКОСТЬ) ---
     'leather_vest': {'result': 'leather_vest', 'cost': 50, 'mats': {'wolf_pelt': 5}},
-    # Новый рецепт
     'hunter_gear': {'result': 'hunter_gear', 'cost': 300, 'mats': {'wolf_pelt': 10, 'spider_silk': 5, 'goblin_ear': 5}},
-    # Новый рецепт
     'shadow_cloak': {'result': 'shadow_cloak', 'cost': 1500, 'mats': {'spider_silk': 20, 'vampire_fang': 2, 'bone_dust': 10}},
 
     # --- ТЯЖЕЛАЯ БРОНЯ (ЗАЩИТА) ---
     'chainmail': {'result': 'chainmail', 'cost': 120, 'mats': {'iron_ore': 8, 'spider_silk': 4}},
-    # Новый рецепт
     'plate_armor': {'result': 'plate_armor', 'cost': 400, 'mats': {'iron_ore': 20, 'bone_dust': 5}},
-    # Новый рецепт
     'dragon_mail': {'result': 'dragon_mail', 'cost': 3000, 'mats': {'demon_horn': 5, 'iron_ore': 50, 'plate_armor': 1}},
 
     # --- МАГИЧЕСКАЯ БРОНЯ (МАНА) ---
-    # Новый рецепт
     'apprentice_robe': {'result': 'apprentice_robe', 'cost': 80, 'mats': {'spider_silk': 5, 'slime_goo': 5}},
-    # Новый рецепт
-    # Новый рецепт: Звездная мантия (Ранг D)
+    
+    # ✅ ВОТ ОНА - ЗВЕЗДНАЯ МАНТИЯ (ДОБАВЛЕНО)
     'archmage_robe': {'result': 'archmage_robe', 'cost': 300, 'mats': {'spider_silk': 15, 'small_mp': 5}},
+    
     'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
     'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
 }
-
 
 # --- БЕСТИАРИЙ (Только материалы и расходники) ---
 BASE_ENEMIES = {
