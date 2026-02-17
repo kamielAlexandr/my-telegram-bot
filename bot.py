@@ -197,16 +197,38 @@ ITEMS_DB = {
 }
 
 # --- РЕЦЕПТЫ КРАФТА ---
+# --- РЕЦЕПТЫ КРАФТА ---
 CRAFT_RECIPES = {
+    # --- РАСХОДНИКИ ---
     'small_hp': {'result': 'small_hp', 'cost': 10, 'mats': {'slime_goo': 2, 'wolf_pelt': 1}},
-    'leather_vest': {'result': 'leather_vest', 'cost': 50, 'mats': {'wolf_pelt': 5}},
-    'rusty_sword': {'result': 'rusty_sword', 'cost': 60, 'mats': {'goblin_ear': 5, 'wolf_pelt': 2}},
     'medium_hp': {'result': 'medium_hp', 'cost': 30, 'mats': {'small_hp': 2, 'spider_silk': 1}},
+    
+    # --- ОРУЖИЕ ---
+    'rusty_sword': {'result': 'rusty_sword', 'cost': 60, 'mats': {'goblin_ear': 5, 'wolf_pelt': 2}},
     'iron_axe': {'result': 'iron_axe', 'cost': 150, 'mats': {'iron_ore': 5, 'wolf_pelt': 3}},
-    'chainmail': {'result': 'chainmail', 'cost': 120, 'mats': {'iron_ore': 8, 'spider_silk': 4}},
     'dark_blade': {'result': 'dark_blade', 'cost': 1000, 'mats': {'demon_horn': 1, 'bone_dust': 10, 'iron_ore': 20}},
+    'god_killer': {'result': 'god_killer', 'cost': 5000, 'mats': {'void_crystal': 5, 'demon_horn': 20, 'dragon_mail': 1}},
+
+    # --- ЛЕГКАЯ БРОНЯ (ЛОВКОСТЬ) ---
+    'leather_vest': {'result': 'leather_vest', 'cost': 50, 'mats': {'wolf_pelt': 5}},
+    # Новый рецепт
+    'hunter_gear': {'result': 'hunter_gear', 'cost': 300, 'mats': {'wolf_pelt': 10, 'spider_silk': 5, 'goblin_ear': 5}},
+    # Новый рецепт
+    'shadow_cloak': {'result': 'shadow_cloak', 'cost': 1500, 'mats': {'spider_silk': 20, 'vampire_fang': 2, 'bone_dust': 10}},
+
+    # --- ТЯЖЕЛАЯ БРОНЯ (ЗАЩИТА) ---
+    'chainmail': {'result': 'chainmail', 'cost': 120, 'mats': {'iron_ore': 8, 'spider_silk': 4}},
+    # Новый рецепт
+    'plate_armor': {'result': 'plate_armor', 'cost': 400, 'mats': {'iron_ore': 20, 'bone_dust': 5}},
+    # Новый рецепт
+    'dragon_mail': {'result': 'dragon_mail', 'cost': 3000, 'mats': {'demon_horn': 5, 'iron_ore': 50, 'plate_armor': 1}},
+
+    # --- МАГИЧЕСКАЯ БРОНЯ (МАНА) ---
+    # Новый рецепт
+    'apprentice_robe': {'result': 'apprentice_robe', 'cost': 80, 'mats': {'spider_silk': 5, 'slime_goo': 5}},
+    # Новый рецепт
     'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
-    'god_killer': {'result': 'god_killer', 'cost': 5000, 'mats': {'void_crystal': 5, 'demon_horn': 20, 'dragon_mail': 1}}
+    'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
 }
 
 
@@ -2033,10 +2055,12 @@ async def craft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
-    # 2. Обработка КРАФТА
-    elif data.startswith('craft_'):
+    # 2. Обработка КРАФТА (ИСПРАВЛЕНО)
+    # Мы проверяем, что это НЕ 'craft_menu', а именно рецепт (например, craft_leather_vest)
+    elif data.startswith('craft_') and data != 'craft_menu':
         try:
-            recipe_key = data.split('_', 1)[1]
+            # Отрезаем 'craft_' (6 символов)
+            recipe_key = data[6:] 
             recipe = CRAFT_RECIPES.get(recipe_key)
             
             if not recipe:
