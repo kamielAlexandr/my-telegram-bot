@@ -2337,14 +2337,14 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer(f"Ошибка: {msg}", show_alert=True)
         return SHOP_MENU
 
-    # 5. КАТЕГОРИИ (ИСПРАВЛЕНО)
+    # 5. КАТЕГОРИИ
     elif data.startswith('shop_cat_'):
         await query.answer()
         cat = data.split('_')[2]
         await render_shop_category(query, user_id, cat)
         return SHOP_MENU
     
-    # 6. ПОКУПКА (ИСПРАВЛЕНО)
+    # 6. ПОКУПКА
     elif data.startswith('buy_'):
         item_key = data.split('_', 1)[1]
         item = ITEMS_DB.get(item_key)
@@ -2362,39 +2362,35 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return SHOP_MENU
             except: pass 
 
-        # Проверка лимита (5 шт)
-        # ... (внутри elif data.startswith('buy_'): )
+        # --- ПРОВЕРКА ЛИМИТОВ ---
+        itype = item['type']
+        items = database.get_inventory(user_id)
+        
+        # Лимит для Оружия и Брони (Макс 5)
+        weapon_types = ['weapon', 'magic_weapon']
+        armor_types = ['armor', 'heavy_armor', 'light_armor', 'magic_armor']
+        
+        if itype in weapon_types or itype in armor_types:
+            count = 0
+            target_list = weapon_types if itype in weapon_types else armor_types
+            for i in items:
+                info = ITEMS_DB.get(i['item_key'])
+                if info and info['type'] in target_list: count += i['quantity']
+            if count >= 5:
+                await query.answer(f"🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
+                return SHOP_MENU
 
-    # 1. Проверка лимита для Оружия/Брони (Ваш старый код)
-    weapon_types = ['weapon', 'magic_weapon']
-    armor_types = ['armor', 'heavy_armor', 'light_armor', 'magic_armor']
-    itype = item['type']
-    
-    if itype in weapon_types or itype in armor_types:
-         items = database.get_inventory(user_id)
-         count = 0
-         target_list = weapon_types if itype in weapon_types else armor_types
-         for i in items:
-             info = ITEMS_DB.get(i['item_key'])
-             if info and info['type'] in target_list: count += i['quantity']
-         if count >= 5:
-             await query.answer(f"🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
-             return SHOP_MENU
-
-    # 2. НОВАЯ ПРОВЕРКА ДЛЯ АКСЕССУАРОВ (Лимит 20)
-    if itype in ['artifact', 'acc']:
-         items = database.get_inventory(user_id)
-         acc_count = 0
-         for i in items:
-             info = ITEMS_DB.get(i['item_key'])
-             if info and info['type'] in ['artifact', 'acc']:
-                 acc_count += i['quantity']
-         
-         if acc_count >= 20:
-             await query.answer("⛔ Слот аксессуаров полон! (Макс 20 шт.)", show_alert=True)
-             return SHOP_MENU
-
-    # ... (дальше идет проверка золота: if char['gold'] >= item['price']: ...)
+        # Лимит для Аксессуаров (Макс 20)
+        if itype in ['artifact', 'acc']:
+            acc_count = 0
+            for i in items:
+                info = ITEMS_DB.get(i['item_key'])
+                if info and info['type'] in ['artifact', 'acc']:
+                    acc_count += i['quantity']
+            if acc_count >= 20:
+                await query.answer("⛔ Слот аксессуаров полон! (Макс 20 шт.)", show_alert=True)
+                return SHOP_MENU
+        # -------------------------
 
         # Покупка
         if char['gold'] >= item['price']:
@@ -2407,7 +2403,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("💸 Не хватает золота!", show_alert=True)
             
     return SHOP_MENU
-
+    
 async def show_craft_category(query, user_id, category_filter):
     """Показывает рецепты только выбранной категории (БЕЗ КАРТИНКИ, ЧТОБЫ ВЛЕЗЛО)"""
     try:
