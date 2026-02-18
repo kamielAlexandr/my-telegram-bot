@@ -24,34 +24,48 @@ battle_sessions = {}
 
 # --- ВИЗУАЛ (DARK FANTASY) ---
 IMAGE_URLS = {
+    #E
     'human': 'https://i.pinimg.com/736x/9b/f6/20/9bf6203bb54a7b095840f55fa780a365.jpg',
     'elf': 'https://i.pinimg.com/736x/c5/b1/e6/c5b1e645ceadf9c42e8ab51393981bb9.jpg',
     'dwarf': 'https://i.pinimg.com/736x/ef/b2/a2/efb2a24d7f7897ba9841764d8fb88c69.jpg',
     'orc': 'https://i.pinimg.com/736x/9d/03/22/9d0322080cea97cfd1e4667f835592dd.jpg',
+    
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
     'slime': 'https://papik.pro/uploads/posts/2023-02/1676176492_papik-pro-p-risunok-sliz-1.jpg',
     'goblin_shaman': 'https://i.pinimg.com/736x/00/75/fd/0075fdfce906f756ef6174aa8afc5401.jpg' ,
     'hot_goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSXgGesfRif8L7MrmHFJruGNuxRWf3G_SFgTw&s', 
+    
     'zombie': 'https://i.pinimg.com/736x/66/f1/95/66f195505cd3d16fea66f320d458c512.jpg',
     'skeleton': 'https://i.pinimg.com/736x/59/d2/a5/59d2a5aa6d18099ca70d3cdec70cdb7c.jpg',
     'mage': 'https://i.pinimg.com/736x/60/f9/99/60f999c66fbda5676aa72cb36476c3cf.jpg',
-    'vampire': 'https://i.pinimg.com/736x/1c/92/84/1c9284d6fd0097031c50c0ffedf2689d.jpg',
+    'vampire': 'https://i.pinimg.com/736x/c7/44/ce/c744ce8f09f8ab438c465b71df581a43.jpg',
     'knight': 'https://i.pinimg.com/736x/93/84/9f/93849fa5c577756a346cd6c4172b384d.jpg',
-    'demon': 'https://img.freepik.com/free-photo/demon_23-2150762325.jpg',
+    'pit_fiend':'https://i.pinimg.com/736x/ba/da/ea/badaeac665b0da85c91f0a77735ed696.jpg',
+    'demon': 'https://i.pinimg.com/736x/72/33/df/7233df1487c23073f5e9c58131adb12a.jpg',
+    'succubus': 'https://i.pinimg.com/736x/fa/42/88/fa4288f0a7cafc214457c85e72690663.jpg',
+    'demon_general':'https://i.pinimg.com/1200x/b8/76/2c/b8762c3a52d031fa4dcebc8e44eacfb1.jpg',
     'lich': 'https://i.pinimg.com/736x/78/95/a5/7895a5a57b658cc1db2950484511a93d.jpg',
     'catacomb_lord':'https://i.pinimg.com/736x/fe/3f/f3/fe3ff3a147e5eb02148c1a4dfda7eba5.jpg',
+    'dark_knight':'https://i.pinimg.com/1200x/0b/99/0e/0b990e5d9114228138810bb57d723685.jpg',
+    'gargoyle':'https://i.pinimg.com/736x/a1/74/6c/a1746c29e6d52dcb6bb2e7ff8f96f04c.jpg',
+    'death_knight':'https://i.pinimg.com/1200x/44/10/95/441095468e8537407825c3ae9c58040e.jpg',
+    'castle_overlord':'https://i.pinimg.com/736x/57/7e/05/577e05fa5cf07bec6ecc5dd15eed2281.jpg',
+    'imp':'https://i.pinimg.com/1200x/6d/39/e0/6d39e0250a65f8e586cd7aae8b8c3538.jpg',
     
     'dragon': 'https://abrakadabra.fun/uploads/posts/2022-03/1646721873_1-abrakadabra-fun-p-pauk-fantezi-art-1.jpg',
-    'dragon_ancient': 'https://img.freepik.com/free-photo/ancient-dragon_23-2150762338.jpg',
+    'dragon_ancient': 'https://i.pinimg.com/736x/87/53/0b/87530bc6086bd4760304d56c1bd452ca.jpg',
     'titan': 'https://img.freepik.com/free-photo/titan_23-2150911270.jpg',
-    'fallen_god': 'https://img.freepik.com/free-photo/fallen-god_23-2150911258.jpg',
+    'fallen_god': 'https://i.pinimg.com/1200x/ae/f3/f8/aef3f8083a8c3b85526131e8991fe460.jpg',
     'forest_spider':'https://i.pinimg.com/1200x/6b/17/a8/6b17a8e5f64f24e2eae2ae468840de76.jpg',
     'wild_boar':'https://i.pinimg.com/736x/cf/8f/57/cf8f57e07d4a1b2a468fa90f8ca0e083.jpg',
     'forest_troll':'https://i.pinimg.com/736x/ae/80/26/ae8026a1ec5a321226c0d2edea140840.jpg',
     'frost_spider': 'https://i.pinimg.com/1200x/f4/7e/d5/f47ed5b2672fc9b63acab360f3464c6d.jpg',
     'forest_guardian':'https://i.pinimg.com/1200x/50/dd/fa/50ddfa68afdc12925fbd2fb3140fe8f7.jpg',
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
+    'void_walker':'https://i.pinimg.com/736x/d7/20/ae/d720aea9c8efa589e991ab14143a7c5e.jpg',
+
+    #локации
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
     'dungeon': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTZd9YHDcPOGmD8ezmHB0xD-HfA9O7OpgVyA&s',
@@ -612,7 +626,7 @@ BASE_ENEMIES = {
         'name': '⚔️ Черный Страж', 
         'base_health': 150, 'base_min_physical_damage': 19, 'base_max_physical_damage': 32, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 
         'base_exp': 80, 'base_gold': 64, 'rank': 'B', 
-        'description': 'Элитный воин.', 'image': IMAGE_URLS['knight'], 'difficulty': 'very_hard', 
+        'description': 'Элитный воин.', 'image': IMAGE_URLS['dark_knight'], 'difficulty': 'very_hard', 
         'abilities': ['basic_attack', 'shield_wall'], 'damage_type': 'physical', 'dodge_chance': 0.20, 
         'drops': ['iron_ore', 'medium_hp']
     },
@@ -628,7 +642,7 @@ BASE_ENEMIES = {
         'name': '🗿 Ожившая Горгулья', 
         'base_health': 180, 'base_min_physical_damage': 20, 'base_max_physical_damage': 30, 'base_min_magic_damage': 0, 'base_max_magic_damage': 0, 
         'base_exp': 90, 'base_gold': 70, 'rank': 'B', 
-        'description': 'Каменная тварь.', 'image': IMAGE_URLS['demon'], 'difficulty': 'very_hard', 
+        'description': 'Каменная тварь.', 'image': IMAGE_URLS['gargoyle'], 'difficulty': 'very_hard', 
         'abilities': ['basic_attack', 'stone_skin'], 'damage_type': 'physical', 'dodge_chance': 0.05, 
         'drops': ['iron_ore']
     },
@@ -636,7 +650,7 @@ BASE_ENEMIES = {
         'name': '💀 Генерал Тьмы', 
         'base_health': 190, 'base_min_physical_damage': 25, 'base_max_physical_damage': 38, 'base_min_magic_damage': 13, 'base_max_magic_damage': 23, 
         'base_exp': 144, 'base_gold': 112, 'rank': 'B', 
-        'description': 'Командующий проклятым легионом.', 'image': IMAGE_URLS['knight'], 'difficulty': 'mini_boss', 
+        'description': 'Командующий проклятым легионом.', 'image': IMAGE_URLS['death_knight'], 'difficulty': 'mini_boss', 
         'abilities': ['basic_attack', 'death_coil'], 'damage_type': 'mixed', 'dodge_chance': 0.23, 
         'drops': ['iron_ore', 'bone_dust'] # Убраны броня и меч, добавлены ресурсы
     },
@@ -644,7 +658,7 @@ BASE_ENEMIES = {
         'name': '🏰 Безумный Император', 
         'base_health': 315, 'base_min_physical_damage': 25, 'base_max_physical_damage': 44, 'base_min_magic_damage': 19, 'base_max_magic_damage': 32, 
         'base_exp': 280, 'base_gold': 200, 'rank': 'B', 
-        'description': 'Тиран, продавший королевство.', 'image': IMAGE_URLS['vampire'], 'difficulty': 'boss', 
+        'description': 'Тиран, продавший королевство.', 'image': IMAGE_URLS['castle_overlord'], 'difficulty': 'boss', 
         'abilities': ['basic_attack', 'royal_command'], 'damage_type': 'mixed', 'dodge_chance': 0.20, 
         'drops': ['vampire_fang', 'large_hp'] # Убран аксессуар
     },
@@ -654,7 +668,7 @@ BASE_ENEMIES = {
         'name': '😈 Адский бес', 
         'base_health': 120, 'base_min_physical_damage': 25, 'base_max_physical_damage': 35, 'base_min_magic_damage': 20, 'base_max_magic_damage': 30, 
         'base_exp': 110, 'base_gold': 90, 'rank': 'A', 
-        'description': 'Мелкий демон.', 'image': IMAGE_URLS['goblin'], 'difficulty': 'extreme', 
+        'description': 'Мелкий демон.', 'image': IMAGE_URLS['imp'], 'difficulty': 'extreme', 
         'abilities': ['basic_attack', 'fireball'], 'damage_type': 'mixed', 'dodge_chance': 0.30, 
         'drops': ['demon_horn']
     },
@@ -670,7 +684,7 @@ BASE_ENEMIES = {
         'name': '💋 Суккуб', 
         'base_health': 150, 'base_min_physical_damage': 20, 'base_max_physical_damage': 30, 'base_min_magic_damage': 40, 'base_max_magic_damage': 60, 
         'base_exp': 180, 'base_gold': 140, 'rank': 'A', 
-        'description': 'Прекрасная и смертоносная.', 'image': IMAGE_URLS['elf'], 'difficulty': 'extreme', 
+        'description': 'Прекрасная и смертоносная.', 'image': IMAGE_URLS['succubus'], 'difficulty': 'extreme', 
         'abilities': ['basic_attack', 'charm'], 'damage_type': 'magic', 'dodge_chance': 0.35, 
         'drops': ['large_mp']
     },
@@ -678,7 +692,7 @@ BASE_ENEMIES = {
         'name': '😈 Архидемон', 
         'base_health': 275, 'base_min_physical_damage': 35, 'base_max_physical_damage': 53, 'base_min_magic_damage': 25, 'base_max_magic_damage': 40, 
         'base_exp': 240, 'base_gold': 176, 'rank': 'A', 
-        'description': 'Один из лордов преисподней.', 'image': IMAGE_URLS['demon'], 'difficulty': 'mini_boss', 
+        'description': 'Один из лордов преисподней.', 'image': IMAGE_URLS['pit_fiend'], 'difficulty': 'mini_boss', 
         'abilities': ['basic_attack', 'summon_demons'], 'damage_type': 'mixed', 'dodge_chance': 0.28, 
         'drops': ['demon_horn', 'large_hp']
     },
@@ -686,7 +700,7 @@ BASE_ENEMIES = {
         'name': '😈 Принц Ада', 
         'base_health': 440, 'base_min_physical_damage': 38, 'base_max_physical_damage': 63, 'base_min_magic_damage': 32, 'base_max_magic_damage': 50, 
         'base_exp': 400, 'base_gold': 280, 'rank': 'A', 
-        'description': 'Правая рука Дьявола.', 'image': IMAGE_URLS['demon'], 'difficulty': 'boss', 
+        'description': 'Правая рука Дьявола.', 'image': IMAGE_URLS['demon_general'], 'difficulty': 'boss', 
         'abilities': ['basic_attack', 'apocalypse'], 'damage_type': 'mixed', 'dodge_chance': 0.25, 
         'drops': ['demon_horn', 'void_crystal'] # Убрано топ снаряжение, добавлены топ ресурсы
     },
@@ -696,7 +710,7 @@ BASE_ENEMIES = {
         'name': '🌑 Странник Пустоты', 
         'base_health': 300, 'base_min_physical_damage': 40, 'base_max_physical_damage': 60, 'base_min_magic_damage': 40, 'base_max_magic_damage': 60, 
         'base_exp': 300, 'base_gold': 200, 'rank': 'S', 
-        'description': 'Существо из антиматерии.', 'image': IMAGE_URLS['mage'], 'difficulty': 'legendary', 
+        'description': 'Существо из антиматерии.', 'image': IMAGE_URLS['void_walker'], 'difficulty': 'legendary', 
         'abilities': ['basic_attack', 'warp'], 'damage_type': 'mixed', 'dodge_chance': 0.40, 
         'drops': ['void_crystal']
     },
