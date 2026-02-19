@@ -427,7 +427,7 @@ def add_experience(user_id, exp_amount):
             # Цикл для повышения нескольких уровней сразу
             leveled_up = False
             while True:
-                needed = (cur_lvl * (cur_lvl + 1) * 150) // 2
+               needed = int((cur_lvl ** 2.2) * 60) 
                 if new_exp >= needed:
                     cur_lvl += 1
                     pts += 2
