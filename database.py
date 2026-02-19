@@ -917,10 +917,12 @@ def build_building(user_id, building_name):
 def init_companion_table():
     """Создает таблицу для экспедиций, если её нет"""
     conn = get_connection()
+    if not conn: return
     c = conn.cursor()
+    # Исправлено: убран комментарий изнутри SQL-запроса
     c.execute("""
         CREATE TABLE IF NOT EXISTS expeditions (
-            user_id BIGINT PRIMARY KEY,  <-- ИЗМЕНЕНО С INTEGER НА BIGINT
+            user_id BIGINT PRIMARY KEY,
             state TEXT DEFAULT 'idle',
             location TEXT,
             start_time TIMESTAMP
