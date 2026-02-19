@@ -929,7 +929,19 @@ def init_companion_table():
     """)
     conn.commit()
     conn.close()
-
+def migrate_expeditions_table():
+    """Исправляет тип user_id в таблице expeditions с INTEGER на BIGINT"""
+    conn = get_connection()
+    if not conn: return
+    c = conn.cursor()
+    try:
+        c.execute("ALTER TABLE expeditions ALTER COLUMN user_id TYPE BIGINT")
+        conn.commit()
+        print("✅ Таблица expeditions обновлена (BIGINT)")
+    except Exception as e:
+        print(f"⚠️ Миграция не требуется или ошибка: {e}")
+    finally:
+        conn.close()
 def get_expedition_status(user_id):
     conn = get_connection()
     c = conn.cursor()
