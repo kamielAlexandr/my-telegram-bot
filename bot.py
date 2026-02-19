@@ -728,13 +728,24 @@ async def start_expedition_handler(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     user_id = query.from_user.id
     
-    # data = send_exp_E
-    rank = query.data.split('_')[2]
-    
-    database.start_expedition(user_id, rank)
-    
-    await query.answer(f"Травник ушел в {EXPEDITION_CONFIG[rank]['name']}!")
-    await herbalist_menu_handler(update, context) # Обновляем меню
+    try:
+        # data = send_exp_E
+        rank = query.data.split('_')[2]
+        
+        # Проверка валидности ранга
+        if rank not in EXPEDITION_CONFIG:
+            await query.answer(f"❌ Ошибка: неверный ранг {rank}", show_alert=True)
+            return
+        
+        # Запускаем экспедицию
+        database.start_expedition(user_id, rank)
+        
+        await query.answer(f"✅ Травник ушел в {EXPEDITION_CONFIG[rank]['name']}!")
+        await herbalist_menu_handler(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка экспедиции для user {user_id}: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 async def claim_loot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -768,7 +779,21 @@ async def claim_loot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup([[InlineKeyboardButton("🌿 К Травнику", callback_data='herbalist_menu')]]))
 
-
+def reset_expedition(user_id):
+    """Принудительно сбрасывает экспедицию пользователя"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as c:
+            c.execute("DELETE FROM expeditions WHERE user_id = %s", (user_id,))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Reset expedition error: {e}")
+        return False
+    finally:
+        conn.close()
+        
 async def safe_edit(query, text=None, keyboard=None, media=None):
     """Безопасное редактирование сообщений, чтобы избежать ошибок API Telegram"""
     try:
