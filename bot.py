@@ -2920,6 +2920,8 @@ async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     # 1. Инициализируем БД
     database.init_db()
+    database.migrate_expeditions_table() 
+    database.init_companion_table()
     # ВАЖНО: Инициализируем таблицу экспедиций!
     if hasattr(database, 'init_companion_table'):
         database.init_companion_table()
