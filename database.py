@@ -149,7 +149,9 @@ def apply_regeneration(character):
             update_character_stats(character['user_id'], last_regeneration=current_time)
             return character
 
-        hp_regen = int(character['max_health'] * 0.05 * minutes_passed)
+        vit = character.get('vitality', 10)
+        regen_percent = 0.05 + (vit * 0.002) # Базовые 5% + 0.2% за каждую единицу живучести
+        hp_regen = int(character['max_health'] * regen_percent * minutes_passed)
         mp_regen = int(character['max_mana'] * 0.05 * minutes_passed)
         
         # Гарантированный минимум регена 1 ед, если прошло время
