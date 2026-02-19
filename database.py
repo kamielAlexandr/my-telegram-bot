@@ -919,7 +919,6 @@ def init_companion_table():
     conn = get_connection()
     if not conn: return
     c = conn.cursor()
-    # Исправлено: убран комментарий изнутри SQL-запроса
     c.execute("""
         CREATE TABLE IF NOT EXISTS expeditions (
             user_id BIGINT PRIMARY KEY,
