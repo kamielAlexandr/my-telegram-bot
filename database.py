@@ -429,7 +429,8 @@ def add_experience(user_id, exp_amount):
             # Цикл для повышения нескольких уровней сразу
             leveled_up = False
             while True:
-               needed = int((cur_lvl ** 2.2) * 60) 
+                # ИСПРАВЛЕННАЯ ФОРМУЛА (без лишних отступов)
+                needed = int((cur_lvl ** 2.2) * 60) 
                 if new_exp >= needed:
                     cur_lvl += 1
                     pts += 2
@@ -449,6 +450,7 @@ def add_experience(user_id, exp_amount):
             conn.commit()
     finally:
         conn.close()
+        
 
 def add_stat_point(user_id, stat_type):
     conn = get_connection()
@@ -916,12 +918,9 @@ def init_companion_table():
     """Создает таблицу для экспедиций, если её нет"""
     conn = get_connection()
     c = conn.cursor()
-    # state: 'idle' (свободен) или 'busy' (занят)
-    # location: 'E', 'D', 'C'...
-    # start_time: timestamp
     c.execute("""
         CREATE TABLE IF NOT EXISTS expeditions (
-            user_id INTEGER PRIMARY KEY,
+            user_id BIGINT PRIMARY KEY,  <-- ИЗМЕНЕНО С INTEGER НА BIGINT
             state TEXT DEFAULT 'idle',
             location TEXT,
             start_time TIMESTAMP
