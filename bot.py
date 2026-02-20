@@ -191,12 +191,14 @@ ITEMS_DB = {
     'leather_vest': {'name': '💨 Кожанка вора', 'desc': 'Не сковывает движения.', 'price': 200, 'type': 'light_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
     'hunter_gear': {'name': '🌿 Плащ следопыта', 'desc': 'Сливается с лесом.', 'price': 750, 'type': 'light_armor', 'effect': 24, 'cat': 'armor', 'rank': 'D'},
     'shadow_cloak': {'name': '🌑 Плащ Теней', 'desc': 'Вы становитесь призраком.', 'price': 2800, 'type': 'light_armor', 'effect': 50, 'cat': 'armor', 'rank': 'B'},
-
+# НОВОЕ: Добавлена роба для B ранга
+    'shadow_robe': {'name': '🌑 Мантия Теней', 'desc': 'Соткана из ночного тумана.', 'price': 3200, 'type': 'magic_armor', 'effect': 55, 'cat': 'armor', 'rank': 'B'},
     # --- МАГИЧЕСКИЕ РОБЫ (Маг/Эльф) ---
     'apprentice_robe': {'name': '🔮 Роба ученика', 'desc': 'Пахнет старыми книгами.', 'price': 200, 'type': 'magic_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'},
     'archmage_robe': {'name': '🌟 Звездная мантия', 'desc': 'Сияет магией.', 'price': 800, 'type': 'magic_armor', 'effect': 25, 'cat': 'armor', 'rank': 'D'},
-    'mithril_armor': {'name': '💠 Мифриловая роба', 'desc': 'Легкая как перо.', 'price': 2200, 'type': 'magic_armor', 'effect': 40, 'cat': 'armor', 'rank': 'B'},
-    'void_robe': {'name': '🌌 Покров Пустоты', 'desc': 'Поглощает заклинания.', 'price': 3000, 'type': 'magic_armor', 'effect': 60, 'cat': 'armor', 'rank': 'B'},
+    # ИСПРАВЛЕНО: Мифрил теперь C ранг (цена снижена, чтобы соответствовать этапу Катакомб)
+    'mithril_armor': {'name': '💠 Мифриловая роба', 'desc': 'Легкая как перо.', 'price': 1500, 'type': 'magic_armor', 'effect': 40, 'cat': 'armor', 'rank': 'C'},
+    'void_robe': {'name': '🌌 Покров Пустоты', 'desc': 'Поглощает заклинания.', 'price': 6000, 'type': 'magic_armor', 'effect': 75, 'cat': 'armor', 'rank': 'A'},
     'void_plate': {'name': '🌌 Доспех Пустоты (Маг)', 'desc': 'Абсолютная защита.', 'price': 12000, 'type': 'magic_armor', 'effect': 100, 'cat': 'armor', 'rank': 'S'},
 
     # --- АКСЕССУАРЫ ---
@@ -448,17 +450,17 @@ CRAFT_RECIPES = {
     'leather_vest': {'result': 'leather_vest', 'cost': 50, 'mats': {'wolf_pelt': 5}},
     'hunter_gear': {'result': 'hunter_gear', 'cost': 300, 'mats': {'wolf_pelt': 10, 'spider_silk': 5, 'goblin_ear': 5}},
     'shadow_cloak': {'result': 'shadow_cloak', 'cost': 1500, 'mats': {'spider_silk': 20, 'vampire_fang': 2, 'bone_dust': 10}},
-
+    'shadow_robe': {'result': 'shadow_robe', 'cost': 1200, 'mats': {'spider_silk': 20, 'vampire_fang': 5, 'bone_dust': 15}},
     # --- ТЯЖЕЛАЯ БРОНЯ (ЗАЩИТА) ---
     'chainmail': {'result': 'chainmail', 'cost': 120, 'mats': {'iron_ore': 8, 'spider_silk': 4}},
     'plate_armor': {'result': 'plate_armor', 'cost': 400, 'mats': {'iron_ore': 20, 'bone_dust': 5}},
     'dragon_mail': {'result': 'dragon_mail', 'cost': 3000, 'mats': {'demon_horn': 5, 'iron_ore': 50, 'plate_armor': 1}},
-
+    'void_robe': {'result': 'void_robe', 'cost': 2500, 'mats': {'void_crystal': 1, 'demon_horn': 5, 'shadow_robe': 1}},
     # --- МАГИЧЕСКАЯ БРОНЯ (МАНА) ---
     'apprentice_robe': {'result': 'apprentice_robe', 'cost': 80, 'mats': {'spider_silk': 5, 'slime_goo': 5}},
     'archmage_robe': {'result': 'archmage_robe', 'cost': 300, 'mats': {'spider_silk': 15, 'small_mp': 5}},
-    'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
-    'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
+    'mithril_armor': {'result': 'mithril_armor', 'cost': 600, 'mats': {'iron_ore': 20, 'bone_dust': 20, 'spider_silk': 10}},
+    'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'void_robe': 1}}
 }
 # --- НАСТРОЙКИ ФЕРМЫ ---
 FARM_CONFIG = {
@@ -3200,7 +3202,11 @@ async def build_farm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def plant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    crop_key = query.data.split('_')[1]
+    
+    # ИСПРАВЛЕНИЕ ЗДЕСЬ: добавляем единичку в split, 
+    # чтобы 'plant_magic_bean' разбилось на 'plant' и 'magic_bean'
+    crop_key = query.data.split('_', 1)[1] 
+    
     database.start_farming(query.from_user.id, crop_key)
     await query.answer(f"🌱 Семена посажены!")
     await farm_menu_handler(update, context)
