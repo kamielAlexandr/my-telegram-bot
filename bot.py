@@ -3270,40 +3270,52 @@ async def cook_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer(f"🍲 Приготовлено: {res_item['name']}")
     await kitchen_menu_handler(update, context)
+
 def main():
-    # 1. Инициализируем БД
+    # 1. Инициализируем БД и таблицы
     database.init_db()
     database.migrate_expeditions_table() 
-    database.init_companion_table()
-    # ВАЖНО: Инициализируем таблицу экспедиций!
     if hasattr(database, 'init_companion_table'):
         database.init_companion_table()
+    if hasattr(database, 'init_farm_table'):
+        database.init_farm_table()
     
     app = Application.builder().token(TOKEN).build()
     
-    # --- ХЕНДЛЕРЫ ТРАВНИКА И АЛХИМИИ (Глобальные) ---
+    # Оставляем только команду /alchemy глобальной
     app.add_handler(CommandHandler('alchemy', alchemy_command))
-    app.add_handler(CallbackQueryHandler(build_alchemy_handler, pattern='^build_alchemy$'))
-    app.add_handler(CallbackQueryHandler(brew_handler, pattern='^brew_'))
-    app.add_handler(CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'))
-    app.add_handler(CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'))
-    app.add_handler(CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'))
 
-    # === НОВЫЕ ХЕНДЛЕРЫ ДЛЯ ФЕРМЫ И КУХНИ ===
-    app.add_handler(CallbackQueryHandler(farm_menu_handler, pattern='^farm_menu$'))
-    app.add_handler(CallbackQueryHandler(build_farm_handler, pattern='^build_farm$'))
-    app.add_handler(CallbackQueryHandler(plant_handler, pattern='^plant_'))
-    app.add_handler(CallbackQueryHandler(harvest_handler, pattern='^harvest_crop$'))
-    app.add_handler(CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'))
-    app.add_handler(CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'))
-    app.add_handler(CallbackQueryHandler(cook_handler, pattern='^cook_'))
-    # --- ДИАЛОГИ ---
+    # --- ДИАЛОГИ (Здесь исправлена маршрутизация кнопок) ---
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
             CHOOSE_RACE: [CallbackQueryHandler(choose_race, pattern='^race_')],
             ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
-            MAIN_MENU: [CallbackQueryHandler(main_menu_handler)],
+            
+            # === ИСПРАВЛЕННЫЙ БЛОК ГЛАВНОГО МЕНЮ ===
+            MAIN_MENU: [
+                # Сначала бот проверяет специфичные кнопки зданий
+                CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'),
+                CallbackQueryHandler(build_alchemy_handler, pattern='^build_alchemy$'),
+                CallbackQueryHandler(brew_handler, pattern='^brew_'),
+                CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'),
+                CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'),
+                
+                CallbackQueryHandler(farm_menu_handler, pattern='^farm_menu$'),
+                CallbackQueryHandler(build_farm_handler, pattern='^build_farm$'),
+                CallbackQueryHandler(plant_handler, pattern='^plant_'),
+                CallbackQueryHandler(harvest_handler, pattern='^harvest_crop$'),
+                
+                CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'),
+                CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'),
+                CallbackQueryHandler(cook_handler, pattern='^cook_'),
+                
+                # Если кнопка не подошла под списки выше, она уходит в главный обработчик
+                # (Профиль, Инвентарь, Битва и т.д.)
+                CallbackQueryHandler(main_menu_handler)
+            ],
+            # =========================================
+            
             BATTLE_MENU: [CallbackQueryHandler(battle_menu_handler)],
             IN_BATTLE: [CallbackQueryHandler(battle_action_handler)],
             GUILD_MENU: [CallbackQueryHandler(guild_menu_handler)],
@@ -3311,7 +3323,6 @@ def main():
             CRAFT_MENU: [CallbackQueryHandler(craft_handler)],
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
-            # Убрал ошибочные строки отсюда
         },
         fallbacks=[CommandHandler('start', start)]
     )
@@ -3323,7 +3334,6 @@ def main():
     
     print("⚔️ Бот Темного Фентези перезапущен! Нажмите /start")
     app.run_polling()
-
 
 if __name__ == '__main__':
     main()
