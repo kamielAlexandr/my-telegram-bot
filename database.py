@@ -24,6 +24,12 @@ RACES = {
         "name": "Орк",
         "strength": 13, "agility": 7, "intelligence": 5, "vitality": 9,
         "health_multiplier": 9, "mana_multiplier": 1.5,
+    },
+    "vampire": {
+        "name": "Вампир",
+        "strength": 10, "agility": 13, "intelligence": 8, "vitality": 4, # Очень мало ХП (живучесть 4), но макс Ловкость
+        "health_multiplier": 5, # Множитель ХП тоже самый низкий
+        "mana_multiplier": 4,
     }
 }
 
@@ -214,7 +220,10 @@ def create_character(user_id, username, char_name, race):
     
     p_res = 0.05 if race == 'orc' else 0.0
     m_res = 0.10 if race == 'dwarf' else 0.0
+    
     if race == 'elf': m_res = 0.05
+    # Вампиры нежить, у них врожденная защита от физики 10%
+    if race == 'vampire': p_res = 0.10
 
     try:
         with conn.cursor() as cursor:
@@ -1972,3 +1981,22 @@ def finish_farming(user_id):
     c.execute("UPDATE farm_jobs SET state='idle', crop_key=NULL, start_time=NULL WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
+def delete_character(user_id):
+    """Полностью удаляет персонажа и весь его прогресс (Реинкарнация)"""
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as c:
+            # Сначала удаляем все связанные данные (инвентарь, здания, квесты)
+            c.execute("DELETE FROM player_inventory WHERE user_id = %s", (user_id,))
+            c.execute("DELETE FROM expeditions WHERE user_id = %s", (user_id,))
+            c.execute("DELETE FROM farm_jobs WHERE user_id = %s", (user_id,))
+            # Затем удаляем самого героя
+            c.execute("DELETE FROM player_characters WHERE user_id = %s", (user_id,))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Delete character error: {e}")
+        return False
+    finally:
+        conn.close()
