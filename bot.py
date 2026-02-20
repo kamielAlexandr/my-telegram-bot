@@ -1214,8 +1214,15 @@ def get_shop_categories_keyboard():
 
 def get_shop_items_keyboard(category, user_gold):
     kb = []
+    # --- СПИСОК ЭКСКЛЮЗИВОВ ФЕРМЫ И КУХНИ ---
+    farm_and_kitchen = ['wheat', 'carrot', 'potato', 'magic_bean', 'bread_fresh', 'carrot_soup', 'meat_pie', 'magic_stew']
+    
     for k, v in ITEMS_DB.items():
         if v.get('cat') == category:
+            
+            # ФИЛЬТР: Не показываем фермерские продукты и блюда
+            if k in farm_and_kitchen:
+                continue
             
             # ФИЛЬТР: Не показываем алхимию в магазине
             if category == 'food':
@@ -2346,19 +2353,26 @@ async def render_shop_category(query, user_id, cat):
         txt = f"🏪 *{cat_names.get(cat, 'Товары')}*\n_Баланс: {char['gold']}g_\n\n"
         items_found = False
         
+        # --- СПИСОК ЭКСКЛЮЗИВОВ ФЕРМЫ И КУХНИ (Скрываем из магазина) ---
+        farm_and_kitchen = ['wheat', 'carrot', 'potato', 'magic_bean', 'bread_fresh', 'carrot_soup', 'meat_pie', 'magic_stew']
+        
         for key, item in ITEMS_DB.items():
             # 1. Проверяем категорию
             if item.get('cat') != cat:
                 continue
 
-            # 2. ФИЛЬТР: Скрываем всё, что для Алхимии (начинается на pot_ или это бафф)
+            # 2. ФИЛЬТР: Скрываем ферму и кухню
+            if key in farm_and_kitchen:
+                continue
+
+            # 3. ФИЛЬТР: Скрываем всё, что для Алхимии (начинается на pot_ или это бафф)
             if cat == 'food':
                 # Если это новое зелье (крафтовое) — пропускаем
                 if key.startswith('pot_'): continue
                 # Если это бафф — пропускаем
                 if item.get('type') == 'buff_potion': continue 
 
-            # 3. Скрываем тестовые предметы
+            # 4. Скрываем тестовые предметы
             if item.get('is_test', False):
                 pass 
 
