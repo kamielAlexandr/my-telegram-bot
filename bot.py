@@ -1355,8 +1355,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'elf_magic_menu' or data.startswith('school_') or data.startswith('set_spell_'):
         await elf_magic_menu_handler(update, context)
         return MAIN_MENU
-    
-    # 3. ПРОФИЛЬ ГЕРОЯ (Ваш правильный код с исправлением race_name)
+
+    # 3. ПРОФИЛЬ ГЕРОЯ
     if data == 'profile':
         char = database.get_character(user_id)
         
@@ -1385,10 +1385,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧠 Инт: {char['intelligence']} | 💓 Жив: {char['vitality']}"
         )
         
-        img = IMAGE_URLS.get(char['race'], IMAGE_URLS['human'])
+        # === ИЗМЕНЕНИЕ ЗДЕСЬ ===
+        # Если раса вампир, показываем красивую аватарку героя. Для остальных - их стандартные.
+        if char['race'] == 'vampire':
+            img = IMAGE_URLS.get('vampire_hero', IMAGE_URLS['human'])
+        else:
+            img = IMAGE_URLS.get(char['race'], IMAGE_URLS['human'])
+        # =======================
+
         await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
-
     
     # 4. ИНВЕНТАРЬ
     elif data == 'inventory':
