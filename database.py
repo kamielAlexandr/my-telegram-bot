@@ -901,20 +901,16 @@ def build_building(user_id, building_name):
     if not conn: return
     try:
         with conn.cursor() as c:
-            # ИСПРАВЛЕНО: 
-            # 1. Имя таблицы player_inventory
-            # 2. Убрана колонка equip_slot (её нет в базе)
-            # 3. Добавлен effect_amount = 0
+            # ИСПРАВЛЕНО: Сохраняем реальное имя постройки (building_name), а не 'building'
             c.execute("""
                 INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount) 
-                VALUES (%s, %s, 'building', 'Лавка Травника', 1, 0) 
-            """, (user_id, building_name))
+                VALUES (%s, %s, 'building', %s, 1, 0) 
+            """, (user_id, building_name, building_name))
             conn.commit()
     except Exception as e:
         print(f"Build error: {e}")
     finally:
         conn.close()
-
 def init_companion_table():
     """Создает таблицу для экспедиций, если её нет"""
     conn = get_connection()
