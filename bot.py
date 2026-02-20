@@ -951,75 +951,81 @@ async def safe_edit(query, text=None, keyboard=None, media=None):
 
 def create_enemy(enemy_key, player_level):
     """
-    Создает экземпляр врага с характеристиками, 
-    масштабированными под уровень игрока.
+    Создает экземпляр врага с характеристиками.
+    Враги теперь ограничены своим рангом и не растут бесконечно.
     """
-    # 1. Проверка существования врага в базе
     if enemy_key not in BASE_ENEMIES:
-        logger.warning(f"Враг {enemy_key} не найден в базе!")
-        # Фоллбэк на волка, чтобы игра не сломалась
         if 'wolf' in BASE_ENEMIES: 
             return create_enemy('wolf', player_level)
         return None
     
     base = BASE_ENEMIES[enemy_key].copy()
+    enemy_rank = base.get('rank', 'E')
     
-    # 2. Расчет множителя уровня (УВЕЛИЧЕН С 0.10 ДО 0.15)
-    # Теперь враги растут быстрее вместе с игроком
-    level_multiplier = 1.0 + (player_level - 1) * 0.15
+    # 1. КАПЫ УРОВНЕЙ ДЛЯ КАЖДОГО РАНГА
+    rank_caps = {
+        'E': (1, 14),   # Руины (макс уровень врагов: 14)
+        'D': (15, 24),  # Лес
+        'C': (25, 34),  # Катакомбы
+        'B': (35, 44),  # Замок
+        'A': (45, 54),  # Пекло
+        'S': (55, 100)  # Хаос (растет до 100)
+    }
     
-    # 3. Множитель сложности (Боссы и Мини-боссы)
+    min_lvl, max_lvl = rank_caps.get(enemy_rank, (1, 14))
+    
+    # Уровень врага ограничивается капом его локации
+    enemy_level = max(min_lvl, min(player_level, max_lvl))
+    
+    # 2. Расчет множителя от УРОВНЯ ВРАГА (а не игрока!)
+    level_multiplier = 1.0 + (enemy_level - 1) * 0.15
+    
+    # Множитель сложности (Боссы)
     bonus = 1.0
-    if base.get('difficulty') == 'mini_boss': 
-        bonus = 1.8
-    elif base.get('difficulty') == 'boss': 
-        bonus = 2.5
+    if base.get('difficulty') == 'mini_boss': bonus = 1.8
+    elif base.get('difficulty') == 'boss': bonus = 2.5
     
     final_multiplier = level_multiplier * bonus
     
-    # 4. НАСТРОЙКА БАЛАНСА (Нерф в зависимости от ранга)
-    # E и D ранги немного слабее (для комфорта на старте)
-    # C, B, A, S ранги имеют 100% характеристик (без скрытых нерфов)
-    rank = base.get('rank', 'E')
+    # 3. НАСТРОЙКА БАЛАНСА (Нерф статов для легких локаций)
     balance_nerf = 1.0 
-    
-    if rank in ['E', 'D']:
-        balance_nerf = 0.90  # 90% от статов для ранних уровней
-    elif rank == 'C':
-        balance_nerf = 0.95  # 95% для середины
-    # Для B, A, S нерф = 1.0 (Полная сила)
+    if enemy_rank in ['E', 'D']: balance_nerf = 0.90
+    elif enemy_rank == 'C': balance_nerf = 0.95
 
-    # 5. Создание объекта врага
+    # Создание объекта врага
     enemy = base.copy()
     
-    # Здоровье (Больше не режется на 0.85 глобально)
+    # Применяем множители
     enemy['health'] = int(base['base_health'] * final_multiplier * balance_nerf)
     enemy['max_health'] = enemy['health']
     
-    # Урон (Физический и Магический)
-    # Применяем баланс-нерф только к урону, чтобы новичков не ваншотали
     enemy['min_physical_damage'] = int(base['base_min_physical_damage'] * level_multiplier * balance_nerf)
     enemy['max_physical_damage'] = int(base['base_max_physical_damage'] * level_multiplier * balance_nerf)
     
     enemy['min_magic_damage'] = int(base['base_min_magic_damage'] * level_multiplier * balance_nerf)
     enemy['max_magic_damage'] = int(base['base_max_magic_damage'] * level_multiplier * balance_nerf)
     
-    # 6. Награда (ОПЫТ И ЗОЛОТО БЕЗ СРЕЗА)
-    # Убран множитель 0.8. Игрок получает 100% награды за свой уровень.
-    enemy['exp'] = int(base['base_exp'] * final_multiplier)
+    # 4. НАГРАДА И ШТРАФ ЗА УРОВЕНЬ
+    base_exp = int(base['base_exp'] * final_multiplier)
+    base_gold = int(base['base_gold'] * final_multiplier)
     
-    # !!! ИСПРАВЛЕНА ОШИБКА ЗДЕСЬ !!! 
-    # Было base['gold'], стало base['base_gold']
-    enemy['gold'] = int(base['base_gold'] * final_multiplier)
+    # Если игрок намного сильнее врага, режем награду (Анти-фарм)
+    level_diff = player_level - enemy_level
+    reward_penalty = 1.0
+    if level_diff > 5:
+        # За каждый уровень выше пятого отнимаем 10% награды, но оставляем минимум 10%
+        reward_penalty = max(0.1, 1.0 - (level_diff * 0.1))
+        
+    enemy['exp'] = int(base_exp * reward_penalty)
+    enemy['gold'] = int(base_gold * reward_penalty)
     
-    # 7. Флаги для логики боя
+    # Флаги боссов
     if enemy.get('difficulty') == 'boss': 
         enemy['is_boss'] = True
     elif enemy.get('difficulty') == 'mini_boss': 
         enemy['is_mini_boss'] = True
         
     return enemy
-
 
 def get_rank_icon(rank): return {'E': '🆕', 'D': '🟢', 'C': '🔵', 'B': '🟣', 'A': '🟠', 'S': '⚡'}.get(rank, '🆕')
 def get_xp_bar(level, exp, length=10):
