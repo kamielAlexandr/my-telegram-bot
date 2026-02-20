@@ -100,6 +100,11 @@ RACE_ABILITIES = {
         10: {'key': 'd1', 'name': '🪨 Каменная кожа', 'mana': 20, 'cd': 4, 'type': 'buff_def', 'val': 0.8, 'desc': 'Снижает урон на 80% (1 ход).'},
         25: {'key': 'd2', 'name': '🔨 Удар Молотом', 'mana': 35, 'cd': 3, 'type': 'stun_dmg', 'val': 2.0, 'desc': 'Урон (200%) + шанс оглушить.'},
         40: {'key': 'd3', 'name': '🍺 Живая вода', 'mana': 50, 'cd': 5, 'type': 'heal', 'val': 1.0, 'desc': 'Полное восстановление здоровья.'}
+    },
+    'vampire': {
+        10: {'key': 'v1', 'name': '🦇 Укус', 'mana': 20, 'cd': 3, 'type': 'lifesteal', 'val': 1.8, 'desc': 'Урон (180%) и лечение от крови врага.'},
+        25: {'key': 'v2', 'name': '🌫 Теневой шаг', 'mana': 35, 'cd': 4, 'type': 'buff_def', 'val': 0.1, 'desc': 'Превращение в туман. Избегание 90% урона (1 ход).'},
+        40: {'key': 'v3', 'name': '🩸 Кровавая жатва', 'mana': 60, 'cd': 5, 'type': 'dmg_agi', 'val': 4.0, 'desc': 'Смертоносный удар от Ловкости (400%).'}
     }
 }
 ELF_MAGIC_TYPES = {
@@ -3276,7 +3281,63 @@ async def cook_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer(f"🍲 Приготовлено: {res_item['name']}")
     await kitchen_menu_handler(update, context)
+# ==========================================
+# === РЕИНКАРНАЦИЯ (УДАЛЕНИЕ ГЕРОЯ) ===
+# ==========================================
 
+async def rebirth_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    char = database.get_character(user_id)
+    
+    if not char:
+        await update.message.reply_text("Духи не видят вас. Сначала создайте героя командой /start.")
+        return
+
+    txt = (
+        "🔥 **РИТУАЛ ПЕРЕРОЖДЕНИЯ** 🔥\n\n"
+        "Вы стоите у края Бездны. Шаг в неё уничтожит ваше нынешнее тело, но душа сможет переродиться в новом обличии.\n\n"
+        "⚠️ **ВНИМАНИЕ:** Ваше золото, уровень, раса, постройки (Травник, Ферма) и инвентарь будут **НАВСЕГДА УДАЛЕНЫ**!\n\n"
+        "Вы точно готовы?"
+    )
+    
+    kb = [
+        [InlineKeyboardButton("💀 ШАГНУТЬ В БЕЗДНУ (Удалить героя)", callback_data='confirm_rebirth')],
+        [InlineKeyboardButton("🔙 ОТОЙТИ ОТ КРАЯ (Отмена)", callback_data='cancel_rebirth')]
+    ]
+    
+    await update.message.reply_photo(
+        photo=IMAGE_URLS['hell_gate'], 
+        caption=txt, 
+        parse_mode='Markdown', 
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def confirm_rebirth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # Подчищаем кэш боев на всякий случай
+    if user_id in battle_sessions:
+        del battle_sessions[user_id]
+        
+    success = database.delete_character(user_id)
+    
+    if success:
+        txt = "Ваше тело обратилось в пепел... 💨\n\nНапишите /start, чтобы родиться заново."
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['dungeon'], caption=txt, parse_mode='Markdown'))
+    else:
+        await query.answer("Бездна отвергла вас (Ошибка БД).", show_alert=True)
+
+async def cancel_rebirth_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer("Вы отступили от края.")
+    
+    # Возвращаем в деревню
+    char = database.get_character(user_id)
+    if char:
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
@@ -3290,7 +3351,12 @@ def main():
     
     # Оставляем только команду /alchemy глобальной
     app.add_handler(CommandHandler('alchemy', alchemy_command))
-
+    # НОВОЕ: Команда для перерождения
+    app.add_handler(CommandHandler('reset', rebirth_command))
+    
+    # НОВОЕ: Обработчики кнопок "Да/Нет" для перерождения
+    app.add_handler(CallbackQueryHandler(confirm_rebirth_handler, pattern='^confirm_rebirth$'))
+    app.add_handler(CallbackQueryHandler(cancel_rebirth_handler, pattern='^cancel_rebirth$'))
     # --- ДИАЛОГИ (Здесь исправлена маршрутизация кнопок) ---
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
