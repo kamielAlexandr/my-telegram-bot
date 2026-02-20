@@ -29,6 +29,8 @@ IMAGE_URLS = {
     'elf': 'https://i.pinimg.com/736x/c5/b1/e6/c5b1e645ceadf9c42e8ab51393981bb9.jpg',
     'dwarf': 'https://i.pinimg.com/736x/ef/b2/a2/efb2a24d7f7897ba9841764d8fb88c69.jpg',
     'orc': 'https://i.pinimg.com/736x/9d/03/22/9d0322080cea97cfd1e4667f835592dd.jpg',
+    # НОВАЯ КАРТИНКА ДЛЯ ГЕРОЯ-ВАМПИРА:
+    'vampire_hero': 'https://i.pinimg.com/736x/f7/cc/5d/f7cc5d151ba496829019f5d0c473fe4f.jpg',
     
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
