@@ -1023,8 +1023,9 @@ def create_enemy(enemy_key, player_level):
 
 def get_rank_icon(rank): return {'E': '🆕', 'D': '🟢', 'C': '🔵', 'B': '🟣', 'A': '🟠', 'S': '⚡'}.get(rank, '🆕')
 def get_xp_bar(level, exp, length=10):
-    needed = (level * (level + 1) * 150) // 2
-    prev_needed = ((level - 1) * level * 150) // 2
+    # Единая формула: (Уровень * (Уровень + 1) * 50) / 2
+    needed = (level * (level + 1) * 50) // 2
+    prev_needed = ((level - 1) * level * 50) // 2
     current_level_exp = exp - prev_needed
     level_diff = needed - prev_needed
     if level_diff <= 0: return "█" * length
@@ -1849,9 +1850,13 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 if c.get('quest_progress') < c.get('quest_goal'):
                     database.update_quest_progress(user_id, 1)
 
+            # --- ВАЖНО: ИСПРАВЛЕННЫЙ ПОРЯДОК СОХРАНЕНИЯ ---
+            # Сначала сохраняем здоровье после битвы
+            database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
+            # А ЗАТЕМ выдаем опыт (если будет новый уровень, здоровье восстановится поверх старого)
             database.add_experience(user_id, xp_win)
             database.add_gold(user_id, gold_win)
-            database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
+            # ---------------------------------------------
             
             if e.get('is_boss'): database.increment_boss_kills(user_id, False)
             if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
@@ -1861,7 +1866,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             win_msg = f"🏆 *ПОБЕДА!*\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}"
             await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
             return MAIN_MENU
-
         # --- 5. ХОД ВРАГА ---
         
         # Слизь
