@@ -878,7 +878,10 @@ def create_enemy(enemy_key, player_level):
     # 6. Награда (ОПЫТ И ЗОЛОТО БЕЗ СРЕЗА)
     # Убран множитель 0.8. Игрок получает 100% награды за свой уровень.
     enemy['exp'] = int(base['base_exp'] * final_multiplier)
-    enemy['gold'] = int(base['gold'] * final_multiplier)
+    
+    # !!! ИСПРАВЛЕНА ОШИБКА ЗДЕСЬ !!! 
+    # Было base['gold'], стало base['base_gold']
+    enemy['gold'] = int(base['base_gold'] * final_multiplier)
     
     # 7. Флаги для логики боя
     if enemy.get('difficulty') == 'boss': 
@@ -887,6 +890,7 @@ def create_enemy(enemy_key, player_level):
         enemy['is_mini_boss'] = True
         
     return enemy
+
 
 def get_rank_icon(rank): return {'E': '🆕', 'D': '🟢', 'C': '🔵', 'B': '🟣', 'A': '🟠', 'S': '⚡'}.get(rank, '🆕')
 def get_xp_bar(level, exp, length=10):
