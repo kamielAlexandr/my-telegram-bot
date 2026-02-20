@@ -194,6 +194,35 @@ def get_character(user_id):
             cursor.execute("SELECT * FROM player_characters WHERE user_id = %s", (user_id,))
             char = cursor.fetchone()
             if char:
+                # --- АВТОМАТИЧЕСКАЯ ПРОВЕРКА УРОВНЯ (ФИКС ЗАВИСШЕГО ОПЫТА) ---
+                cur_exp = char['experience']
+                cur_lvl = char['level']
+                pts = char['stat_points']
+                leveled_up = False
+                
+                while True:
+                    # Единая формула: (Уровень * (Уровень + 1) * 50) / 2
+                    needed = (cur_lvl * (cur_lvl + 1) * 50) // 2 
+                    if cur_exp >= needed:
+                        cur_lvl += 1
+                        pts += 2
+                        leveled_up = True
+                    else:
+                        break
+                        
+                if leveled_up:
+                    cursor.execute("""
+                        UPDATE player_characters 
+                        SET level=%s, stat_points=%s, health=max_health, mana=max_mana 
+                        WHERE user_id=%s
+                    """, (cur_lvl, pts, user_id))
+                    char['level'] = cur_lvl
+                    char['stat_points'] = pts
+                    char['health'] = char['max_health']
+                    char['mana'] = char['max_mana']
+                    conn.commit()
+                # -------------------------------------------------------------
+
                 # Обновляем активность
                 cursor.execute("UPDATE player_characters SET last_active = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
                 conn.commit()
@@ -207,6 +236,9 @@ def get_character(user_id):
                     update_character_stats(user_id, rank=actual_rank)
                     char['rank'] = actual_rank
             return char
+    except Exception as e:
+        print(f"Get character error: {e}")
+        return None
     finally:
         conn.close()
 
