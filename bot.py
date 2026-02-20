@@ -3097,7 +3097,12 @@ async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         start_time = status['start_time']
         if isinstance(start_time, str): start_time = datetime.fromisoformat(start_time)
             
-        crop = FARM_CONFIG[status['crop_key']]
+        crop = FARM_CONFIG.get(status['crop_key'])
+        if not crop: # Защита от ошибок базы
+             database.finish_farming(user_id)
+             await query.answer("Урожай погиб. Поле снова свободно.")
+             return MAIN_MENU
+             
         elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
         
         if elapsed_minutes >= crop['time_minutes']:
@@ -3111,6 +3116,31 @@ async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                   [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
             await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return MAIN_MENU
+
+async def harvest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    status = database.get_farm_status(user_id)
+    if status['state'] != 'growing': return
+    
+    crop = FARM_CONFIG.get(status['crop_key'])
+    if not crop: return
+    
+    amount = random.randint(crop['yield_min'], crop['yield_max'])
+    item_data = ITEMS_DB.get(status['crop_key'])
+    if not item_data: return
+    
+    item_name = item_data['name']
+    
+    # Добавляем предметы в цикле через buy_item, чтобы не ломать базу ручными запросами
+    # Цена 0, так как мы их вырастили
+    for _ in range(amount):
+        database.buy_item(user_id, status['crop_key'], 'material', item_name, 0, 0)
+
+    database.finish_farming(user_id)
+    
+    txt = f"🧺 **УРОЖАЙ СОБРАН!**\nВы получили: {item_name} (x{amount})"
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup([[InlineKeyboardButton("🌾 Вернуться на ферму", callback_data='farm_menu')]]))
 
 async def build_farm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -3177,22 +3207,30 @@ async def kitchen_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     for key, recipe in COOKING_RECIPES.items():
         res_item = ITEMS_DB.get(recipe['result'])
+        if not res_item: continue
         txt += f"🍽 *{res_item['name']}*\n   _{res_item['desc']}_\n"
         
         mats_str = []
+        can_cook = True
         for mat, amt in recipe['mats'].items():
             m_name = ITEMS_DB.get(mat, {'name': mat})['name']
             u_amt = inv_dict.get(mat, 0)
             mark = "✅" if u_amt >= amt else "❌"
+            if u_amt < amt: can_cook = False
             mats_str.append(f"{mark} {u_amt}/{amt} {m_name}")
             
         txt += "   " + ", ".join(mats_str) + "\n\n"
-        kb.append([InlineKeyboardButton(f"🍳 Готовить {res_item['name']}", callback_data=f"cook_{key}")])
+        
+        # Кнопка активна только если хватает ресурсов
+        if can_cook:
+            kb.append([InlineKeyboardButton(f"🍳 Готовить {res_item['name']}", callback_data=f"cook_{key}")])
+        else:
+            kb.append([InlineKeyboardButton(f"❌ {res_item['name']} (Нет продуктов)", callback_data="ignore")])
 
     kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
     await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return MAIN_MENU
-
+    
 async def build_kitchen_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
