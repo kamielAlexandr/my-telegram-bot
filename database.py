@@ -1930,3 +1930,48 @@ def finish_expedition(user_id):
     c.execute("UPDATE expeditions SET state='idle', location=NULL, start_time=NULL WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
+# --- МЕХАНИКА ФЕРМЕРА ---
+def init_farm_table():
+    """Создает таблицу для Фермы"""
+    conn = get_connection()
+    if not conn: return
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS farm_jobs (
+            user_id BIGINT PRIMARY KEY,
+            state TEXT DEFAULT 'idle',
+            crop_key TEXT,
+            start_time TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def get_farm_status(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT state, crop_key, start_time FROM farm_jobs WHERE user_id = %s", (user_id,))
+    res = c.fetchone()
+    conn.close()
+    if not res:
+        return {'state': 'idle', 'crop_key': None, 'start_time': None}
+    return {'state': res[0], 'crop_key': res[1], 'start_time': res[2]}
+
+def start_farming(user_id, crop_key):
+    conn = get_connection()
+    c = conn.cursor()
+    now = datetime.now()
+    c.execute("""
+        INSERT INTO farm_jobs (user_id, state, crop_key, start_time) 
+        VALUES (%s, 'growing', %s, %s)
+        ON CONFLICT(user_id) DO UPDATE SET state='growing', crop_key=%s, start_time=%s
+    """, (user_id, crop_key, now, crop_key, now))
+    conn.commit()
+    conn.close()
+
+def finish_farming(user_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE farm_jobs SET state='idle', crop_key=NULL, start_time=NULL WHERE user_id=%s", (user_id,))
+    conn.commit()
+    conn.close()
