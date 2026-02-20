@@ -4,6 +4,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import json
 # --- КОНСТАНТЫ РАС ---
+# --- КОНСТАНТЫ РАС ---
 RACES = {
     "human": {
         "name": "Человек",
@@ -27,12 +28,11 @@ RACES = {
     },
     "vampire": {
         "name": "Вампир",
-        "strength": 10, "agility": 13, "intelligence": 8, "vitality": 4, # Очень мало ХП (живучесть 4), но макс Ловкость
-        "health_multiplier": 5, # Множитель ХП тоже самый низкий
+        "strength": 10, "agility": 13, "intelligence": 8, "vitality": 4, # Мало здоровья, много ловкости
+        "health_multiplier": 5, 
         "mana_multiplier": 4,
     }
 }
-
 def get_connection():
     """Создание подключения к PostgreSQL"""
     database_url = os.getenv('DATABASE_URL')
