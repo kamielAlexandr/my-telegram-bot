@@ -347,7 +347,16 @@ ITEMS_DB = {
     'pot_chaos_def': {'name': '🧪 Твердыня хаоса', 'desc': '+100 Брони (8 ходов)', 'price': 3000, 'type': 'buff_potion', 'buff_type': 'armor', 'effect': 100, 'duration': 8, 'rank': 'S'},
     'pot_inv_step': {'name': '🧪 Незримая поступь', 'desc': '+15 Ловкости (8 ходов)', 'price': 3000, 'type': 'buff_potion', 'buff_type': 'agility', 'effect': 15, 'duration': 8, 'rank': 'S'},
     'pot_deadly_psn': {'name': '☠️ Смертельный яд', 'desc': '200 яда/ход', 'price': 3500, 'type': 'buff_potion', 'buff_type': 'poison_weapon', 'effect': 200, 'duration': 3, 'rank': 'S'},
-
+    # === ФЕРМА И КУХНЯ ===
+    'wheat': {'name': '🌾 Пшеница', 'price': 5, 'type': 'material', 'cat': 'mat', 'rank': 'E'},
+    'carrot': {'name': '🥕 Сладкая морковь', 'price': 8, 'type': 'material', 'cat': 'mat', 'rank': 'D'},
+    'potato': {'name': '🥔 Картофель', 'price': 10, 'type': 'material', 'cat': 'mat', 'rank': 'C'},
+    'magic_bean': {'name': '🫘 Магический боб', 'price': 50, 'type': 'material', 'cat': 'mat', 'rank': 'A'},
+    
+    'bread_fresh': {'name': '🍞 Горячий хлеб', 'desc': '+80 HP', 'price': 50, 'type': 'food', 'effect': 80, 'cat': 'food', 'rank': 'E'},
+    'carrot_soup': {'name': '🥣 Морковный суп', 'desc': '+120 HP', 'price': 100, 'type': 'food', 'effect': 120, 'cat': 'food', 'rank': 'D'},
+    'meat_pie': {'name': '🥧 Мясной пирог', 'desc': '+250 HP', 'price': 200, 'type': 'food', 'effect': 250, 'cat': 'food', 'rank': 'C'},
+    'magic_stew': {'name': '🍲 Похлебка Героя', 'desc': '+600 HP, +200 MP', 'price': 800, 'type': 'food', 'effect': 600, 'cat': 'food', 'rank': 'A'},
 
  
 }
@@ -444,8 +453,23 @@ CRAFT_RECIPES = {
     'mithril_armor': {'result': 'mithril_armor', 'cost': 800, 'mats': {'iron_ore': 30, 'bone_dust': 15, 'vampire_fang': 2}},
     'void_plate': {'result': 'void_plate', 'cost': 8000, 'mats': {'void_crystal': 3, 'demon_horn': 10, 'mithril_armor': 1}}
 }
-# --- БЕСТИАРИЙ (Только материалы и расходники) ---
-# --- БЕСТИАРИЙ (ИСПРАВЛЕННЫЙ БАЛАНС) ---
+# --- НАСТРОЙКИ ФЕРМЫ ---
+FARM_CONFIG = {
+    'wheat': {'name': '🌾 Пшеница', 'time_minutes': 10, 'yield_min': 3, 'yield_max': 6, 'req_rank': 'E'},
+    'carrot': {'name': '🥕 Морковь', 'time_minutes': 20, 'yield_min': 2, 'yield_max': 5, 'req_rank': 'D'},
+    'potato': {'name': '🥔 Картофель', 'time_minutes': 40, 'yield_min': 2, 'yield_max': 4, 'req_rank': 'C'},
+    'magic_bean': {'name': '🫘 Магические бобы', 'time_minutes': 120, 'yield_min': 1, 'yield_max': 3, 'req_rank': 'A'},
+}
+
+# --- РЕЦЕПТЫ КУХНИ (ПОВАР) ---
+COOKING_RECIPES = {
+    'bread_fresh': {'result': 'bread_fresh', 'cost': 15, 'mats': {'wheat': 3}},
+    'carrot_soup': {'result': 'carrot_soup', 'cost': 30, 'mats': {'carrot': 2, 'wheat': 1}},
+    # meat_stew - это лут с кабана (D ранг), делаем из него мощный пирог!
+    'meat_pie': {'result': 'meat_pie', 'cost': 50, 'mats': {'meat_stew': 2, 'potato': 2, 'wheat': 1}},
+    'magic_stew': {'result': 'magic_stew', 'cost': 150, 'mats': {'magic_bean': 2, 'meat_pie': 1, 'carrot': 3}},
+}
+
 # --- БЕСТИАРИЙ ---
 BASE_ENEMIES = {
     # === РАНГ E (1-14 ур) ===
@@ -1137,7 +1161,12 @@ def get_main_menu_keyboard(user_id):
         # --- НОВАЯ КНОПКА ССЫЛКИ ---
         [InlineKeyboardButton("📢 Новости и Обновления", url='https://t.me/hero_spath')],
         # Где-то в списке кнопок:
-        [InlineKeyboardButton("🌿 Травник (Экспедиции)", callback_data='herbalist_menu')],
+        [
+            InlineKeyboardButton("🌿 Травник", callback_data='herbalist_menu'),
+            InlineKeyboardButton("🌾 Фермер", callback_data='farm_menu'),
+            InlineKeyboardButton("🍳 Кухня", callback_data='kitchen_menu')
+        ],
+        
         # ---------------------------
         [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
     ]
@@ -3025,7 +3054,180 @@ async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_alchemy_menu(query, user_id)
 
 
+# ==========================================
+# === ФЕРМЕР И ПОВАР ===
+# ==========================================
 
+async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    # 1. Проверяем постройку
+    if not database.check_building(user_id, 'building_farm'):
+        txt = "🌾 **ЗАБРОШЕННОЕ ПОЛЕ**\nЗдесь можно разбить грядки и нанять Фермера.\n💰 Цена: 2000g"
+        kb = [[InlineKeyboardButton("🔨 Построить Ферму (2000g)", callback_data='build_farm')],
+              [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+
+    # 2. Статус фермы
+    status = database.get_farm_status(user_id)
+    
+    if status['state'] == 'idle':
+        txt = "🌾 **ФЕРМА СВОБОДНА**\nЧто прикажете посадить, милорд?"
+        kb = []
+        ranks = ['E', 'D', 'C', 'B', 'A', 'S']
+        
+        for crop_key, conf in FARM_CONFIG.items():
+            if ranks.index(char['rank']) >= ranks.index(conf['req_rank']):
+                kb.append([InlineKeyboardButton(f"🌱 Посадить {conf['name']} ({conf['time_minutes']} мин)", callback_data=f"plant_{crop_key}")])
+            else:
+                kb.append([InlineKeyboardButton(f"🔒 {conf['name']} (Нужен ранг {conf['req_rank']})", callback_data="ignore")])
+        
+        kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        
+    else:
+        # Урожай зреет
+        start_time = status['start_time']
+        if isinstance(start_time, str): start_time = datetime.fromisoformat(start_time)
+            
+        crop = FARM_CONFIG[status['crop_key']]
+        elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
+        
+        if elapsed_minutes >= crop['time_minutes']:
+            txt = f"✅ **Урожай созрел!**\nВаша {crop['name']} готова к сбору."
+            kb = [[InlineKeyboardButton("🧺 СОБРАТЬ УРОЖАЙ", callback_data='harvest_crop')]]
+            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        else:
+            left = int(crop['time_minutes'] - elapsed_minutes)
+            txt = f"⏳ **Растения зреют...**\nПосажено: {crop['name']}\nОсталось: {left} мин."
+            kb = [[InlineKeyboardButton("🔄 Обновить", callback_data='farm_menu')],
+                  [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return MAIN_MENU
+
+async def build_farm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    if char['gold'] >= 2000:
+        database.add_gold(user_id, -2000)
+        database.build_building(user_id, 'building_farm')
+        await query.answer("✅ Ферма построена!", show_alert=True)
+        await farm_menu_handler(update, context)
+    else:
+        await query.answer("❌ Нужно 2000 золота!", show_alert=True)
+
+async def plant_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    crop_key = query.data.split('_')[1]
+    database.start_farming(query.from_user.id, crop_key)
+    await query.answer(f"🌱 Семена посажены!")
+    await farm_menu_handler(update, context)
+
+async def harvest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    status = database.get_farm_status(user_id)
+    if status['state'] != 'growing': return
+    
+    crop = FARM_CONFIG.get(status['crop_key'])
+    amount = random.randint(crop['yield_min'], crop['yield_max'])
+    item_name = ITEMS_DB[status['crop_key']]['name']
+    
+    database.buy_item(user_id, status['crop_key'], 'material', item_name, 0, 0)
+    # Добавляем нужное количество (первый раз добавился в buy_item)
+    if amount > 1: database.buy_item(user_id, status['crop_key'], 'material', item_name, 0, 0) # Упрощенный костыль или прописать SQL
+
+    # Корректное добавление нужного количества:
+    conn = database.get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE player_inventory SET quantity = quantity + %s WHERE user_id = %s AND item_key = %s", (amount-1, user_id, status['crop_key']))
+    conn.commit()
+    conn.close()
+
+    database.finish_farming(user_id)
+    
+    txt = f"🧺 **УРОЖАЙ СОБРАН!**\nВы получили: {item_name} (x{amount})"
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup([[InlineKeyboardButton("🌾 Вернуться на ферму", callback_data='farm_menu')]]))
+
+
+async def kitchen_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if not database.check_building(user_id, 'building_kitchen'):
+        txt = "🍳 **РУИНЫ ТАВЕРНЫ**\nВосстановите кухню, чтобы Повар готовил вам сытную еду.\n💰 Цена: 3000g"
+        kb = [[InlineKeyboardButton("🔨 Восстановить Кухню (3000g)", callback_data='build_kitchen')],
+              [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+
+    items = database.get_inventory(user_id)
+    inv_dict = {i['item_key']: i['quantity'] for i in items}
+    
+    txt = "🍳 **ПОЛЕВАЯ КУХНЯ**\n_«Запах жареного мяса манит монстров... и героев.»_\n━━━━━━━━━━━━━━━━\n"
+    kb = []
+    
+    for key, recipe in COOKING_RECIPES.items():
+        res_item = ITEMS_DB.get(recipe['result'])
+        txt += f"🍽 *{res_item['name']}*\n   _{res_item['desc']}_\n"
+        
+        mats_str = []
+        for mat, amt in recipe['mats'].items():
+            m_name = ITEMS_DB.get(mat, {'name': mat})['name']
+            u_amt = inv_dict.get(mat, 0)
+            mark = "✅" if u_amt >= amt else "❌"
+            mats_str.append(f"{mark} {u_amt}/{amt} {m_name}")
+            
+        txt += "   " + ", ".join(mats_str) + "\n\n"
+        kb.append([InlineKeyboardButton(f"🍳 Готовить {res_item['name']}", callback_data=f"cook_{key}")])
+
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return MAIN_MENU
+
+async def build_kitchen_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    if char['gold'] >= 3000:
+        database.add_gold(user_id, -3000)
+        database.build_building(user_id, 'building_kitchen')
+        await query.answer("✅ Кухня восстановлена!", show_alert=True)
+        await kitchen_menu_handler(update, context)
+    else:
+        await query.answer("❌ Нужно 3000 золота!", show_alert=True)
+
+async def cook_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    recipe_key = query.data.split('_', 1)[1]
+    recipe = COOKING_RECIPES.get(recipe_key)
+    if not recipe: return
+    
+    items = database.get_inventory(user_id)
+    inv_dict = {i['item_key']: i['quantity'] for i in items}
+    char = database.get_character(user_id)
+    
+    if char['gold'] < recipe['cost']:
+        await query.answer("Не хватает золота на специи!", show_alert=True); return
+
+    for mat, amt in recipe['mats'].items():
+        if inv_dict.get(mat, 0) < amt:
+            await query.answer("Не хватает продуктов!", show_alert=True); return
+            
+    database.add_gold(user_id, -recipe['cost'])
+    for mat, amt in recipe['mats'].items():
+        database.remove_item(user_id, mat, amt)
+        
+    res_item = ITEMS_DB[recipe['result']]
+    database.buy_item(user_id, recipe['result'], res_item['type'], res_item['name'], 0, res_item.get('effect', 0))
+    
+    await query.answer(f"🍲 Приготовлено: {res_item['name']}")
+    await kitchen_menu_handler(update, context)
 def main():
     # 1. Инициализируем БД
     database.init_db()
@@ -3045,6 +3247,14 @@ def main():
     app.add_handler(CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'))
     app.add_handler(CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'))
 
+    # === НОВЫЕ ХЕНДЛЕРЫ ДЛЯ ФЕРМЫ И КУХНИ ===
+    app.add_handler(CallbackQueryHandler(farm_menu_handler, pattern='^farm_menu$'))
+    app.add_handler(CallbackQueryHandler(build_farm_handler, pattern='^build_farm$'))
+    app.add_handler(CallbackQueryHandler(plant_handler, pattern='^plant_'))
+    app.add_handler(CallbackQueryHandler(harvest_handler, pattern='^harvest_crop$'))
+    app.add_handler(CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'))
+    app.add_handler(CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'))
+    app.add_handler(CallbackQueryHandler(cook_handler, pattern='^cook_'))
     # --- ДИАЛОГИ ---
     conv = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
