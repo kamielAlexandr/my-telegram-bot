@@ -1284,9 +1284,15 @@ def get_level_up_keyboard(char, points):
     return InlineKeyboardMarkup(kb)
 
 def get_race_selection_keyboard():
-    kb = [[InlineKeyboardButton(v['name'], callback_data=f"race_{k}")] for k, v in database.RACES.items()]
+    # Создаем кнопки рас вручную прямо здесь, чтобы не зависеть от кэша database
+    kb = [
+        [InlineKeyboardButton("⚔️ Человек", callback_data="race_human")],
+        [InlineKeyboardButton("🏹 Эльф", callback_data="race_elf")],
+        [InlineKeyboardButton("🛡️ Дварф", callback_data="race_dwarf")],
+        [InlineKeyboardButton("🪓 Орк", callback_data="race_orc")],
+        [InlineKeyboardButton("🦇 Вампир", callback_data="race_vampire")] # <--- НАШ ВАМПИР!
+    ]
     return InlineKeyboardMarkup(kb)
-
 # --- HANDLERS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1361,8 +1367,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         char = database.get_character(user_id)
         
         race_key = char['race']
-        race_info = database.RACES.get(race_key) 
-        race_name = race_info['name'] if race_info else race_key.capitalize()
+        
+        # Надежный перевод расы:
+        race_names = {
+            'human': 'Человек',
+            'elf': 'Эльф',
+            'dwarf': 'Дварф',
+            'orc': 'Орк',
+            'vampire': 'Вампир'
+        }
+        race_name = race_names.get(race_key, race_key.capitalize())
 
         phys = max(1, char['strength'] // 2)
         mag = max(1, char['intelligence'] // 2)
@@ -1385,13 +1399,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🧠 Инт: {char['intelligence']} | 💓 Жив: {char['vitality']}"
         )
         
-        # === ИЗМЕНЕНИЕ ЗДЕСЬ ===
-        # Если раса вампир, показываем красивую аватарку героя. Для остальных - их стандартные.
         if char['race'] == 'vampire':
             img = IMAGE_URLS.get('vampire_hero', IMAGE_URLS['human'])
         else:
             img = IMAGE_URLS.get(char['race'], IMAGE_URLS['human'])
-        # =======================
 
         await safe_edit(query, text=txt, media=InputMediaPhoto(img, caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
