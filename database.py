@@ -437,8 +437,9 @@ def add_experience(user_id, exp_amount):
             
             leveled_up = False
             while True:
-                # Единая формула для базы и для интерфейса
+                # ВОТ ЗДЕСЬ БЫЛА ОШИБКА! Теперь формула точно такая же, как в профиле:
                 needed = (cur_lvl * (cur_lvl + 1) * 50) // 2 
+                
                 if new_exp >= needed:
                     cur_lvl += 1
                     pts += 2
