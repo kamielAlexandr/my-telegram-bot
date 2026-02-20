@@ -426,11 +426,10 @@ def add_experience(user_id, exp_amount):
             cur_exp, cur_lvl, pts = data
             new_exp = cur_exp + exp_amount
             
-            # Цикл для повышения нескольких уровней сразу
             leveled_up = False
             while True:
-                # ИСПРАВЛЕННАЯ ФОРМУЛА (без лишних отступов)
-                needed = int((cur_lvl ** 2.2) * 60) 
+                # Единая формула для базы и для интерфейса
+                needed = (cur_lvl * (cur_lvl + 1) * 50) // 2 
                 if new_exp >= needed:
                     cur_lvl += 1
                     pts += 2
@@ -448,6 +447,8 @@ def add_experience(user_id, exp_amount):
                 cursor.execute("UPDATE player_characters SET experience=%s WHERE user_id=%s", (new_exp, user_id))
             
             conn.commit()
+    except Exception as e:
+        print(f"Add Experience Error: {e}")
     finally:
         conn.close()
         
