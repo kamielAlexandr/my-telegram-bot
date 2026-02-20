@@ -216,11 +216,13 @@ def get_character(user_id):
                         SET level=%s, stat_points=%s, health=max_health, mana=max_mana 
                         WHERE user_id=%s
                     """, (cur_lvl, pts, user_id))
+                    conn.commit()
+                    
+                    # ИСПРАВЛЕНИЕ: МЫ ОБЯЗАТЕЛЬНО ОБНОВЛЯЕМ СЛОВАРЬ CHAR ДЛЯ БОТА
                     char['level'] = cur_lvl
                     char['stat_points'] = pts
                     char['health'] = char['max_health']
                     char['mana'] = char['max_mana']
-                    conn.commit()
                 # -------------------------------------------------------------
 
                 # Обновляем активность
@@ -235,6 +237,7 @@ def get_character(user_id):
                 if char['rank'] != actual_rank:
                     update_character_stats(user_id, rank=actual_rank)
                     char['rank'] = actual_rank
+                    
             return char
     except Exception as e:
         print(f"Get character error: {e}")
