@@ -3096,14 +3096,28 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 async def show_top_players(query, user_id):
     top_players = database.get_top_players(10)
     top_text = "🏆 *ЛЕГЕНДЫ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
+    
+    # Добавляем наш надежный локальный словарь рас
+    race_names = {
+        'human': 'Человек',
+        'elf': 'Эльф',
+        'dwarf': 'Дварф',
+        'orc': 'Орк',
+        'vampire': 'Вампир'
+    }
+    
     for i, player in enumerate(top_players, 1):
         name = html.escape(player['character_name'])
         lvl = player['level']
         race_key = player['race']
-        race_name = database.RACES.get(race_key, {}).get('name', 'Неизвестно')
+        
+        # Переводим расу через локальный словарь
+        race_name = race_names.get(race_key, 'Неизвестно')
+        
         bosses = player.get('boss_kills', 0)
         medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
         top_text += f"{medal} <b>{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
+        
     await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
