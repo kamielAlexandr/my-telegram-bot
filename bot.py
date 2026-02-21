@@ -66,7 +66,10 @@ IMAGE_URLS = {
     'forest_guardian':'https://i.pinimg.com/1200x/50/dd/fa/50ddfa68afdc12925fbd2fb3140fe8f7.jpg',
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'void_walker':'https://i.pinimg.com/736x/d7/20/ae/d720aea9c8efa589e991ab14143a7c5e.jpg',
-
+    #рыбалка
+    'pier': 'https://i.pinimg.com/736x/2b/9a/c3/2b9ac325f6e80bca6ec7100b730f81d1.jpg',
+    'drowned': 'https://i.pinimg.com/736x/8d/f3/d1/8df3d15442ceb674313f83737ec30eb5.jpg',
+    'kraken': 'https://i.pinimg.com/736x/f6/c8/10/f6c8106b12d547f87900bdf19234b3f1.jpg',
     #локации
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
@@ -219,6 +222,13 @@ ITEMS_DB = {
     'demon_horn': {'name': '😈 Рог демона', 'desc': 'Излучает жар.', 'price': 100, 'type': 'material', 'cat': 'mat', 'rank': 'A'},
     'void_crystal': {'name': '🌌 Осколок Пустоты', 'desc': 'Из другого мира.', 'price': 300, 'type': 'material', 'cat': 'mat', 'rank': 'S'},
 # --- ДОБАВИТЬ В ITEMS_DB ---
+    # === РЫБАЛКА ===
+    'bait_worm': {'name': '🪱 Жирный червь', 'desc': 'Наживка для рыбы.', 'price': 10, 'type': 'material', 'cat': 'mat', 'rank': 'E'},
+    'fish_blind': {'name': '🐟 Слепая рыба', 'desc': 'Бледная рыбешка.', 'price': 25, 'type': 'material', 'cat': 'mat', 'rank': 'E'},
+    'fish_golden': {'name': '🐡 Золотой карп', 'desc': 'Светится в темноте!', 'price': 150, 'type': 'material', 'cat': 'mat', 'rank': 'C'},
+    'trash_boot': {'name': '👢 Дырявый сапог', 'desc': 'Пахнет болотом.', 'price': 2, 'type': 'material', 'cat': 'mat', 'rank': 'E'},
+    
+    'fish_soup': {'name': '🍲 Наваристая уха', 'desc': '+200 HP, +50 MP', 'price': 150, 'type': 'food', 'effect': 200, 'cat': 'food', 'rank': 'D'},
 # ==========================
     # 🌿 РЕСУРСЫ (ТРАВНИК)
     # ==========================
@@ -472,6 +482,8 @@ FARM_CONFIG = {
 
 # --- РЕЦЕПТЫ КУХНИ (ПОВАР) ---
 COOKING_RECIPES = {
+    # Вставьте это к остальным рецептам кухни
+    'fish_soup': {'result': 'fish_soup', 'cost': 30, 'mats': {'fish_blind': 2, 'potato': 1}},
     'bread_fresh': {'result': 'bread_fresh', 'cost': 15, 'mats': {'wheat': 3}},
     'carrot_soup': {'result': 'carrot_soup', 'cost': 30, 'mats': {'carrot': 2, 'wheat': 1}},
     # meat_stew - это лут с кабана (D ранг), делаем из него мощный пирог!
@@ -508,6 +520,15 @@ BASE_ENEMIES = {
         'description': 'Бурлящая кислотная масса.', 'image': IMAGE_URLS['slime'], 'difficulty': 'medium',
         'abilities': ['basic_attack', 'toxic_growth'], 'damage_type': 'mixed', 'dodge_chance': 0.02,
         'drops': ['slime_goo', 'small_hp']
+    },
+    'drowned_corpse': {
+        'name': '🧟‍♂️ Утопленник',
+        'base_health': 70, 'base_min_physical_damage': 8, 'base_max_physical_damage': 15, 
+        'base_min_magic_damage': 0, 'base_max_magic_damage': 0,
+        'base_exp': 40, 'base_gold': 25, 'rank': 'E',
+        'description': 'Он ждал на дне слишком долго...', 'image': IMAGE_URLS['drowned'], 'difficulty': 'medium',
+        'abilities': ['basic_attack'], 'damage_type': 'physical', 'dodge_chance': 0.05,
+        'drops': ['fish_blind', 'bone_dust']
     },
     'goblin_shaman': {
         'name': '🔥 Гоблин-Шаман',
@@ -595,6 +616,15 @@ BASE_ENEMIES = {
     },
 
     # === РАНГ C (25-34 ур) ===
+    'swamp_kraken': {
+        'name': '🦑 Глубинный Ужас',
+        'base_health': 400, 'base_min_physical_damage': 35, 'base_max_physical_damage': 55, 
+        'base_min_magic_damage': 20, 'base_max_magic_damage': 30,
+        'base_exp': 350, 'base_gold': 180, 'rank': 'C',
+        'description': 'Тварь с десятком щупалец!', 'image': IMAGE_URLS['kraken'], 'difficulty': 'mini_boss',
+        'abilities': ['basic_attack'], 'damage_type': 'mixed', 'dodge_chance': 0.10,
+        'drops': ['fish_golden', 'large_hp']
+    },
     'skeleton_warrior': {
         'name': '💀 Костяной Легионер',
         'base_health': 300, 'base_min_physical_damage': 30, 'base_max_physical_damage': 50, 
@@ -1187,7 +1217,10 @@ def get_main_menu_keyboard(user_id):
         [
             InlineKeyboardButton("🌿 Травник", callback_data='herbalist_menu'),
             InlineKeyboardButton("🌾 Фермер", callback_data='farm_menu'),
-            InlineKeyboardButton("🍳 Кухня", callback_data='kitchen_menu')
+        ],
+        [
+            InlineKeyboardButton("🍳 Кухня", callback_data='kitchen_menu'),
+            InlineKeyboardButton("🎣 Рыбалка", callback_data='fishing_menu') # НОВАЯ КНОПКА
         ],
         
         # ---------------------------
@@ -1982,7 +2015,118 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_sessions[user_id]['processing'] = False
             
     return IN_BATTLE
+# ==========================================
+# === РЫБАЛКА (Азарт и Смерть) ===
+# ==========================================
 
+async def fishing_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if not database.check_building(user_id, 'building_pier'):
+        txt = "🌊 **ГНИЛОЙ ПРИЧАЛ**\nДоски прогнили, а лодка пошла ко дну. Восстановите причал, чтобы ловить рыбу.\n💰 Цена: 1000g"
+        kb = [[InlineKeyboardButton("🔨 Отстроить Причал (1000g)", callback_data='build_pier')],
+              [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+
+    # Проверяем количество наживки
+    items = database.get_inventory(user_id)
+    bait_count = 0
+    for i in items:
+        if i['item_key'] == 'bait_worm':
+            bait_count = i['quantity']
+            break
+
+    txt = (
+        "🎣 **МРАЧНЫЙ ПРИЧАЛ**\n"
+        "_Вода здесь темная и холодная. Кто знает, что скрывается на дне?_\n\n"
+        f"🪱 Наживка (Черви): **{bait_count} шт.**\n"
+        "_(Червей можно купить в Магазине в разделе Ресурсов)_"
+    )
+    
+    kb = []
+    if bait_count > 0:
+        kb.append([InlineKeyboardButton("🎣 ЗАБРОСИТЬ УДОЧКУ (1 червь)", callback_data='catch_fish')])
+    else:
+        kb.append([InlineKeyboardButton("❌ Нет наживки", callback_data='ignore')])
+        
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return MAIN_MENU
+
+async def build_pier_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    if char['gold'] >= 1000:
+        database.add_gold(user_id, -1000)
+        database.build_building(user_id, 'building_pier')
+        await query.answer("✅ Причал восстановлен!", show_alert=True)
+        await fishing_menu_handler(update, context)
+    else:
+        await query.answer("❌ Нужно 1000 золота!", show_alert=True)
+
+async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    # Списываем 1 наживку
+    database.remove_item(user_id, 'bait_worm', 1)
+    
+    # --- РУЛЕТКА РЫБАКА ---
+    roll = random.random() # Число от 0.0 до 1.0
+    
+    if roll < 0.15: # 15% ШАНС ВЫЛОВИТЬ МОНСТРА!
+        enemy_key = random.choice(['drowned_corpse', 'swamp_kraken'])
+        enemy = create_enemy(enemy_key, char['level'])
+        
+        # Насильно закидываем в бой
+        battle_sessions[user_id] = {
+            'char': char, 
+            'enemy': enemy, 
+            'enemy_key': enemy_key,
+            'log': [f"🌊 *УДОЧКА РЕЗКО ДЕРНУЛАСЬ!*\nИз темной воды на вас выпрыгнуло чудовище!\n{enemy['description']}"], 
+            'turn': 1, 'status_effects': [], 'cooldowns': {}, 'last_image': None, 'processing': False,
+            'slime_stacks': 0, 'burn_stacks': 0, 'frost_stacks': 0, 'active_buffs': {}
+        }
+        await query.answer("УДОЧКА ДЕРНУЛАСЬ! К БОЮ!", show_alert=True)
+        await render_battle(query, user_id)
+        return IN_BATTLE
+        
+    elif roll < 0.25: # 10% ШАНС ВЫЛОВИТЬ СУНДУК
+        gold_found = random.randint(100, 300)
+        database.add_gold(user_id, gold_found)
+        database.buy_item(user_id, 'small_hp', 'potion', '🧪 Малое лечебное', 0, 30)
+        
+        txt = f"📦 **СУНДУК!**\nВы вытащили со дна старый сундук!\n\nВы получили: {gold_found}g и 🧪 Малое лечебное."
+        kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+        
+    elif roll < 0.45: # 20% ШАНС ВЫЛОВИТЬ МУСОР
+        database.buy_item(user_id, 'trash_boot', 'material', '👢 Дырявый сапог', 0, 0)
+        txt = "👢 **Мусор...**\nВы вытянули чей-то старый дырявый сапог."
+        kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+        
+    else: # 55% ШАНС ВЫЛОВИТЬ РЫБУ
+        # Немного усложним: 10% на золотую рыбу, 90% на обычную
+        if random.random() < 0.10:
+            database.buy_item(user_id, 'fish_golden', 'material', '🐡 Золотой карп', 0, 0)
+            txt = "✨ **РЕДКИЙ УЛОВ!**\nВы поймали 🐡 Золотого карпа! Его можно дорого продать."
+        else:
+            database.buy_item(user_id, 'fish_blind', 'material', '🐟 Слепая рыба', 0, 0)
+            txt = "🐟 **Улов!**\nВы поймали Слепую рыбу. Повар будет рад."
+            
+        kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return MAIN_MENU
+        
 # --- ГЕНЕРАТОР ЗАДАНИЙ ---
 def generate_daily_quests(rank, reputation=0): # <--- Добавили аргумент reputation
     """Генерирует квесты с учетом репутации"""
@@ -3427,7 +3571,10 @@ def main():
                 CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'),
                 CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'),
                 CallbackQueryHandler(cook_handler, pattern='^cook_'),
-                
+
+                CallbackQueryHandler(fishing_menu_handler, pattern='^fishing_menu$'),
+                CallbackQueryHandler(build_pier_handler, pattern='^build_pier$'),
+                CallbackQueryHandler(catch_fish_handler, pattern='^catch_fish$'),
                 # Если кнопка не подошла под списки выше, она уходит в главный обработчик
                 # (Профиль, Инвентарь, Битва и т.д.)
                 CallbackQueryHandler(main_menu_handler)
