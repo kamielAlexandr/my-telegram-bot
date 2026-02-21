@@ -1137,29 +1137,7 @@ def calculate_rank(level):
 
 # --- ОСНОВНЫЕ ФУНКЦИИ ---
 
-def get_character(user_id):
-    conn = get_connection()
-    if not conn: return None
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM player_characters WHERE user_id = %s", (user_id,))
-            char = cursor.fetchone()
-            if char:
-                # Обновляем активность
-                cursor.execute("UPDATE player_characters SET last_active = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
-                conn.commit()
-                
-                # Применяем реген
-                char = apply_regeneration(char)
-                
-                # Проверяем ранг
-                actual_rank = calculate_rank(char['level'])
-                if char['rank'] != actual_rank:
-                    update_character_stats(user_id, rank=actual_rank)
-                    char['rank'] = actual_rank
-            return char
-    finally:
-        conn.close()
+
 
 def create_character(user_id, username, char_name, race):
     conn = get_connection()
@@ -1371,43 +1349,91 @@ def get_inventory(user_id):
 
 # --- ПРОКАЧКА ---
 
+# --- ЖЕЛЕЗНАЯ СИСТЕМА УРОВНЕЙ ---
+def get_correct_level(exp):
+    """Считает, какой уровень должен быть у игрока при его текущем опыте"""
+    lvl = 1
+    while True:
+        needed = (lvl * (lvl + 1) * 50) // 2
+        if exp >= needed:
+            lvl += 1
+        else:
+            break
+    return lvl
+
+def get_character(user_id):
+    conn = get_connection()
+    if not conn: return None
+    char = None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM player_characters WHERE user_id = %s", (user_id,))
+            row = cursor.fetchone()
+            if not row: return None
+            
+            # Превращаем в обычный словарь
+            char = dict(row)
+            
+            # --- БЕЗОПАСНАЯ ПРОВЕРКА УРОВНЯ ---
+            cur_exp = int(char.get('experience', 0))
+            cur_lvl = int(char.get('level', 1))
+            pts = int(char.get('stat_points', 0))
+            
+            correct_lvl = get_correct_level(cur_exp)
+            
+            # Если опыта хватает на новый уровень:
+            if correct_lvl > cur_lvl:
+                levels_gained = correct_lvl - cur_lvl
+                pts += (levels_gained * 2) # 2 очка за каждый уровень
+                
+                max_hp = int(char.get('max_health', 64))
+                max_mp = int(char.get('max_mana', 24))
+                
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET level=%s, stat_points=%s, health=%s, mana=%s 
+                    WHERE user_id=%s
+                """, (correct_lvl, pts, max_hp, max_mp, user_id))
+                
+                # Обновляем данные для отображения в боте
+                char['level'] = correct_lvl
+                char['stat_points'] = pts
+                char['health'] = max_hp
+                char['mana'] = max_mp
+
+            # Обновляем активность
+            cursor.execute("UPDATE player_characters SET last_active = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
+            conn.commit()
+            
+    except Exception as e:
+        print(f"Get character error: {e}")
+        return None
+    finally:
+        if conn: conn.close()
+
+    # --- Эти функции вызываются ПОСЛЕ закрытия БД, чтобы не было зависаний ---
+    if char:
+        char = apply_regeneration(char)
+        actual_rank = calculate_rank(char['level'])
+        if char.get('rank') != actual_rank:
+            update_character_stats(user_id, rank=actual_rank)
+            char['rank'] = actual_rank
+            
+    return char
+
+
 def add_experience(user_id, exp_amount):
+    """Теперь эта функция ТОЛЬКО добавляет опыт. Уровень проверится сам."""
     conn = get_connection()
     if not conn: return
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT experience, level, stat_points FROM player_characters WHERE user_id=%s", (user_id,))
-            data = cursor.fetchone()
-            if not data: return
-
-            cur_exp, cur_lvl, pts = data
-            new_exp = cur_exp + exp_amount
-            
-            # Цикл для повышения нескольких уровней сразу
-            leveled_up = False
-            while True:
-                # ИСПРАВЛЕННАЯ ФОРМУЛА (без лишних отступов)
-                needed = int((cur_lvl ** 2.2) * 60) 
-                if new_exp >= needed:
-                    cur_lvl += 1
-                    pts += 2
-                    leveled_up = True
-                else:
-                    break
-            
-            if leveled_up:
-                cursor.execute("""
-                    UPDATE player_characters 
-                    SET experience=%s, level=%s, stat_points=%s, health=max_health, mana=max_mana 
-                    WHERE user_id=%s
-                """, (new_exp, cur_lvl, pts, user_id))
-            else:
-                cursor.execute("UPDATE player_characters SET experience=%s WHERE user_id=%s", (new_exp, user_id))
-            
+            cursor.execute("UPDATE player_characters SET experience = experience + %s WHERE user_id=%s", (int(exp_amount), user_id))
             conn.commit()
+    except Exception as e:
+        print(f"Add Experience Error: {e}")
     finally:
-        conn.close()
-        
+        if conn: conn.close()
 
 def add_stat_point(user_id, stat_type):
     conn = get_connection()
