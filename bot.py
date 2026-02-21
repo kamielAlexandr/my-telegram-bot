@@ -1038,23 +1038,22 @@ def create_enemy(enemy_key, player_level):
 
 def get_rank_icon(rank): return {'E': '🆕', 'D': '🟢', 'C': '🔵', 'B': '🟣', 'A': '🟠', 'S': '⚡'}.get(rank, '🆕')
 def get_xp_bar(level, exp, length=10):
-    # Единая формула: (Уровень * (Уровень + 1) * 50) / 2
     needed = (level * (level + 1) * 50) // 2
     prev_needed = ((level - 1) * level * 50) // 2
     
     current_level_exp = exp - prev_needed
     level_diff = needed - prev_needed
     
-    # Защита: если опыт перевалил за порог (база еще не успела обновить), 
-    # просто показываем полную полоску
+    # Защита: если уровень уже взят, показываем полную полоску
     if current_level_exp >= level_diff:
-        return "█" * length + f" {exp}/{needed} (УРОВЕНЬ ВЗЯТ!)"
+        return "█" * length + f" {exp}/{needed} 🌟"
         
     if level_diff <= 0: return "█" * length
     
     percent = min(1.0, max(0.0, current_level_exp / level_diff))
     filled = int(length * percent)
     return "█" * filled + "░" * (length - filled) + f" {exp}/{needed}"
+
 
 def get_health_bar(current, maximum, length=15):
     if maximum <= 0: return "💀"
