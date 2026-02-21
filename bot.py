@@ -67,9 +67,9 @@ IMAGE_URLS = {
     'village': 'https://i.pinimg.com/736x/50/b6/36/50b636f399c41e8697972676ebe85dff.jpg',
     'void_walker':'https://i.pinimg.com/736x/d7/20/ae/d720aea9c8efa589e991ab14143a7c5e.jpg',
     #рыбалка
-    'pier': 'https://i.pinimg.com/736x/2b/9a/c3/2b9ac325f6e80bca6ec7100b730f81d1.jpg',
-    'drowned': 'https://i.pinimg.com/736x/8d/f3/d1/8df3d15442ceb674313f83737ec30eb5.jpg',
-    'kraken': 'https://i.pinimg.com/736x/f6/c8/10/f6c8106b12d547f87900bdf19234b3f1.jpg',
+    'pier': 'https://i.pinimg.com/1200x/e9/cb/d8/e9cbd8f837b30bf1d0385e0e32aa790e.jpg',
+    'drowned': 'https://i.pinimg.com/1200x/b8/9f/c4/b89fc4239c083a908c972633d6d2668f.jpg',
+    'kraken': 'https://i.pinimg.com/736x/de/0f/92/de0f92f2fa2ef3ea4acf028d7c5270ee.jpg',
     #локации
     'forest': 'https://img.freepik.com/premium-photo/ancient-forest-ai-generated_1127-13930.jpg',
     'castle': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTrAoGzKjgZxurLbxZ_Dyhtkm1gBqMUMtA87w&s',
