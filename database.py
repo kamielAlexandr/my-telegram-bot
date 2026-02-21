@@ -186,7 +186,7 @@ def calculate_rank(level):
 
 # --- ОСНОВНЫЕ ФУНКЦИИ ---
 
-get_character
+
 
 def create_character(user_id, username, char_name, race):
     conn = get_connection()
