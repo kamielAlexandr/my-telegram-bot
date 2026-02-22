@@ -36,6 +36,8 @@ IMAGE_URLS = {
     'orc': 'https://i.pinimg.com/736x/9d/03/22/9d0322080cea97cfd1e4667f835592dd.jpg',
     # НОВАЯ КАРТИНКА ДЛЯ ГЕРОЯ-ВАМПИРА:
     'vampire_hero': 'https://i.pinimg.com/736x/f7/cc/5d/f7cc5d151ba496829019f5d0c473fe4f.jpg',
+    'lizardman': 'https://i.pinimg.com/736x/71/78/8e/71788e6d14f77626848d21b322800be0.jpg',
+    'frogman': 'https://i.pinimg.com/736x/c3/d7/f6/c3d7f623bca415d0e111c867f3cb4cac.jpg',
     
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
@@ -116,6 +118,16 @@ RACE_ABILITIES = {
         10: {'key': 'v1', 'name': '🦇 Укус', 'mana': 20, 'cd': 3, 'type': 'lifesteal', 'val': 1.8, 'desc': 'Урон (180%) и лечение от крови врага.'},
         25: {'key': 'v2', 'name': '🌫 Теневой шаг', 'mana': 35, 'cd': 4, 'type': 'buff_def', 'val': 0.1, 'desc': 'Превращение в туман. Избегание 90% урона (1 ход).'},
         40: {'key': 'v3', 'name': '🩸 Кровавая жатва', 'mana': 60, 'cd': 5, 'type': 'dmg_agi', 'val': 4.0, 'desc': 'Смертоносный удар от Ловкости (400%).'}
+    },
+    'lizardman': {
+        10: {'key': 'lz1', 'name': '🦎 Удар хвостом', 'mana': 15, 'cd': 3, 'type': 'stun_dmg', 'val': 1.5, 'desc': 'Урон (150%) + шанс оглушить.'},
+        25: {'key': 'lz2', 'name': '🛡 Толстая чешуя', 'mana': 30, 'cd': 4, 'type': 'buff_def', 'val': 0.5, 'desc': 'Снижает урон врага на 50% (1 ход).'},
+        40: {'key': 'lz3', 'name': '🩸 Первобытная ярость', 'mana': 50, 'cd': 5, 'type': 'lifesteal', 'val': 3.0, 'desc': 'Разрывает врага (300%) и лечит.'}
+    },
+    'frogman': {
+        10: {'key': 'fr1', 'name': '👅 Хлыст-язык', 'mana': 15, 'cd': 2, 'type': 'dmg_agi', 'val': 2.0, 'desc': 'Быстрый удар (зависит от Ловкости).'},
+        25: {'key': 'fr2', 'name': '🤢 Токсичная слизь', 'mana': 35, 'cd': 4, 'type': 'magic_nuke', 'val': 2.5, 'desc': 'Магический ядовитый взрыв (250%).'},
+        40: {'key': 'fr3', 'name': '🌊 Целебная трясина', 'mana': 50, 'cd': 5, 'type': 'heal', 'val': 0.8, 'desc': 'Восстанавливает 80% здоровья.'}
     }
 }
 ELF_MAGIC_TYPES = {
@@ -1355,7 +1367,9 @@ def get_race_selection_keyboard():
         [InlineKeyboardButton("🏹 Эльф", callback_data="race_elf")],
         [InlineKeyboardButton("🛡️ Дварф", callback_data="race_dwarf")],
         [InlineKeyboardButton("🪓 Орк", callback_data="race_orc")],
-        [InlineKeyboardButton("🦇 Вампир", callback_data="race_vampire")] # <--- НАШ ВАМПИР!
+        [InlineKeyboardButton("🦇 Вампир", callback_data="race_vampire")], # <--- НАШ ВАМПИР!
+        [InlineKeyboardButton("🦎 Ящеролюд", callback_data="race_lizardman")],
+        [InlineKeyboardButton("🐸 Жаболюд", callback_data="race_frogman")]
     ]
     return InlineKeyboardMarkup(kb)
 # --- HANDLERS ---
@@ -1439,7 +1453,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'elf': 'Эльф',
             'dwarf': 'Дварф',
             'orc': 'Орк',
-            'vampire': 'Вампир'
+            'vampire': 'Вампир',
+            'lizardman': 'Ящеролюд',
+            'frogman': 'Жаболюд'
         }
         race_name = race_names.get(race_key, race_key.capitalize())
 
@@ -3119,7 +3135,9 @@ async def show_top_players(query, user_id):
         'elf': 'Эльф',
         'dwarf': 'Дварф',
         'orc': 'Орк',
-        'vampire': 'Вампир'
+        'vampire': 'Вампир',
+        'lizardman': 'Ящеролюд',
+        'frogman': 'Жаболюд'
     }
     
     for i, player in enumerate(top_players, 1):
