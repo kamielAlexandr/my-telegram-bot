@@ -31,6 +31,18 @@ RACES = {
         "strength": 10, "agility": 13, "intelligence": 8, "vitality": 4, # Мало здоровья, много ловкости
         "health_multiplier": 5, 
         "mana_multiplier": 4,
+    },
+    "lizardman": {
+        "name": "Ящеролюд",
+        "strength": 11, "agility": 8, "intelligence": 4, "vitality": 12, # Очень много ХП
+        "health_multiplier": 9, 
+        "mana_multiplier": 2,
+    },
+    "frogman": {
+        "name": "Жаболюд",
+        "strength": 6, "agility": 14, "intelligence": 9, "vitality": 6, # Экстремальная ловкость
+        "health_multiplier": 6, 
+        "mana_multiplier": 4,
     }
 }
 def get_connection():
@@ -202,7 +214,12 @@ def create_character(user_id, username, char_name, race):
     if race == 'elf': m_res = 0.05
     # Вампиры нежить, у них врожденная защита от физики 10%
     if race == 'vampire': p_res = 0.10
-
+    # НОВЫЕ РАСЫ:
+    # У Ящеролюда толстая чешуя (12% поглощения физурона со старта)
+    if race == 'lizardman': p_res = 0.12 
+    # У Жаболюда скользкая кожа и иммунитет к болотной магии
+    if race == 'frogman': m_res = 0.10
+        
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id FROM player_characters WHERE user_id = %s", (user_id,))
