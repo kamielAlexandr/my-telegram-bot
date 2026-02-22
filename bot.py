@@ -1040,10 +1040,11 @@ def create_enemy(enemy_key, player_level):
     
     final_multiplier = level_multiplier * bonus
     
-    # 3. НАСТРОЙКА БАЛАНСА (Нерф статов для легких локаций)
-    balance_nerf = 1.0 
-    if enemy_rank in ['E', 'D']: balance_nerf = 0.90
-    elif enemy_rank == 'C': balance_nerf = 0.95
+
+    # 3. НАСТРОЙКА БАЛАНСА (Глобальное ослабление на 5%)
+    balance_nerf = 0.95  # Было 1.0, теперь базовый урон/хп -5% для высоких рангов
+    if enemy_rank in ['E', 'D']: balance_nerf = 0.85 # Было 0.90 (стало -15%)
+    elif enemy_rank == 'C': balance_nerf = 0.90 # Было 0.95 (стало -10%)
 
     # Создание объекта врага
     enemy = base.copy()
