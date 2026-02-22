@@ -3618,8 +3618,9 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     payload = payment.invoice_payload
     
     if payload.startswith("gold_"):
-        # Расшифровываем payload: gold_123456789_pack1
-        parts = payload.split('_')
+        # ИСПРАВЛЕНИЕ ЗДЕСЬ: добавляем двойку в split('_', 2)
+        # Теперь 'gold_12345_pack_mini' разобьется ровно на 3 части: 'gold', '12345' и 'pack_mini'
+        parts = payload.split('_', 2)
         user_id = int(parts[1])
         pack_key = parts[2]
         
@@ -3635,6 +3636,9 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
                 "Огромное спасибо за поддержку развития игры! ❤️"
             )
             await update.message.reply_photo(IMAGE_URLS['bank'], caption=success_txt, parse_mode='Markdown')
+        else:
+            # На случай непредвиденных сбоев, чтобы бот не молчал
+            await update.message.reply_text("⚠️ Оплата прошла, но пакет не распознан. Пожалуйста, обратитесь к администратору.")
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
