@@ -10,6 +10,11 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
     ContextTypes, ConversationHandler, MessageHandler, filters
 )
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, LabeledPrice
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler, 
+    ContextTypes, ConversationHandler, MessageHandler, filters, PreCheckoutQueryHandler
+)
 import database
 
 # Настройка логирования
@@ -80,7 +85,8 @@ IMAGE_URLS = {
     'shop': 'https://cubiq.ru/wp-content/uploads/2021/07/picture-1-15.jpeg',
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
     'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg',
-    'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg'
+    'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg',
+    'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg'
 }
 # --- СПОСОБНОСТИ РАС ---
 # type: heal (лечение), dmg (урон), buff (усиление)
@@ -380,6 +386,11 @@ ITEMS_DB = {
  
 }
 
+DONATE_PACKAGES = {
+    'pack1': {'name': '💰 Кошель монет (5,000g)', 'gold': 5000, 'price': 50},      # 50 звезд (~ 100 рублей)
+    'pack2': {'name': '💰💰 Сундук золота (25,000g)', 'gold': 25000, 'price': 200}, # 200 звезд
+    'pack3': {'name': '👑 Имперская казна (100,000g)', 'gold': 100000, 'price': 500} # 500 звезд
+}
 
 # --- РЕЦЕПТЫ АЛХИМИИ ---
 ALCHEMY_RECIPES = {
@@ -1209,7 +1220,8 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("📜 Герой", callback_data='profile'), InlineKeyboardButton("🎒 Инвентарь", callback_data='inventory')],
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
-        [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu')], 
+        [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu'),
+         InlineKeyboardButton("💎 Банк (Донат)", callback_data='donate_menu')], # <--- НОВАЯ КНОПКА
         [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],
         # --- НОВАЯ КНОПКА ССЫЛКИ ---
         [InlineKeyboardButton("📢 Новости и Обновления", url='https://t.me/hero_spath')],
@@ -3542,6 +3554,86 @@ async def cancel_rebirth_handler(update: Update, context: ContextTypes.DEFAULT_T
     if char:
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
+# ==========================================
+# === ИМПЕРСКИЙ БАНК (ДОНАТ ЧЕРЕЗ STARS) ===
+# ==========================================
+
+async def donate_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    txt = (
+        "💎 *ИМПЕРСКИЙ БАНК*\n"
+        "_Смотритель банка оценивающе смотрит на вас._\n\n"
+        "Здесь вы можете обменять **Telegram Stars (⭐)** на золото.\n"
+        "Это очень поможет развитию нашего проклятого мира!\n\n"
+        f"Ваше золото: {char['gold']}g"
+    )
+    
+    kb = []
+    for k, v in DONATE_PACKAGES.items():
+        # Кнопки с пакетами
+        kb.append([InlineKeyboardButton(f"{v['name']} — {v['price']} ⭐", callback_data=f"buy_gold_{k}")])
+        
+    kb.append([InlineKeyboardButton("🔙 Выйти из банка", callback_data='back_to_main')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['bank'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return MAIN_MENU
+
+async def send_gold_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer() # Убираем часики
+    
+    user_id = query.from_user.id
+    pack_key = query.data.split('_', 2)[2] # Получаем pack1, pack2...
+    
+    pack = DONATE_PACKAGES.get(pack_key)
+    if not pack: return MAIN_MENU
+    
+    # ОТПРАВЛЯЕМ СЧЕТ (INVOICE)
+    await context.bot.send_invoice(
+        chat_id=query.message.chat_id,
+        title=pack['name'],
+        description=f"Мгновенное зачисление {pack['gold']} золотых монет на ваш аккаунт.",
+        payload=f"gold_{user_id}_{pack_key}", # Секретная метка платежа
+        provider_token="", # ПУСТАЯ СТРОКА ОБЯЗАТЕЛЬНА ДЛЯ TELEGRAM STARS
+        currency="XTR",    # Код валюты Telegram Stars
+        prices=[LabeledPrice("Telegram Stars", pack['price'])]
+    )
+    return MAIN_MENU
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отвечает Telegram, что мы готовы принять платеж"""
+    query = update.pre_checkout_query
+    if query.invoice_payload.startswith("gold_"):
+        await query.answer(ok=True)
+    else:
+        await query.answer(ok=False, error_message="Ошибка идентификации заказа.")
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает успешный платеж и начисляет золото"""
+    payment = update.message.successful_payment
+    payload = payment.invoice_payload
+    
+    if payload.startswith("gold_"):
+        # Расшифровываем payload: gold_123456789_pack1
+        parts = payload.split('_')
+        user_id = int(parts[1])
+        pack_key = parts[2]
+        
+        pack = DONATE_PACKAGES.get(pack_key)
+        if pack:
+            database.add_gold(user_id, pack['gold'])
+            
+            # Отправляем радостное сообщение
+            success_txt = (
+                "🎉 *ОПЛАТА УСПЕШНО ПРОШЛА!*\n\n"
+                f"Смотритель банка с уважением передает вам тугой мешок.\n"
+                f"💰 **+{pack['gold']} золота** зачислено на ваш счет!\n\n"
+                "Огромное спасибо за поддержку развития игры! ❤️"
+            )
+            await update.message.reply_photo(IMAGE_URLS['bank'], caption=success_txt, parse_mode='Markdown')
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
@@ -3589,6 +3681,8 @@ def main():
                 CallbackQueryHandler(fishing_menu_handler, pattern='^fishing_menu$'),
                 CallbackQueryHandler(build_pier_handler, pattern='^build_pier$'),
                 CallbackQueryHandler(catch_fish_handler, pattern='^catch_fish$'),
+                CallbackQueryHandler(donate_menu_handler, pattern='^donate_menu$'),
+                CallbackQueryHandler(send_gold_invoice, pattern='^buy_gold_'),
                 # Если кнопка не подошла под списки выше, она уходит в главный обработчик
                 # (Профиль, Инвентарь, Битва и т.д.)
                 CallbackQueryHandler(main_menu_handler)
@@ -3607,7 +3701,12 @@ def main():
     )
     
     app.add_handler(conv)
+    
     app.add_handler(CommandHandler('help', help_command))
+    # --- ОБРАБОТЧИКИ ОПЛАТЫ ---
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+    # --------------------------
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
     app.add_handler(CallbackQueryHandler(unknown_callback))
     
