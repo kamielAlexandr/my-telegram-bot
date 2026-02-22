@@ -200,7 +200,72 @@ ITEMS_DB = {
     'void_scepter': {'name': '🌑 Скипетр Пустоты', 'desc': 'Излучает тьму.', 'price': 2500, 'type': 'magic_weapon', 'effect': 20, 'cat': 'weapon', 'rank': 'B'},
     'archmage_staff': {'name': '🔥 Посох Архимага', 'desc': 'Пылает вечным огнем.', 'price': 6000, 'type': 'magic_weapon', 'effect': 30, 'cat': 'weapon', 'rank': 'A'},
     'world_tree_branch': {'name': '🌿 Ветвь Древа', 'desc': 'Сила самой природы.', 'price': 15000, 'type': 'magic_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'S'},
+    # ==========================================
+    # === НОВОЕ ОРУЖИЕ НА ЛОВКОСТЬ (agi_weapon) ===
+    # ==========================================
+    # Ранг E
+    'dagger_rusty': {'name': '🗡️ Ржавый кинжал', 'desc': 'Оружие вора.', 'price': 180, 'type': 'agi_weapon', 'effect': 6, 'cat': 'weapon', 'rank': 'E'},
+    'bone_shiv': {'name': '🗡️ Костяная заточка', 'desc': 'Сделана из ребра.', 'price': 250, 'type': 'agi_weapon', 'effect': 8, 'cat': 'weapon', 'rank': 'E'},
+    # Ранг D
+    'hunter_knife': {'name': '🗡️ Охотничий нож', 'desc': 'Хорош для снятия шкур.', 'price': 500, 'type': 'agi_weapon', 'effect': 14, 'cat': 'weapon', 'rank': 'D'},
+    'short_bow': {'name': '🏹 Короткий лук', 'desc': 'Бьет издалека.', 'price': 700, 'type': 'agi_weapon', 'effect': 18, 'cat': 'weapon', 'rank': 'D'},
+    # Ранг C
+    'poison_stiletto': {'name': '🗡️ Отравленный стилет', 'desc': 'Лезвие в зеленой слизи.', 'price': 1500, 'type': 'agi_weapon', 'effect': 28, 'cat': 'weapon', 'rank': 'C'},
+    'curved_saber': {'name': '⚔️ Изогнутая сабля', 'desc': 'Оружие пустынных наемников.', 'price': 1900, 'type': 'agi_weapon', 'effect': 32, 'cat': 'weapon', 'rank': 'C'},
+    # Ранг B
+    'assassin_dagger': {'name': '🗡️ Кинжал Убийцы', 'desc': 'Не издает звука при ударе.', 'price': 4000, 'type': 'agi_weapon', 'effect': 50, 'cat': 'weapon', 'rank': 'B'},
+    'elven_bow': {'name': '🏹 Эльфийский длинный лук', 'desc': 'Стрелы летят быстрее ветра.', 'price': 5500, 'type': 'agi_weapon', 'effect': 65, 'cat': 'weapon', 'rank': 'B'},
+    # Ранг A
+    'shadow_blades': {'name': '⚔️ Парные Клинки Тени', 'desc': 'Рассекают саму тьму.', 'price': 10000, 'type': 'agi_weapon', 'effect': 90, 'cat': 'weapon', 'rank': 'A'},
+    'wyvern_fang': {'name': '🐍 Клык Виверны', 'desc': 'Яд разъедает доспехи.', 'price': 13000, 'type': 'agi_weapon', 'effect': 110, 'cat': 'weapon', 'rank': 'A'},
+    # Ранг S
+    'meteor_shard': {'name': '🗡️ Осколок Метеорита', 'desc': 'Кинжал из упавшей звезды.', 'price': 22000, 'type': 'agi_weapon', 'effect': 160, 'cat': 'weapon', 'rank': 'S'},
+    'eclipse_bow': {'name': '🏹 Лук Затмения', 'desc': 'Стреляет чистой пустотой.', 'price': 28000, 'type': 'agi_weapon', 'effect': 200, 'cat': 'weapon', 'rank': 'S'},
 
+    # ==========================================
+    # === НОВАЯ БРОНЯ (ПО 5 ШТУК НА РАНГ) ===
+    # ==========================================
+    # Ранг E
+    'e_heavy_1': {'name': '🛡️ Деревянный щит и цепь', 'desc': 'Собрано на свалке.', 'price': 180, 'type': 'heavy_armor', 'effect': 8, 'cat': 'armor', 'rank': 'E'},
+    'e_heavy_2': {'name': '🛡️ Медный нагрудник', 'desc': 'Тяжелый и погнутый.', 'price': 300, 'type': 'heavy_armor', 'effect': 14, 'cat': 'armor', 'rank': 'E'},
+    'e_light_1': {'name': '💨 Обноски бродяги', 'desc': 'Совсем не стесняют.', 'price': 150, 'type': 'light_armor', 'effect': 8, 'cat': 'armor', 'rank': 'E'},
+    'e_light_2': {'name': '💨 Шкура кабана', 'desc': 'Грубая, но прочная.', 'price': 280, 'type': 'light_armor', 'effect': 14, 'cat': 'armor', 'rank': 'E'},
+    'e_magic_1': {'name': '🔮 Рваная ряса', 'desc': 'Хранит остатки магии.', 'price': 250, 'type': 'magic_armor', 'effect': 12, 'cat': 'armor', 'rank': 'E'},
+
+    # Ранг D
+    'd_heavy_1': {'name': '🛡️ Бронзовая кираса', 'desc': 'Сверкает на солнце.', 'price': 500, 'type': 'heavy_armor', 'effect': 20, 'cat': 'armor', 'rank': 'D'},
+    'd_heavy_2': {'name': '🛡️ Доспех стражника', 'desc': 'Снят с мертвого патрульного.', 'price': 850, 'type': 'heavy_armor', 'effect': 28, 'cat': 'armor', 'rank': 'D'},
+    'd_light_1': {'name': '💨 Усиленная кожанка', 'desc': 'С заклепками.', 'price': 450, 'type': 'light_armor', 'effect': 18, 'cat': 'armor', 'rank': 'D'},
+    'd_light_2': {'name': '💨 Охотничий камзол', 'desc': 'Сливается с листвой.', 'price': 800, 'type': 'light_armor', 'effect': 26, 'cat': 'armor', 'rank': 'D'},
+    'd_magic_1': {'name': '🔮 Накидка аколита', 'desc': 'Защищает от сглаза.', 'price': 700, 'type': 'magic_armor', 'effect': 22, 'cat': 'armor', 'rank': 'D'},
+
+    # Ранг C
+    'c_heavy_1': {'name': '🛡️ Костяной доспех', 'desc': 'Собран из ребер гулей.', 'price': 1200, 'type': 'heavy_armor', 'effect': 38, 'cat': 'armor', 'rank': 'C'},
+    'c_heavy_2': {'name': '🛡️ Латы Крестоносца', 'desc': 'Святая сталь.', 'price': 1800, 'type': 'heavy_armor', 'effect': 50, 'cat': 'armor', 'rank': 'C'},
+    'c_light_1': {'name': '💨 Плащ Тени', 'desc': 'Делает шаги бесшумными.', 'price': 1100, 'type': 'light_armor', 'effect': 35, 'cat': 'armor', 'rank': 'C'},
+    'c_light_2': {'name': '💨 Змеиная чешуя', 'desc': 'Скользкая броня.', 'price': 1700, 'type': 'light_armor', 'effect': 48, 'cat': 'armor', 'rank': 'C'},
+    'c_magic_1': {'name': '🔮 Мантия Иллюзиониста', 'desc': 'Искажает силуэт.', 'price': 1500, 'type': 'magic_armor', 'effect': 42, 'cat': 'armor', 'rank': 'C'},
+
+    # Ранг B
+    'b_heavy_1': {'name': '🛡️ Руническая кираса', 'desc': 'Гномья ковка.', 'price': 4000, 'type': 'heavy_armor', 'effect': 75, 'cat': 'armor', 'rank': 'B'},
+    'b_heavy_2': {'name': '🛡️ Доспех Кровавого Барона', 'desc': 'Впитывает кровь.', 'price': 6500, 'type': 'heavy_armor', 'effect': 95, 'cat': 'armor', 'rank': 'B'},
+    'b_light_1': {'name': '💨 Накидка Ассасина', 'desc': 'Вплетены нити тени.', 'price': 3800, 'type': 'light_armor', 'effect': 70, 'cat': 'armor', 'rank': 'B'},
+    'b_light_2': {'name': '💨 Эльфийский доспех', 'desc': 'Легче пуха.', 'price': 6000, 'type': 'light_armor', 'effect': 90, 'cat': 'armor', 'rank': 'B'},
+    'b_magic_1': {'name': '🔮 Мантия Крови', 'desc': 'Усиливает заклинания.', 'price': 5500, 'type': 'magic_armor', 'effect': 85, 'cat': 'armor', 'rank': 'B'},
+
+    # Ранг A
+    'a_heavy_1': {'name': '🛡️ Демонический панцирь', 'desc': 'Обжигает при касании.', 'price': 12000, 'type': 'heavy_armor', 'effect': 140, 'cat': 'armor', 'rank': 'A'},
+    'a_heavy_2': {'name': '🛡️ Обсидиановые латы', 'desc': 'Тверже алмаза.', 'price': 18000, 'type': 'heavy_armor', 'effect': 180, 'cat': 'armor', 'rank': 'A'},
+    'a_light_1': {'name': '💨 Броня Владыки Ветров', 'desc': 'Дарует сверхскорость.', 'price': 11500, 'type': 'light_armor', 'effect': 130, 'cat': 'armor', 'rank': 'A'},
+    'a_light_2': {'name': '💨 Одеяние Призрака', 'desc': 'Оружие проходит насквозь.', 'price': 17000, 'type': 'light_armor', 'effect': 170, 'cat': 'armor', 'rank': 'A'},
+    'a_magic_1': {'name': '🔮 Регалии Архимага', 'desc': 'Соткано из маны.', 'price': 15000, 'type': 'magic_armor', 'effect': 160, 'cat': 'armor', 'rank': 'A'},
+
+    # Ранг S
+    's_heavy_1': {'name': '🛡️ Доспех Падшего Бога', 'desc': 'Абсолютная защита.', 'price': 30000, 'type': 'heavy_armor', 'effect': 260, 'cat': 'armor', 'rank': 'S'},
+    's_heavy_2': {'name': '🛡️ Титановый Монолит', 'desc': 'Вы — ходячая крепость.', 'price': 45000, 'type': 'heavy_armor', 'effect': 320, 'cat': 'armor', 'rank': 'S'},
+    's_light_1': {'name': '💨 Эфирный Плащ', 'desc': 'Вы существуете между мирами.', 'price': 28000, 'type': 'light_armor', 'effect': 240, 'cat': 'armor', 'rank': 'S'},
+    's_light_2': {'name': '💨 Доспех Искажения', 'desc': 'Манипулирует пространством.', 'price': 42000, 'type': 'light_armor', 'effect': 300, 'cat': 'armor', 'rank': 'S'},
+    's_magic_1': {'name': '🔮 Покров Хаоса', 'desc': 'Бесконечная магическая мощь.', 'price': 38000, 'type': 'magic_armor', 'effect': 280, 'cat': 'armor', 'rank': 'S'},
     # --- ТЯЖЕЛАЯ БРОНЯ (Воин/Дварф) ---
     'rusty_chainmail': {'name': '🛡️ Ржавая кольчуга', 'desc': 'Тяжелая и дырявая.', 'price': 250, 'type': 'heavy_armor', 'effect': 10, 'cat': 'armor', 'rank': 'E'}, 
     'chainmail': {'name': '🛡️ Кольчуга стража', 'desc': 'Надежная сталь.', 'price': 350, 'type': 'heavy_armor', 'effect': 15, 'cat': 'armor', 'rank': 'D'},
@@ -2568,6 +2633,7 @@ async def render_shop_category(query, user_id, cat):
             
             if ieffect:
                 if itype == 'weapon':         effect_str = f" (+{ieffect} ⚔️)"
+                elif itype == 'agi_weapon':   effect_str = f" (+{ieffect} 💨 / +{max(1, ieffect//2)} ⚔️)"
                 elif itype == 'magic_weapon': effect_str = f" (+{ieffect} 🔮)"
                 elif itype == 'heavy_armor':  effect_str = f" (+{ieffect} HP/Физ)"
                 elif itype == 'light_armor':  effect_str = f" (+{int(ieffect*0.6)} HP/Ловк)"
@@ -2653,6 +2719,9 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stat_changes['intelligence'] = -eff
                 stat_changes['max_mana'] = -(eff * 3)
                 stat_changes['mana'] = -(eff * 3)
+            elif itype == 'agi_weapon': 
+                stat_changes['strength'] = -max(1, eff // 2)
+                stat_changes['agility'] = -eff
             elif itype == 'heavy_armor':
                 stat_changes['max_health'] = -eff
                 stat_changes['health'] = -eff
@@ -2713,7 +2782,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         items = database.get_inventory(user_id)
         
         # Лимит для Оружия и Брони (Макс 5)
-        weapon_types = ['weapon', 'magic_weapon']
+        weapon_types = ['weapon', 'magic_weapon','agi_weapon']
         armor_types = ['armor', 'heavy_armor', 'light_armor', 'magic_armor']
         
         if itype in weapon_types or itype in armor_types:
@@ -2968,7 +3037,7 @@ async def render_inventory_category(query, user_id, cat):
         
         # Определяем, какие типы предметов показывать в какой категории
         types_map = {
-            'equip': ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor'],
+            'equip': ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor','agi_weapon'],
             'food': ['food', 'potion', 'buff_potion'],
             'mat': ['material'],
             'acc': ['artifact', 'acc', 'combat_item']
@@ -3042,7 +3111,7 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
         
         for i in items:
             itype = ITEMS_DB.get(i['item_key'], {}).get('type', 'unknown')
-            if itype in ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor']: c_equip += 1
+            if itype in ['weapon', 'magic_weapon', 'heavy_armor', 'light_armor', 'magic_armor','agi_weapon']: c_equip += 1
             elif itype in ['food', 'potion', 'buff_potion']: c_food += 1
             elif itype == 'material': c_mat += 1
             elif itype in ['artifact', 'acc', 'combat_item']: c_acc += 1
