@@ -301,7 +301,17 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
                 msg_extra = f"\n🔮 Интеллект +{int_bonus} / Мана +{mp_bonus}"
             # ----------------------------
             # ... (предыдущий код для weapon/magic_weapon осталcя без изменений) ...
-
+            # === НОВЫЙ БЛОК ДЛЯ ОРУЖИЯ НА ЛОВКОСТЬ ===
+            elif item_type == 'agi_weapon':
+                agi_bonus = effect_amount
+                str_bonus = max(1, effect_amount // 2) # Дает половину в Силу
+                cursor.execute("""
+                    UPDATE player_characters 
+                    SET agility = agility + %s, strength = strength + %s 
+                    WHERE user_id=%s
+                """, (agi_bonus, str_bonus, user_id))
+                msg_extra = f"\n🗡 Ловкость +{agi_bonus} | Сила +{str_bonus}"
+            # =========================================
             # --- НОВАЯ ЛОГИКА БРОНИ ---
             
             # 1. ТЯЖЕЛАЯ БРОНЯ (Для Танков) -> Дает ХП и Физ. Защиту
