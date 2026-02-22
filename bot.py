@@ -807,15 +807,16 @@ BASE_ENEMIES = {
     }
 }
 # --- ЛОКАЦИИ ---
+# --- ЛОКАЦИИ ---
+# --- ЛОКАЦИИ ---
 LOCATIONS = {
     'E': {'name': '🏚️ Руины Деревни', 'description': 'Здесь лишь пепел и безумцы.', 'image': IMAGE_URLS['village'], 'min_level': 1, 'enemies': ['wolf', 'goblin', 'slime','goblin_shaman' ,'goblin_elite','training_master']},
-    'D': {'name': '🌲 Шепчущий Лес', 'description': 'Тени здесь длиннее, чем кажется.', 'image': IMAGE_URLS['forest'], 'min_level': 10, 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'frost_spider','forest_troll', 'forest_guardian']},
-    'C': {'name': '☠️ Катакомбы Скорби', 'description': 'Подземелья, пропахшие гнилью.', 'image': IMAGE_URLS['dungeon'], 'min_level': 20, 'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord']},
-    'B': {'name': '🏰 Проклятая Цитадель', 'description': 'Обитель вампиров.', 'image': IMAGE_URLS['castle'], 'min_level': 30, 'enemies': ['dark_knight', 'vampire', 'gargoyle', 'death_knight', 'castle_overlord']},
-    'A': {'name': '🔥 Врата Ада', 'description': 'Земля раскалена.', 'image': IMAGE_URLS['hell_gate'], 'min_level': 40, 'enemies': ['imp', 'demon', 'succubus', 'pit_fiend', 'demon_general']},
-    'S': {'name': '🌌 Трон Хаоса', 'description': 'Пустота за пределами реальности.', 'image': IMAGE_URLS['throne_god'], 'min_level': 50, 'enemies': ['void_walker', 'dragon_ancient', 'final_god']}
+    'D': {'name': '🌲 Шепчущий Лес', 'description': 'Тени здесь длиннее, чем кажется.', 'image': IMAGE_URLS['forest'], 'min_level': 15, 'enemies': ['forest_spider', 'ghost', 'wild_boar', 'frost_spider','forest_troll', 'forest_guardian']},
+    'C': {'name': '☠️ Катакомбы Скорби', 'description': 'Подземелья, пропахшие гнилью.', 'image': IMAGE_URLS['dungeon'], 'min_level': 25, 'enemies': ['skeleton_warrior', 'ghoul', 'dark_priest', 'crypt_keeper', 'catacomb_lord']},
+    'B': {'name': '🏰 Проклятая Цитадель', 'description': 'Обитель вампиров.', 'image': IMAGE_URLS['castle'], 'min_level': 35, 'enemies': ['dark_knight', 'vampire', 'gargoyle', 'death_knight', 'castle_overlord']},
+    'A': {'name': '🔥 Врата Ада', 'description': 'Земля раскалена.', 'image': IMAGE_URLS['hell_gate'], 'min_level': 60, 'enemies': ['imp', 'demon', 'succubus', 'pit_fiend', 'demon_general']},
+    'S': {'name': '🌌 Трон Хаоса', 'description': 'Пустота за пределами реальности.', 'image': IMAGE_URLS['throne_god'], 'min_level': 100, 'enemies': ['void_walker', 'dragon_ancient', 'final_god']}
 }
-# --- НАСТРОЙКИ ЭКСПЕДИЦИЙ ---
 # --- НАСТРОЙКИ ЭКСПЕДИЦИЙ (ТРАВНИК) ---
 EXPEDITION_CONFIG = {
     'E': {
@@ -1013,14 +1014,15 @@ def create_enemy(enemy_key, player_level):
     base = BASE_ENEMIES[enemy_key].copy()
     enemy_rank = base.get('rank', 'E')
     
+
     # 1. КАПЫ УРОВНЕЙ ДЛЯ КАЖДОГО РАНГА
     rank_caps = {
-        'E': (1, 14),   # Руины (макс уровень врагов: 14)
+        'E': (1, 14),   # Руины 
         'D': (15, 24),  # Лес
         'C': (25, 34),  # Катакомбы
-        'B': (35, 44),  # Замок
-        'A': (45, 54),  # Пекло
-        'S': (55, 100)  # Хаос (растет до 100)
+        'B': (35, 59),  # Замок (расширен)
+        'A': (60, 99),  # Пекло (расширен)
+        'S': (100, 150) # Хаос (расширен до 150)
     }
     
     min_lvl, max_lvl = rank_caps.get(enemy_rank, (1, 14))
@@ -1521,10 +1523,10 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GUILD_MENU
         
     # 12. ИНФО О РАНГАХ
+    # 12. ИНФО О РАНГАХ
     elif data == 'rank_info':
-        rank_info = """🏆 *РАНГИ*\n🆕 E: 1-14 ур (Руины)\n🟢 D: 15-24 ур (Лес)\n🔵 C: 25-34 ур (Катакомбы)\n🟣 B: 35-44 ур (Замок)\n🟠 A: 45-54 ур (Ад)\n⚡ S: 55+ ур (Трон Хаоса)"""
+        rank_info = """🏆 *РАНГИ*\n🆕 E: 1-14 ур (Руины)\n🟢 D: 15-24 ур (Лес)\n🔵 C: 25-34 ур (Катакомбы)\n🟣 B: 35-59 ур (Замок)\n🟠 A: 60-99 ур (Ад)\n⚡ S: 100-150 ур (Трон Хаоса)"""
         await query.edit_message_caption(rank_info, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
-        
     # 13. ПОМОЩЬ
     elif data == 'help':
         await help_command(update, context)
