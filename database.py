@@ -177,8 +177,8 @@ def apply_regeneration(character):
         return character
 
 def calculate_rank(level):
-    if level >= 55: return 'S'
-    elif level >= 45: return 'A'
+    if level >= 100: return 'S'
+    elif level >= 60: return 'A'
     elif level >= 35: return 'B'
     elif level >= 25: return 'C'
     elif level >= 15: return 'D'
