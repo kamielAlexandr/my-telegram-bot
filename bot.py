@@ -3993,8 +3993,30 @@ async def enter_gift_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     target_id = int(context.user_data.get('gift_target', 0))
     item_key = context.user_data.get('gift_item')
+    
     char = database.get_character(user_id)
+    target_char = database.get_character(target_id) # Получаем данные того, кому дарим
     item_info = ITEMS_DB.get(item_key)
+    
+    # === НОВАЯ ПРОВЕРКА РАНГА ===
+    item_rank = item_info.get('rank', 'E')
+    ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+    
+    try: item_rank_idx = ranks_order.index(item_rank)
+    except: item_rank_idx = 0
+    
+    try: target_rank_idx = ranks_order.index(target_char['rank'])
+    except: target_rank_idx = 0
+
+    if target_rank_idx < item_rank_idx:
+        await update.message.reply_text(
+            f"🔒 **Магия отвергает этот дар!**\n"
+            f"У соклановца {target_char['character_name']} слишком низкий ранг для {item_info['name']}.\n"
+            f"_Требуется ранг: {item_rank}_", 
+            reply_markup=get_main_menu_keyboard(user_id)
+        )
+        return MAIN_MENU
+    # ============================
     
     try:
         amount = int(update.message.text.strip())
@@ -4010,11 +4032,13 @@ async def enter_gift_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Уведомляем получателя
             await context.bot.send_message(chat_id=target_id, text=f"📦 **Вам посылка!**\nСоклановец {char['character_name']} прислал вам: {item_info['name']} (x{amount})")
         except: pass
-        await update.message.reply_text(f"✅ Предметы отправлены!", reply_markup=get_main_menu_keyboard(user_id))
+        await update.message.reply_text(f"✅ Предметы успешно отправлены!", reply_markup=get_main_menu_keyboard(user_id))
     else:
         await update.message.reply_text(f"❌ Ошибка: {msg}", reply_markup=get_main_menu_keyboard(user_id))
         
     return MAIN_MENU
+
+
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
