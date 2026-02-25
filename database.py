@@ -2185,8 +2185,9 @@ def transfer_item(sender_id, target_id, item_key, amount, item_info):
             if res:
                 c.execute("UPDATE player_inventory SET quantity = quantity + %s WHERE user_id = %s AND item_key = %s", (amount, target_id, item_key))
             else:
-                c.execute("INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, item_effect) VALUES (%s, %s, %s, %s, %s, %s)",
-                          (target_id, item_key, item_info['type'], item_info['name'], amount, item_info.get('effect', 0)))
+                # ИСПРАВЛЕНИЕ: Убрали item_effect, так как он не хранится в таблице инвентаря
+                c.execute("INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity) VALUES (%s, %s, %s, %s, %s)",
+                          (target_id, item_key, item_info['type'], item_info['name'], amount))
             conn.commit()
             return True, ""
     except Exception as e:
