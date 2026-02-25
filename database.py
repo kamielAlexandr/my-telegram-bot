@@ -526,10 +526,12 @@ def get_top_players(limit=10):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # ИСПРАВЛЕНО: Теперь берем и название клана тоже!
             cursor.execute("""
-                SELECT character_name, race, level, battle_wins, boss_kills, gold 
-                FROM player_characters 
-                ORDER BY level DESC, battle_wins DESC 
+                SELECT pc.character_name, pc.race, pc.level, pc.boss_kills, cl.name as clan_name 
+                FROM player_characters pc
+                LEFT JOIN clans cl ON pc.clan_id = cl.id
+                ORDER BY pc.level DESC, pc.experience DESC 
                 LIMIT %s
             """, (limit,))
             return cursor.fetchall()
@@ -2030,5 +2032,128 @@ def delete_character(user_id):
     except Exception as e:
         print(f"Delete character error: {e}")
         return False
+    finally:
+        conn.close()
+# ==========================================
+# === СИСТЕМА КЛАНОВ ===
+# ==========================================
+
+def init_clans_table():
+    """Создает таблицы для кланов и добавляет колонку в профили"""
+    conn = get_connection()
+    if not conn: return
+    try:
+        with conn.cursor() as c:
+            # Создаем таблицу кланов
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS clans (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(30) NOT NULL UNIQUE,
+                    owner_id BIGINT NOT NULL,
+                    icon_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # Пытаемся добавить колонку клана к игроку
+            try:
+                c.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS clan_id INTEGER DEFAULT NULL")
+            except:
+                conn.rollback() # Игнорируем ошибку, если колонка уже есть
+            conn.commit()
+            print("✅ Система кланов инициализирована.")
+    except Exception as e:
+        print(f"Clan init error: {e}")
+    finally:
+        conn.close()
+
+def create_clan(user_id, name, icon_id):
+    conn = get_connection()
+    if not conn: return False, "Ошибка БД"
+    try:
+        with conn.cursor() as c:
+            # Списываем 10000 золота
+            c.execute("UPDATE player_characters SET gold = gold - 10000 WHERE user_id = %s AND gold >= 10000", (user_id,))
+            if c.rowcount == 0:
+                return False, "Не хватает золота!"
+            
+            # Создаем клан
+            c.execute("INSERT INTO clans (name, owner_id, icon_id) VALUES (%s, %s, %s) RETURNING id", (name, user_id, icon_id))
+            clan_id = c.fetchone()[0]
+            
+            # Присваиваем клан создателю
+            c.execute("UPDATE player_characters SET clan_id = %s WHERE user_id = %s", (clan_id, user_id))
+            conn.commit()
+            return True, "Клан успешно основан!"
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return False, "Клан с таким названием уже существует!"
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+def get_clan_by_id(clan_id):
+    conn = get_connection()
+    if not clan_id: return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute("SELECT * FROM clans WHERE id = %s", (clan_id,))
+            return c.fetchone()
+    finally:
+        conn.close()
+
+def get_all_clans():
+    conn = get_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            # Считаем количество участников в каждом клане
+            c.execute("""
+                SELECT cl.*, COUNT(pc.id) as members_count 
+                FROM clans cl 
+                LEFT JOIN player_characters pc ON pc.clan_id = cl.id 
+                GROUP BY cl.id 
+                ORDER BY members_count DESC 
+                LIMIT 20
+            """)
+            return c.fetchall()
+    finally:
+        conn.close()
+
+def get_clan_members(clan_id):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as c:
+            c.execute("SELECT character_name, level, rank, user_id FROM player_characters WHERE clan_id = %s ORDER BY level DESC", (clan_id,))
+            return c.fetchall()
+    finally:
+        conn.close()
+
+def join_clan(user_id, clan_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            c.execute("UPDATE player_characters SET clan_id = %s WHERE user_id = %s", (clan_id, user_id))
+            conn.commit()
+    finally:
+        conn.close()
+
+def leave_clan(user_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            # Проверяем, не является ли игрок владельцем
+            c.execute("SELECT id FROM clans WHERE owner_id = %s", (user_id,))
+            owned_clan = c.fetchone()
+            
+            if owned_clan:
+                # Если владелец уходит, клан распускается (всех кикает)
+                c.execute("UPDATE player_characters SET clan_id = NULL WHERE clan_id = %s", (owned_clan[0],))
+                c.execute("DELETE FROM clans WHERE id = %s", (owned_clan[0],))
+            else:
+                # Иначе просто убираем игрока
+                c.execute("UPDATE player_characters SET clan_id = NULL WHERE user_id = %s", (user_id,))
+            conn.commit()
     finally:
         conn.close()
