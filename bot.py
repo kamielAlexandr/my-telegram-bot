@@ -1528,9 +1528,15 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         race_name = race_names.get(race_key, race_key.capitalize())
 
         phys = max(1, char['strength'] // 2)
-        mag = max(1, char['intelligence'] // 2)
-        dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
-        crit = int(calculate_crit_chance(char['agility']) * 100)
+        mag = max(1, char['intelligence'] // 2)
+        dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
+        crit = int(calculate_crit_chance(char['agility']) * 100)
+        
+        # --- ИСПРАВЛЕНИЕ: Достаем инфу о клане перед тем, как писать текст ---
+        clan = database.get_clan_by_id(char.get('clan_id')) if char.get('clan_id') else None
+        clan_tag = f" 🛡️ [{clan['name']}]" if clan else ""
+        # -------------------------------------------------------------------
+
         
         txt = (
             f"👤 *{char['character_name']}*{clan_tag}\n"
