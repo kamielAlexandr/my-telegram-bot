@@ -2157,3 +2157,49 @@ def leave_clan(user_id):
             conn.commit()
     finally:
         conn.close()
+def transfer_gold(sender_id, target_id, amount):
+    conn = get_connection()
+    if not conn: return False, "БД недоступна"
+    try:
+        with conn.cursor() as c:
+            # Списываем у отправителя (только если хватает денег)
+            c.execute("UPDATE player_characters SET gold = gold - %s WHERE user_id = %s AND gold >= %s", (amount, sender_id, amount))
+            if c.rowcount == 0: return False, "Недостаточно золота!"
+            
+            # Начисляем получателю
+            c.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id = %s", (amount, target_id))
+            conn.commit()
+            return True, ""
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+def transfer_item(sender_id, target_id, item_key, amount, item_info):
+    conn = get_connection()
+    if not conn: return False, "БД недоступна"
+    try:
+        with conn.cursor() as c:
+            # Списываем предмет (только если хватает количества)
+            c.execute("UPDATE player_inventory SET quantity = quantity - %s WHERE user_id = %s AND item_key = %s AND quantity >= %s", (amount, sender_id, item_key, amount))
+            if c.rowcount == 0: return False, "Недостаточно предметов!"
+            
+            # Удаляем строку, если предметов стало 0
+            c.execute("DELETE FROM player_inventory WHERE user_id = %s AND quantity <= 0", (sender_id,))
+
+            # Проверяем, есть ли такой предмет у получателя
+            c.execute("SELECT quantity FROM player_inventory WHERE user_id = %s AND item_key = %s", (target_id, item_key))
+            res = c.fetchone()
+            if res:
+                c.execute("UPDATE player_inventory SET quantity = quantity + %s WHERE user_id = %s AND item_key = %s", (amount, target_id, item_key))
+            else:
+                c.execute("INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, item_effect) VALUES (%s, %s, %s, %s, %s, %s)",
+                          (target_id, item_key, item_info['type'], item_info['name'], amount, item_info.get('effect', 0)))
+            conn.commit()
+            return True, ""
+    except Exception as e:
+        conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
