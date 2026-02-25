@@ -834,45 +834,40 @@ def sell_item_transaction(user_id, item_key, quantity=1):
     # СТОП. Чтобы не усложнять импорты, сделаем универсальную функцию изменения,
     # а логику "что отнимать" посчитаем в bot.py.
 
-def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
-    """
-    Выполняет продажу: удаляет предмет, дает золото, меняет статы.
-    """
+def execute_sell(user_id, item_key, price, stat_changes):
     conn = get_connection()
-    if not conn: return False, "Ошибка подключения"
-    
+    if not conn: return False, "Ошибка БД"
     try:
-        with conn.cursor() as cursor:
-            # 1. Проверяем наличие
-            cursor.execute("SELECT id, quantity FROM player_inventory WHERE user_id=%s AND item_key=%s", (user_id, item_key))
-            res = cursor.fetchone()
-            if not res: return False, "Предмет не найден"
-            item_id, current_qty = res
+        with conn.cursor() as c:
+            # 1. ЖЕСТКАЯ ПРОВЕРКА НАЛИЧИЯ (Защита от спама)
+            # Отнимаем 1 предмет ТОЛЬКО если их >= 1
+            c.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE user_id = %s AND item_key = %s AND quantity >= 1", (user_id, item_key))
             
-            # 2. Удаляем
-            if current_qty <= 1:
-                cursor.execute("DELETE FROM player_inventory WHERE id=%s", (item_id,))
-            else:
-                cursor.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE id=%s", (item_id,))
+            # Если база ответила "0 строк изменено", значит предмета нет!
+            if c.rowcount == 0:
+                conn.rollback()
+                return False, "Предмет не найден!"
             
-            # 3. Даем золото
-            cursor.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id=%s", (price_to_add, user_id))
+            # 2. Удаляем пустые слоты
+            c.execute("DELETE FROM player_inventory WHERE user_id = %s AND quantity <= 0", (user_id,))
             
-            # 4. Отнимаем статы (если нужно)
-            if stat_changes:
-                set_clauses = [f"{k} = {k} + %s" for k in stat_changes.keys()]
-                values = list(stat_changes.values())
-                values.append(user_id)
-                sql = f"UPDATE player_characters SET {', '.join(set_clauses)} WHERE user_id=%s"
-                cursor.execute(sql, values)
+            # 3. Начисляем золото
+            c.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id = %s", (price, user_id))
+            
+            # 4. Безопасное снятие статов
+            for stat_name, change_val in stat_changes.items():
+                # change_val уже отрицательный (например, -50), поэтому прибавляем его: stat + (-50)
+                c.execute(f"UPDATE player_characters SET {stat_name} = {stat_name} + %s WHERE user_id = %s", (change_val, user_id))
             
             conn.commit()
             return True, "Успешно"
     except Exception as e:
-        print(f"Sell error: {e}")
-        return False, f"Ошибка: {e}"
+        conn.rollback()
+        return False, str(e)
     finally:
         conn.close()
+
+
 def cancel_quest(user_id):
     """Отказ от задания (штраф репутации)"""
     conn = get_connection()
@@ -1282,18 +1277,14 @@ def buy_item(user_id, item_key, item_type, item_name, price, effect_amount=0):
 
             # 2. ЛЕГКАЯ БРОНЯ (Для Ловкачей) -> Дает ХП и Ловкость (Уворот/Крит)
             elif item_type == 'light_armor':
-                hp_bonus = int(effect_amount * 0.6) # Меньше ХП чем у тяжелой
-                agi_bonus = int(effect_amount / 2)  # Дает ловкость
-                
+                hp_bonus = int(effect_amount * 0.6)
+                agi_bonus = int(effect_amount / 2) # Начисляем ловкость!
                 cursor.execute("""
                     UPDATE player_characters 
-                    SET max_health = max_health + %s, 
-                        health = health + %s, 
-                        agility = agility + %s
+                    SET max_health = max_health + %s, health = health + %s, agility = agility + %s
                     WHERE user_id=%s
                 """, (hp_bonus, hp_bonus, agi_bonus, user_id))
-                
-                msg_extra = f"\n💨 HP +{hp_bonus} | Ловкость +{agi_bonus}"
+                msg_extra = f"\n❤️ HP +{hp_bonus} / 💨 Ловкость +{agi_bonus}"
 
             # 3. МАГИЧЕСКАЯ РОБА (Для Магов) -> Дает Ману и Маг. Защиту
             elif item_type == 'magic_armor':
