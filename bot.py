@@ -2927,55 +2927,62 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. ОБРАБОТКА ПРОДАЖИ
     elif data.startswith('sell_item_'):
-        item_key = data.split('_', 2)[2]
-        item_info = ITEMS_DB.get(item_key)
-        
-        if not item_info:
-            await query.answer("Ошибка предмета.", show_alert=True)
-            await render_sell_menu(query, user_id) 
+        # --- АНТИ-СПАМ ЗАЩИТА ОТ ДВОЙНЫХ КЛИКОВ ---
+        if context.user_data.get('is_selling'):
+            await query.answer("⏳ Торговец пересчитывает монеты...", show_alert=False)
             return SHOP_MENU
             
-        stat_changes = {}
-        eff = item_info.get('effect', 0)
-        
-        if eff > 0:
-            itype = item_info['type']
-            if itype == 'weapon': stat_changes['strength'] = -eff
-            elif itype == 'magic_weapon':
-                stat_changes['intelligence'] = -eff
-                stat_changes['max_mana'] = -(eff * 3)
-                stat_changes['mana'] = -(eff * 3)
-            elif itype == 'agi_weapon': 
-                stat_changes['strength'] = -max(1, eff // 2)
-                stat_changes['agility'] = -eff
-            elif itype == 'heavy_armor':
-                stat_changes['max_health'] = -eff
-                stat_changes['health'] = -eff
-                stat_changes['physical_resistance'] = -(eff / 200.0)
-            elif itype == 'light_armor':
-                hp_lost = int(eff * 0.6)
-                agi_lost = int(eff / 2)
-                stat_changes['max_health'] = -hp_lost
-                stat_changes['health'] = -hp_lost
-                stat_changes['agility'] = -agi_lost
-            elif itype == 'magic_armor':
-                mp_lost = eff * 2
-                stat_changes['max_mana'] = -mp_lost
-                stat_changes['mana'] = -mp_lost
-                stat_changes['magic_resistance'] = -(eff / 200.0)
-            elif itype in ['artifact', 'acc']:
-                stat_changes['intelligence'] = -eff
-                stat_changes['max_mana'] = -(eff * 5)
-                stat_changes['mana'] = -(eff * 5)
+        context.user_data['is_selling'] = True
+        try:
+            item_key = data.split('_', 2)[2]
+            item_info = ITEMS_DB.get(item_key)
+            
+            if not item_info:
+                await query.answer("Ошибка предмета.", show_alert=True)
+                await render_sell_menu(query, user_id) 
+                return SHOP_MENU
+                
+            stat_changes = {}
+            eff = item_info.get('effect', 0)
+            
+            if eff > 0:
+                itype = item_info['type']
+                if itype == 'weapon': stat_changes['strength'] = -eff
+                elif itype == 'magic_weapon':
+                    stat_changes['intelligence'] = -eff
+                    stat_changes['max_mana'] = -(eff * 3)
+                    stat_changes['mana'] = -(eff * 3)
+                elif itype == 'agi_weapon': 
+                    stat_changes['strength'] = -max(1, eff // 2)
+                    stat_changes['agility'] = -eff
+                elif itype == 'heavy_armor':
+                    stat_changes['max_health'] = -eff
+                    stat_changes['health'] = -eff
+                elif itype == 'light_armor':
+                    # Снимаем ровно столько, сколько броня давала при покупке
+                    stat_changes['max_health'] = -int(eff * 0.6)
+                    stat_changes['health'] = -int(eff * 0.6)
+                    stat_changes['agility'] = -int(eff / 2)
+                elif itype == 'magic_armor':
+                    stat_changes['max_mana'] = -(eff * 2)
+                    stat_changes['mana'] = -(eff * 2)
+                elif itype in ['artifact', 'acc']:
+                    stat_changes['intelligence'] = -eff
+                    stat_changes['max_mana'] = -(eff * 5)
+                    stat_changes['mana'] = -(eff * 5)
 
-        sell_price = max(1, item_info['price'] // 2)
-        success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
-        
-        if success:
-            await query.answer(f"💰 Продано: {item_info['name']} (+{sell_price}g)", show_alert=True)
-            await render_sell_menu(query, user_id)
-        else:
-            await query.answer(f"Ошибка: {msg}", show_alert=True)
+            sell_price = max(1, item_info['price'] // 2)
+            success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
+            
+            if success:
+                await query.answer(f"💰 Продано: {item_info['name']} (+{sell_price}g)", show_alert=True)
+                await render_sell_menu(query, user_id)
+            else:
+                await query.answer(f"❌ {msg}", show_alert=True)
+        finally:
+            # Обязательно снимаем блокировку кнопки
+            context.user_data['is_selling'] = False
+            
         return SHOP_MENU
 
     # 5. КАТЕГОРИИ
