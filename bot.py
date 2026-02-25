@@ -22,7 +22,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU= range(10)
+# Состояния
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON = range(13)
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
@@ -1317,7 +1318,9 @@ def get_main_menu_keyboard(user_id):
         ],
         
         # ---------------------------
-        [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')]
+        [InlineKeyboardButton("📜 Помощь", callback_data='help'), InlineKeyboardButton("🔄 Обновить", callback_data='refresh')
+        ],
+        [InlineKeyboardButton("🏰 Кланы", callback_data='clans_menu')]
     ]
     
     # --- ОТЛАДКА ---
@@ -1530,8 +1533,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         crit = int(calculate_crit_chance(char['agility']) * 100)
         
         txt = (
-            f"👤 *{char['character_name']}*\n"
-            f"📖 Раса: *{race_name}*\n" 
+            f"👤 *{char['character_name']}*{clan_tag}\n"
+            f"📖 Раса: *{race_name}*\n"
             f"🎖 Уровень: *{char['level']}*\n"
             f"💰 Золото: *{char['gold']}g*\n"
             f"──────────────────\n"
@@ -2112,6 +2115,162 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             battle_sessions[user_id]['processing'] = False
             
     return IN_BATTLE
+
+# ==========================================
+# === СИСТЕМА КЛАНОВ ===
+# ==========================================
+
+async def clan_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    clan_id = char.get('clan_id')
+    if clan_id:
+        # --- ИГРОК СОСТОИТ В КЛАНЕ ---
+        clan = database.get_clan_by_id(clan_id)
+        members = database.get_clan_members(clan_id)
+        
+        # Строим список участников
+        mem_text = "\n".join([f"• {m['character_name']} ({m['level']} ур.)" for m in members[:15]])
+        if len(members) > 15: mem_text += f"\n...и еще {len(members)-15} героев."
+        
+        role = "👑 Владыка" if clan['owner_id'] == user_id else "🛡 Участник"
+        
+        txt = (
+            f"🏰 *КЛАН: [{clan['name']}]*\n"
+            f"Ваша роль: {role}\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👥 **Участники ({len(members)}):**\n"
+            f"{mem_text}"
+        )
+        
+        kb = [
+            [InlineKeyboardButton("🚪 Покинуть клан", callback_data='leave_clan')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
+        ]
+        
+        # Выводим с гербом клана (иконкой), если она есть
+        if clan['icon_id']:
+            await safe_edit(query, text=None, media=InputMediaPhoto(clan['icon_id'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        else:
+            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+        
+    else:
+        # --- ИГРОК БЕЗ КЛАНА ---
+        txt = (
+            "🏰 *ЗАЛ СЛАВЫ*\n"
+            "Одиночкам не место в Бездне. Объединяйтесь с другими героями!\n\n"
+            "• Вступить в клан: **с 10 уровня**\n"
+            "• Создать свой клан: **Ранг D+ и 10,000g**"
+        )
+        kb = [
+            [InlineKeyboardButton("📜 Список кланов", callback_data='list_clans')],
+            [InlineKeyboardButton("👑 Создать клан (10,000g)", callback_data='create_clan_start')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
+        ]
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+
+async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    if data == 'back_to_main':
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+        
+    elif data == 'list_clans':
+        clans = database.get_all_clans()
+        if not clans:
+            await query.answer("Мир пуст. Кланов пока нет.", show_alert=True)
+            return CLAN_MENU
+        
+        txt = "📜 *ОТКРЫТЫЕ КЛАНЫ*\nВыберите, куда подать заявку:\n\n"
+        kb = []
+        for c in clans:
+            txt += f"🛡️ *[{c['name']}]* (Участников: {c['members_count']})\n"
+            kb.append([InlineKeyboardButton(f"Вступить в [{c['name']}]", callback_data=f"join_clan_{c['id']}")])
+        
+        kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_clan_hub')])
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+        
+    elif data == 'back_to_clan_hub':
+        return await clan_hub_handler(update, context)
+        
+    elif data.startswith('join_clan_'):
+        clan_id = int(data.split('_')[2])
+        if char['level'] < 10:
+            await query.answer("🔒 Вступление доступно только с 10 уровня!", show_alert=True)
+            return CLAN_MENU
+            
+        database.join_clan(user_id, clan_id)
+        await query.answer("✅ Вы успешно присоединились к клану!", show_alert=True)
+        return await clan_hub_handler(update, context)
+        
+    elif data == 'leave_clan':
+        database.leave_clan(user_id)
+        await query.answer("Вы ушли из клана. (Если вы лидер, клан распущен)", show_alert=True)
+        return await clan_hub_handler(update, context)
+        
+    elif data == 'create_clan_start':
+        ranks_order = ['E', 'D', 'C', 'B', 'A', 'S']
+        try: p_idx = ranks_order.index(char['rank'])
+        except: p_idx = 0
+        
+        if p_idx < 1: # Нужен ранг D (индекс 1)
+            await query.answer("🔒 Вы слишком слабы! Создать клан можно с ранга D.", show_alert=True)
+            return CLAN_MENU
+            
+        if char['gold'] < 10000:
+            await query.answer("💸 Не хватает золота! Нужно 10,000g.", show_alert=True)
+            return CLAN_MENU
+            
+        try: await query.message.delete()
+        except: pass
+        await context.bot.send_message(chat_id=user_id, text="👑 Напишите название вашего будущего Клана (до 20 символов):")
+        return CLAN_CREATE_NAME
+
+async def enter_clan_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text.strip()
+    if len(name) > 20 or len(name) < 2:
+        await update.message.reply_text("Название должно быть от 2 до 20 символов. Попробуйте еще раз:")
+        return CLAN_CREATE_NAME
+        
+    context.user_data['temp_clan_name'] = name
+    await update.message.reply_text(
+        f"🛡 Название «{name}» принято!\n\n"
+        "🖼 Теперь отправьте **КАРТИНКУ (ФОТО)**, которая станет гербом вашего клана.\n"
+        "_(Отправьте именно как сжатое фото, а не как файл)_"
+    )
+    return CLAN_CREATE_ICON
+
+async def enter_clan_icon(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if not update.message.photo:
+        await update.message.reply_text("❌ Это не фото! Пожалуйста, загрузите картинку герба.")
+        return CLAN_CREATE_ICON
+        
+    # БЕРЕМ САМОЕ МАЛЕНЬКОЕ ФОТО (индекс 0), чтобы бот не тормозил от 4K изображений
+    icon_file_id = update.message.photo[0].file_id
+    name = context.user_data.get('temp_clan_name', 'Неизвестно')
+    
+    success, msg = database.create_clan(user_id, name, icon_file_id)
+    
+    if success:
+        txt = f"🎉 **Вы основали клан [{name}]!**\nТеперь вы можете набирать участников."
+        await update.message.reply_photo(photo=icon_file_id, caption=txt, parse_mode='Markdown', reply_markup=get_main_menu_keyboard(user_id))
+    else:
+        await update.message.reply_text(f"❌ Ошибка: {msg}\nВозврат в деревню.", reply_markup=get_main_menu_keyboard(user_id))
+        
+    return MAIN_MENU
 # ==========================================
 # === РЫБАЛКА (Азарт и Смерть) ===
 # ==========================================
@@ -3218,9 +3377,11 @@ async def show_top_players(query, user_id):
         race_name = race_names.get(race_key, 'Неизвестно')
         
         bosses = player.get('boss_kills', 0)
-        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
-        top_text += f"{medal} <b>{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
+        # Добавляем тег клана
+        clan_tag = f"[{player['clan_name']}] " if player.get('clan_name') else ""
         
+        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
+        top_text += f"{medal} <b>{clan_tag}{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
     await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3732,6 +3893,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
+    database.init_clans_table()
     database.migrate_expeditions_table() 
     if hasattr(database, 'init_companion_table'):
         database.init_companion_table()
@@ -3763,7 +3925,7 @@ def main():
                 CallbackQueryHandler(brew_handler, pattern='^brew_'),
                 CallbackQueryHandler(start_expedition_handler, pattern='^send_exp_'),
                 CallbackQueryHandler(claim_loot_handler, pattern='^claim_exp_loot$'),
-                
+                CallbackQueryHandler(clan_hub_handler, pattern='^clans_menu$'),
                 CallbackQueryHandler(farm_menu_handler, pattern='^farm_menu$'),
                 CallbackQueryHandler(build_farm_handler, pattern='^build_farm$'),
                 CallbackQueryHandler(plant_handler, pattern='^plant_'),
@@ -3791,6 +3953,12 @@ def main():
             CRAFT_MENU: [CallbackQueryHandler(craft_handler)],
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
+            CLAN_MENU: [CallbackQueryHandler(clan_action_handler)],
+            CLAN_CREATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_clan_name)],
+            CLAN_CREATE_ICON: [
+                MessageHandler(filters.PHOTO, enter_clan_icon),
+                MessageHandler(filters.ALL & ~filters.COMMAND, enter_clan_icon) # ловушка на случай, если пришлют текст
+            ],
         },
         fallbacks=[CommandHandler('start', start)]
     )
