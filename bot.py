@@ -21,9 +21,9 @@ import database
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 # Состояния
-# Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON = range(13)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER = range(15)
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
@@ -2151,6 +2151,7 @@ async def clan_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         kb = [
+            [InlineKeyboardButton("🎁 Отправить подарок", callback_data='clan_gift_start')],
             [InlineKeyboardButton("🚪 Покинуть клан", callback_data='leave_clan')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
         ]
@@ -2203,7 +2204,70 @@ async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_clan_hub')])
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return CLAN_MENU
+    # === СИСТЕМА ПОДАРКОВ ===
+    elif data == 'clan_gift_start':
+        clan_id = char.get('clan_id')
+        members = database.get_clan_members(clan_id)
+        kb = []
+        for m in members:
+            if m['user_id'] != user_id: # Нельзя дарить самому себе
+                kb.append([InlineKeyboardButton(f"🎁 {m['character_name']}", callback_data=f"cg_user_{m['user_id']}")])
         
+        if not kb:
+            await query.answer("В клане больше никого нет!", show_alert=True)
+            return CLAN_MENU
+            
+        kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_clan_hub')])
+        txt = "🎁 *ПОДАРКИ СОКЛАНОВЦАМ*\nВыберите, кого хотите отблагодарить:"
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+
+    elif data.startswith('cg_user_'):
+        target_id = data.split('_')[2]
+        context.user_data['gift_target'] = target_id
+        
+        txt = "Что будем дарить?"
+        kb = [
+            [InlineKeyboardButton("💰 Золото", callback_data='cg_type_gold')],
+            [InlineKeyboardButton("🎒 Материалы / Еду", callback_data='cg_type_item')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='clan_gift_start')]
+        ]
+        await safe_edit(query, text=txt, keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+
+    elif data == 'cg_type_gold':
+        try: await query.message.delete()
+        except: pass
+        await context.bot.send_message(chat_id=user_id, text=f"💰 У вас есть **{char['gold']}g**.\nСколько золота отправить?\n\n_Напишите число в чат:_")
+        return CLAN_GIFT_GOLD_ENTER
+
+    elif data == 'cg_type_item':
+        items = database.get_inventory(user_id)
+        kb = []
+        has_gifts = False
+        for i in items:
+            info = ITEMS_DB.get(i['item_key'])
+            # Дарить можно только расходники и материалы
+            if info and info['type'] in ['material', 'food', 'potion', 'buff_potion']:
+                has_gifts = True
+                kb.append([InlineKeyboardButton(f"{info['name']} (В наличии: {i['quantity']})", callback_data=f"cg_item_{i['item_key']}")])
+        
+        kb.append([InlineKeyboardButton("🔙 Отмена", callback_data='clan_gift_start')])
+        
+        txt = "🎁 *ЧТО ПОДАРИМ?*\n_Можно дарить только материалы, еду и зелья._" if has_gifts else "У вас нет подходящих предметов в рюкзаке."
+        await safe_edit(query, text=txt, keyboard=InlineKeyboardMarkup(kb))
+        return CLAN_MENU
+
+    elif data.startswith('cg_item_'):
+        item_key = data.split('_', 2)[2]
+        context.user_data['gift_item'] = item_key
+        item_info = ITEMS_DB.get(item_key)
+        
+        try: await query.message.delete()
+        except: pass
+        await context.bot.send_message(chat_id=user_id, text=f"🎒 Выбран предмет: **{item_info['name']}**.\nСколько штук отправить?\n\n_Напишите число в чат:_")
+        return CLAN_GIFT_ITEM_ENTER
+    # ========================    
     elif data == 'back_to_clan_hub':
         return await clan_hub_handler(update, context)
         
@@ -3893,6 +3957,57 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         else:
             # На случай непредвиденных сбоев, чтобы бот не молчал
             await update.message.reply_text("⚠️ Оплата прошла, но пакет не распознан. Пожалуйста, обратитесь к администратору.")
+async def enter_gift_gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    target_id = int(context.user_data.get('gift_target', 0))
+    char = database.get_character(user_id)
+    
+    try:
+        amount = int(update.message.text.strip())
+        if amount <= 0: raise ValueError
+    except:
+        await update.message.reply_text("Введите корректное число (больше нуля):")
+        return CLAN_GIFT_GOLD_ENTER
+
+    success, msg = database.transfer_gold(user_id, target_id, amount)
+    
+    if success:
+        try:
+            # Пытаемся уведомить получателя в личку!
+            await context.bot.send_message(chat_id=target_id, text=f"🎁 **Вам посылка!**\nСоклановец {char['character_name']} прислал вам {amount} золота!")
+        except: pass
+        await update.message.reply_text(f"✅ Вы успешно отправили {amount}g!", reply_markup=get_main_menu_keyboard(user_id))
+    else:
+        await update.message.reply_text(f"❌ Ошибка: {msg}", reply_markup=get_main_menu_keyboard(user_id))
+        
+    return MAIN_MENU
+
+async def enter_gift_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    target_id = int(context.user_data.get('gift_target', 0))
+    item_key = context.user_data.get('gift_item')
+    char = database.get_character(user_id)
+    item_info = ITEMS_DB.get(item_key)
+    
+    try:
+        amount = int(update.message.text.strip())
+        if amount <= 0: raise ValueError
+    except:
+        await update.message.reply_text("Введите корректное число (больше нуля):")
+        return CLAN_GIFT_ITEM_ENTER
+
+    success, msg = database.transfer_item(user_id, target_id, item_key, amount, item_info)
+    
+    if success:
+        try:
+            # Уведомляем получателя
+            await context.bot.send_message(chat_id=target_id, text=f"📦 **Вам посылка!**\nСоклановец {char['character_name']} прислал вам: {item_info['name']} (x{amount})")
+        except: pass
+        await update.message.reply_text(f"✅ Предметы отправлены!", reply_markup=get_main_menu_keyboard(user_id))
+    else:
+        await update.message.reply_text(f"❌ Ошибка: {msg}", reply_markup=get_main_menu_keyboard(user_id))
+        
+    return MAIN_MENU
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
@@ -3960,8 +4075,11 @@ def main():
             CLAN_CREATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_clan_name)],
             CLAN_CREATE_ICON: [
                 MessageHandler(filters.PHOTO, enter_clan_icon),
-                MessageHandler(filters.ALL & ~filters.COMMAND, enter_clan_icon) # ловушка на случай, если пришлют текст
+                MessageHandler(filters.ALL & ~filters.COMMAND, enter_clan_icon)
             ],
+            # --- НОВЫЕ СТРОКИ ---
+            CLAN_GIFT_GOLD_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_gold)],
+            CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
         },
         fallbacks=[CommandHandler('start', start)]
     )
