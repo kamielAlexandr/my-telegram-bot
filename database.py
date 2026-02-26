@@ -834,38 +834,7 @@ def sell_item_transaction(user_id, item_key, quantity=1):
     # СТОП. Чтобы не усложнять импорты, сделаем универсальную функцию изменения,
     # а логику "что отнимать" посчитаем в bot.py.
 
-def execute_sell(user_id, item_key, price, stat_changes):
-    conn = get_connection()
-    if not conn: return False, "Ошибка БД"
-    try:
-        with conn.cursor() as c:
-            # 1. ЖЕСТКАЯ ПРОВЕРКА НАЛИЧИЯ (Защита от спама)
-            # Отнимаем 1 предмет ТОЛЬКО если их >= 1
-            c.execute("UPDATE player_inventory SET quantity = quantity - 1 WHERE user_id = %s AND item_key = %s AND quantity >= 1", (user_id, item_key))
-            
-            # Если база ответила "0 строк изменено", значит предмета нет!
-            if c.rowcount == 0:
-                conn.rollback()
-                return False, "Предмет не найден!"
-            
-            # 2. Удаляем пустые слоты
-            c.execute("DELETE FROM player_inventory WHERE user_id = %s AND quantity <= 0", (user_id,))
-            
-            # 3. Начисляем золото
-            c.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id = %s", (price, user_id))
-            
-            # 4. Безопасное снятие статов
-            for stat_name, change_val in stat_changes.items():
-                # change_val уже отрицательный (например, -50), поэтому прибавляем его: stat + (-50)
-                c.execute(f"UPDATE player_characters SET {stat_name} = {stat_name} + %s WHERE user_id = %s", (change_val, user_id))
-            
-            conn.commit()
-            return True, "Успешно"
-    except Exception as e:
-        conn.rollback()
-        return False, str(e)
-    finally:
-        conn.close()
+
 
 
 def cancel_quest(user_id):
@@ -1803,21 +1772,57 @@ def get_inventory_count(user_id, item_type):
     finally:
         conn.close()
 
-def sell_item_transaction(user_id, item_key, quantity=1):
+def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
     """
-    Продает предмет:
-    1. Проверяет наличие.
-    2. Снимает статы (если это экипировка).
-    3. Удаляет предмет.
-    4. Начисляет золото (50% от цены).
+    Выполняет продажу с АБСОЛЮТНОЙ защитой от двойных кликов
+    и жестким ограничением статов (не ниже нуля).
     """
-    # Здесь нам нужен доступ к ITEMS_DB, но database.py не видит bot.py.
-    # Поэтому мы передадим цену и характеристики аргументами из бота,
-    # ЛИБО (проще) сделаем всю логику проверок в боте, а здесь только SQL.
-    # Но для надежности лучше так:
-    pass 
-    # СТОП. Чтобы не усложнять импорты, сделаем универсальную функцию изменения,
-    # а логику "что отнимать" посчитаем в bot.py.
+    conn = get_connection()
+    if not conn: return False, "Ошибка подключения"
+    
+    try:
+        with conn.cursor() as cursor:
+            # 1. АТОМАРНОЕ СПИСАНИЕ: Отнимаем 1 предмет ТОЛЬКО если он реально есть
+            cursor.execute("""
+                UPDATE player_inventory 
+                SET quantity = quantity - 1 
+                WHERE user_id = %s AND item_key = %s AND quantity >= 1
+            """, (user_id, item_key))
+            
+            # Если база говорит, что ничего не изменилось - значит предмета нет (игрок спамит кнопку)
+            if cursor.rowcount == 0:
+                conn.rollback()
+                return False, "Предмет не найден или уже продан!"
+            
+            # 2. Очищаем пустые слоты
+            cursor.execute("DELETE FROM player_inventory WHERE user_id = %s AND quantity <= 0", (user_id,))
+            
+            # 3. Даем золото
+            cursor.execute("UPDATE player_characters SET gold = gold + %s WHERE user_id = %s", (price_to_add, user_id))
+            
+            # 4. СНИМАЕМ СТАТЫ С ЖЕСТКИМ ЛИМИТОМ
+            if stat_changes:
+                for stat_name, change_val in stat_changes.items():
+                    # Резисты не могут быть ниже 0.0, остальные статы не ниже 1
+                    min_val = 0.0 if 'resistance' in stat_name else 1
+                    
+                    # GREATEST выбирает наибольшее число. Если stat + (-50) уйдет в минус, 
+                    # база данных выберет min_val (1), спасая персонажа от минусовых статов!
+                    sql = f"""
+                        UPDATE player_characters 
+                        SET {stat_name} = GREATEST({min_val}, {stat_name} + %s) 
+                        WHERE user_id = %s
+                    """
+                    cursor.execute(sql, (change_val, user_id))
+            
+            conn.commit()
+            return True, "Успешно"
+    except Exception as e:
+        conn.rollback()
+        print(f"Sell error: {e}")
+        return False, f"Ошибка: {e}"
+    finally:
+        conn.close()
 
 def execute_sell(user_id, item_key, price_to_add, stat_changes=None):
     """
