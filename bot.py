@@ -1527,8 +1527,18 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         race_name = race_names.get(race_key, race_key.capitalize())
 
-        phys = max(1, char['strength'] // 2)
-        mag = max(1, char['intelligence'] // 2)
+        # --- КРАСИВЫЙ РАСЧЕТ УРОНА ---
+        base_phys = max(1, char['strength'] // 2)
+        min_phys = int(base_phys * 0.8)
+        max_phys = int(base_phys * 1.2)
+        if max_phys <= min_phys: max_phys = min_phys + 1
+
+        base_mag = max(1, char['intelligence'] // 2)
+        min_mag = int(base_mag * 0.8)
+        max_mag = int(base_mag * 1.2)
+        if max_mag <= min_mag: max_mag = min_mag + 1
+        # -----------------------------
+
         dodge = int(calculate_player_dodge_chance(char['agility']) * 100)
         crit = int(calculate_crit_chance(char['agility']) * 100)
         
@@ -1546,7 +1556,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌀 MP: {get_mana_bar(char['mana'], char['max_mana'])}\n"
             f"📚 XP: {get_xp_bar(char['level'], char['experience'])}\n"
             f"──────────────────\n"
-            f"⚔️ Урон: *{phys}* (Физ) / *{mag}* (Маг)\n"
+            f"⚔️ Урон: *{min_phys}-{max_phys}* (Физ) / *{min_mag}-{max_mag}* (Маг)\n"
             f"💨 Уворот: *{dodge}%* | 💥 Крит: *{crit}%*\n"
             f"🧱 Сила: {char['strength']} | 🤸 Ловк: {char['agility']}\n"
             f"🧠 Инт: {char['intelligence']} | 💓 Жив: {char['vitality']}"
@@ -2927,7 +2937,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. ОБРАБОТКА ПРОДАЖИ
     elif data.startswith('sell_item_'):
-        # --- АНТИ-СПАМ ЗАЩИТА ОТ ДВОЙНЫХ КЛИКОВ ---
+        # --- АНТИ-СПАМ ЗАЩИТА В ИНТЕРФЕЙСЕ ---
         if context.user_data.get('is_selling'):
             await query.answer("⏳ Торговец пересчитывает монеты...", show_alert=False)
             return SHOP_MENU
@@ -2947,7 +2957,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if eff > 0:
                 itype = item_info['type']
-                if itype == 'weapon': stat_changes['strength'] = -eff
+                if itype == 'weapon': 
+                    stat_changes['strength'] = -eff
                 elif itype == 'magic_weapon':
                     stat_changes['intelligence'] = -eff
                     stat_changes['max_mana'] = -(eff * 3)
@@ -2958,14 +2969,15 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 elif itype == 'heavy_armor':
                     stat_changes['max_health'] = -eff
                     stat_changes['health'] = -eff
+                    stat_changes['physical_resistance'] = -(eff / 200.0) # Возвращаем снятие защиты!
                 elif itype == 'light_armor':
-                    # Снимаем ровно столько, сколько броня давала при покупке
                     stat_changes['max_health'] = -int(eff * 0.6)
                     stat_changes['health'] = -int(eff * 0.6)
                     stat_changes['agility'] = -int(eff / 2)
                 elif itype == 'magic_armor':
                     stat_changes['max_mana'] = -(eff * 2)
                     stat_changes['mana'] = -(eff * 2)
+                    stat_changes['magic_resistance'] = -(eff / 200.0) # Возвращаем снятие маг защиты!
                 elif itype in ['artifact', 'acc']:
                     stat_changes['intelligence'] = -eff
                     stat_changes['max_mana'] = -(eff * 5)
@@ -2980,7 +2992,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.answer(f"❌ {msg}", show_alert=True)
         finally:
-            # Обязательно снимаем блокировку кнопки
+            # Снимаем блокировку, чтобы можно было продать следующий предмет
             context.user_data['is_selling'] = False
             
         return SHOP_MENU
