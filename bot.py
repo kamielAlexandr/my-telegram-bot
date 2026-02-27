@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 # Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER = range(15)
+# Состояния
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY = range(16)
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
@@ -3033,11 +3034,30 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return SHOP_MENU
             except: pass 
 
-        # --- ПРОВЕРКА ЛИМИТОВ ---
         itype = item['type']
+        
+        # --- ЕСЛИ ЭТО ЕДА, ЗЕЛЬЕ ИЛИ РЕСУРС -> СПРАШИВАЕМ КОЛИЧЕСТВО ---
+        if itype in ['material', 'food', 'potion', 'buff_potion']:
+            context.user_data['buy_item_key'] = item_key
+            try: await query.message.delete()
+            except: pass
+            
+            max_can_buy = char['gold'] // item['price'] if item['price'] > 0 else 999
+            if max_can_buy < 1:
+                await query.answer("💸 Не хватает золота даже на одну штуку!", show_alert=True)
+                return SHOP_MENU
+                
+            msg = (f"🛒 **Покупка: {item['name']}**\n"
+                   f"Цена: {item['price']}g за шт.\n"
+                   f"Ваше золото: {char['gold']}g\n\n"
+                   f"_Напишите в чат, сколько штук хотите купить (максимум доступно: {max_can_buy} шт.):_")
+            
+            await context.bot.send_message(chat_id=user_id, text=msg, parse_mode='Markdown')
+            return SHOP_BUY_QUANTITY
+
+        # --- ЕСЛИ ЭТО ЭКИПИРОВКА -> ПОКУПАЕМ СРАЗУ 1 ШТ. ---
         items = database.get_inventory(user_id)
         
-        # Лимит для Оружия и Брони (Макс 5)
         weapon_types = ['weapon', 'magic_weapon','agi_weapon']
         armor_types = ['armor', 'heavy_armor', 'light_armor', 'magic_armor']
         
@@ -3051,23 +3071,15 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer(f"🎒 Слот переполнен! (Макс 5 шт.)", show_alert=True)
                 return SHOP_MENU
 
-        # Лимит для Аксессуаров (Макс 20)
         if itype in ['artifact', 'acc']:
-            acc_count = 0
-            for i in items:
-                info = ITEMS_DB.get(i['item_key'])
-                if info and info['type'] in ['artifact', 'acc']:
-                    acc_count += i['quantity']
+            acc_count = sum(1 for i in items if ITEMS_DB.get(i['item_key'], {}).get('type') in ['artifact', 'acc'])
             if acc_count >= 20:
                 await query.answer("⛔ Слот аксессуаров полон! (Макс 20 шт.)", show_alert=True)
                 return SHOP_MENU
-        # -------------------------
 
-        # Покупка
         if char['gold'] >= item['price']:
-            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0))
+            res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0), amount=1)
             await query.answer(msg, show_alert=True)
-            # Обновляем категорию через функцию
             if 'cat' in item:
                 await render_shop_category(query, user_id, item['cat'])
         else:
@@ -4060,7 +4072,51 @@ async def enter_gift_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка: {msg}", reply_markup=get_main_menu_keyboard(user_id))
         
     return MAIN_MENU
-
+async def enter_buy_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    item_key = context.user_data.get('buy_item_key')
+    
+    if not item_key:
+        await update.message.reply_text("Ошибка покупки. Вернитесь в магазин.", reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+        
+    item = ITEMS_DB.get(item_key)
+    
+    try:
+        amount = int(update.message.text.strip())
+        if amount <= 0: raise ValueError
+    except:
+        await update.message.reply_text("Пожалуйста, введите корректное число (больше нуля):")
+        return SHOP_BUY_QUANTITY
+        
+    char = database.get_character(user_id)
+    total_price = item['price'] * amount
+    
+    # Проверка золота
+    if char['gold'] < total_price:
+        await update.message.reply_text(
+            f"💸 У вас не хватает золота!\n"
+            f"Вы пытаетесь купить {amount} шт. за {total_price}g, а у вас всего {char['gold']}g.\n\n"
+            f"_Введите число поменьше:_"
+        )
+        return SHOP_BUY_QUANTITY
+        
+    # Защита от сумасшедших чисел, чтобы не сломать базу
+    if amount > 10000:
+        await update.message.reply_text("Ого! Торговец не может продать больше 10,000 штук за раз. Введите число поменьше:")
+        return SHOP_BUY_QUANTITY
+        
+    # Проводим покупку
+    res, msg = database.buy_item(user_id, item_key, item['type'], item['name'], item['price'], item.get('effect', 0), amount=amount)
+    
+    if res:
+        await update.message.reply_text(f"{msg}", reply_markup=get_main_menu_keyboard(user_id))
+    else:
+        await update.message.reply_text(f"❌ Ошибка: {msg}", reply_markup=get_main_menu_keyboard(user_id))
+        
+    # Очищаем временную память
+    context.user_data.pop('buy_item_key', None)
+    return MAIN_MENU
 
 def main():
     # 1. Инициализируем БД и таблицы
@@ -4134,6 +4190,8 @@ def main():
             # --- НОВЫЕ СТРОКИ ---
             CLAN_GIFT_GOLD_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_gold)],
             CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
+            # --- НОВАЯ СТРОКА (Магазин) ---
+            SHOP_BUY_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_buy_quantity)],
         },
         fallbacks=[CommandHandler('start', start)]
     )
