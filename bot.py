@@ -1532,8 +1532,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         race_name = race_names.get(race_key, race_key.capitalize())
 
-        # --- КРАСИВЫЙ РАСЧЕТ УРОНА ---
+        # --- КРАСИВЫЙ РАСЧЕТ УРОНА (С УЧЕТОМ ФЕХТОВАНИЯ) ---
         eff_phys_stat = max(char['strength'], int(char['agility'] * 0.9))
+        base_phys = max(1, eff_phys_stat // 2)
         min_phys = int(base_phys * 0.8)
         max_phys = int(base_phys * 1.2)
         if max_phys <= min_phys: max_phys = min_phys + 1
