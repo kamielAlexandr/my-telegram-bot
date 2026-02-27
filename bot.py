@@ -1348,9 +1348,11 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("⚔️ НА БИТВУ!", callback_data='battle_menu')],
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
         [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu'),
-         InlineKeyboardButton("💎 Банк (Донат)", callback_data='donate_menu')], # <--- НОВАЯ КНОПКА
-        [InlineKeyboardButton("🏆 Топ игроков", callback_data='top_players')],
-        # --- НОВАЯ КНОПКА ССЫЛКИ ---
+         InlineKeyboardButton("💎 Банк (Донат)", callback_data='donate_menu')], 
+        [
+            InlineKeyboardButton("🏆 Топ героев", callback_data='top_players'),
+            InlineKeyboardButton("🛡 Топ кланов", callback_data='top_clans')
+        ],
         [InlineKeyboardButton("📢 Новости и Обновления", url='https://t.me/hero_spath')],
         # Где-то в списке кнопок:
         [
@@ -1645,7 +1647,11 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 8. ТОП ИГРОКОВ
     elif data == 'top_players':
         await show_top_players(query, user_id)
-        
+    # --- НОВЫЙ БЛОК: ТОП КЛАНОВ ---
+    elif data == 'top_clans':
+        await show_top_clans(query, user_id)
+        return MAIN_MENU
+    # ------------------------------
     # 9. ОБНОВИТЬ (Исправил на возврат в деревню)
     elif data == 'refresh':
         await safe_edit(
@@ -3575,7 +3581,29 @@ async def show_top_players(query, user_id):
         medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
         top_text += f"{medal} <b>{clan_tag}{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
     await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
-
+async def show_top_clans(query, user_id):
+    clans = database.get_all_clans()
+    
+    if not clans:
+        top_text = "🛡 <b>ТОП КЛАНОВ</b>\n\nВ этом мире еще не основано ни одного клана. Станьте первым!"
+    else:
+        top_text = "🛡 <b>ТОП КЛАНОВ ЭТОГО МИРА</b>\n━━━━━━━━━━━━━━━━\n"
+        for i, c in enumerate(clans, 1):
+            name = html.escape(c['name'])
+            members = c['members_count']
+            
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"<b>{i}.</b>"
+            top_text += f"{medal} <b>[{name}]</b>\n   └ 👥 Участников: {members}\n\n"
+            
+    # Добавляем кнопку возврата
+    kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+    
+    await safe_edit(
+        query, 
+        text=top_text, 
+        media=InputMediaPhoto(IMAGE_URLS['castle'], caption=top_text, parse_mode='HTML'), 
+        keyboard=InlineKeyboardMarkup(kb)
+    )
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "🆘 *Книга Знаний*\n\n"
