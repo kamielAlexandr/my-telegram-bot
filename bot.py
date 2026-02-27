@@ -1120,9 +1120,9 @@ def create_enemy(enemy_key, player_level):
     
 
     # 3. НАСТРОЙКА БАЛАНСА (Глобальное ослабление на 5%)
-    balance_nerf = 0.95  # Было 1.0, теперь базовый урон/хп -5% для высоких рангов
-    if enemy_rank in ['E', 'D']: balance_nerf = 0.85 # Было 0.90 (стало -15%)
-    elif enemy_rank == 'C': balance_nerf = 0.90 # Было 0.95 (стало -10%)
+    balance_nerf = 0.90  # Было 1.0, теперь базовый урон/хп -5% для высоких рангов
+    if enemy_rank in ['E', 'D']: balance_nerf = 0.80 # Было 0.90 (стало -15%)
+    elif enemy_rank == 'C': balance_nerf = 0.85 # Было 0.95 (стало -10%)
 
     # Создание объекта врага
     enemy = base.copy()
@@ -1202,12 +1202,17 @@ def calculate_crit_chance(agility): return min(0.03 + (agility * 0.002), 0.15)
 def calculate_damage(character, enemy, damage_type='physical', buffs=None):
     if buffs is None: buffs = {}
 
-    # 1. Базовый стат + БАФФЫ
+   # 1. Базовый стат + БАФФЫ
     if damage_type == 'physical':
-        # Берем Силу героя + бонус от зелья (если есть)
-        stat_val = character['strength'] + buffs.get('strength', {}).get('val', 0)
+        str_val = character['strength'] + buffs.get('strength', {}).get('val', 0)
+        agi_val = character['agility'] + buffs.get('agility', {}).get('val', 0)
+        
+        # БАЛАНС: Механика "Фехтования". Если ловкость выше, бьем от нее (штраф 10%, т.к. она дает еще и уворот/крит)
+        if agi_val > str_val:
+            stat_val = int(agi_val * 0.9)
+        else:
+            stat_val = str_val
     else:
-        # Берем Интеллект героя + бонус от зелья
         stat_val = character['intelligence'] + buffs.get('intelligence', {}).get('val', 0)
 
     base_damage = max(1, stat_val // 2)
@@ -1528,7 +1533,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         race_name = race_names.get(race_key, race_key.capitalize())
 
         # --- КРАСИВЫЙ РАСЧЕТ УРОНА ---
-        base_phys = max(1, char['strength'] // 2)
+        eff_phys_stat = max(char['strength'], int(char['agility'] * 0.9))
         min_phys = int(base_phys * 0.8)
         max_phys = int(base_phys * 1.2)
         if max_phys <= min_phys: max_phys = min_phys + 1
@@ -2402,19 +2407,16 @@ async def build_pier_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await query.answer("❌ Нужно 1000 золота!", show_alert=True)
 
-async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    char = database.get_character(user_id)
-    
-    # Списываем 1 наживку
-    database.remove_item(user_id, 'bait_worm', 1)
-    
-    # --- РУЛЕТКА РЫБАКА ---
+# --- РУЛЕТКА РЫБАКА (СУРОВЫЙ БАЛАНС) ---
     roll = random.random() # Число от 0.0 до 1.0
     
-    if roll < 0.15: # 15% ШАНС ВЫЛОВИТЬ МОНСТРА!
-        enemy_key = random.choice(['drowned_corpse', 'swamp_kraken'])
+    if roll < 0.05: # 5% ШАНС ВЫЛОВИТЬ МОНСТРА (Было 15%)
+        # Кракен теперь элита. Шанс на Кракена 20%, на Утопленника 80%
+        if random.random() < 0.20:
+            enemy_key = 'swamp_kraken'
+        else:
+            enemy_key = 'drowned_corpse'
+            
         enemy = create_enemy(enemy_key, char['level'])
         
         # Насильно закидываем в бой
@@ -2430,8 +2432,9 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await render_battle(query, user_id)
         return IN_BATTLE
         
-    elif roll < 0.25: # 10% ШАНС ВЫЛОВИТЬ СУНДУК
-        gold_found = random.randint(100, 300)
+    elif roll < 0.10: # 5% ШАНС НА СУНДУК (Было 10%)
+        # Жестко режем золото в сундуках (теперь 30-100 вместо 100-300)
+        gold_found = random.randint(30, 100)
         database.add_gold(user_id, gold_found)
         database.buy_item(user_id, 'small_hp', 'potion', '🧪 Малое лечебное', 0, 30)
         
@@ -2440,16 +2443,16 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return MAIN_MENU
         
-    elif roll < 0.45: # 20% ШАНС ВЫЛОВИТЬ МУСОР
+    elif roll < 0.40: # 30% ШАНС НА МУСОР (Было 20%) - рыбаки чаще терпят неудачу
         database.buy_item(user_id, 'trash_boot', 'material', '👢 Дырявый сапог', 0, 0)
         txt = "👢 **Мусор...**\nВы вытянули чей-то старый дырявый сапог."
         kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return MAIN_MENU
         
-    else: # 55% ШАНС ВЫЛОВИТЬ РЫБУ
-        # Немного усложним: 10% на золотую рыбу, 90% на обычную
-        if random.random() < 0.10:
+    else: # 60% ШАНС ВЫЛОВИТЬ РЫБУ
+        # Золотой карп попадается только в 3% случаев успешного улова (было 10%)
+        if random.random() < 0.03:
             database.buy_item(user_id, 'fish_golden', 'material', '🐡 Золотой карп', 0, 0)
             txt = "✨ **РЕДКИЙ УЛОВ!**\nВы поймали 🐡 Золотого карпа! Его можно дорого продать."
         else:
