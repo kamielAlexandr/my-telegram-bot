@@ -420,22 +420,7 @@ def increment_boss_kills(user_id, is_mini_boss=False):
     finally:
         conn.close()
 
-def get_top_players(limit=10):
-    conn = get_connection()
-    if not conn: return []
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            # ИСПРАВЛЕНО: Теперь берем и название клана тоже!
-            cursor.execute("""
-                SELECT pc.character_name, pc.race, pc.level, pc.boss_kills, cl.name as clan_name 
-                FROM player_characters pc
-                LEFT JOIN clans cl ON pc.clan_id = cl.id
-                ORDER BY pc.level DESC, pc.experience DESC 
-                LIMIT %s
-            """, (limit,))
-            return cursor.fetchall()
-    finally:
-        conn.close()
+
 
 def get_all_users():
     conn = get_connection()
@@ -1380,10 +1365,12 @@ def get_top_players(limit=10):
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Используем LEFT JOIN: берем героя и приклеиваем к нему имя клана по clan_id
             cursor.execute("""
-                SELECT character_name, race, level, battle_wins, boss_kills, gold 
-                FROM player_characters 
-                ORDER BY level DESC, battle_wins DESC 
+                SELECT pc.character_name, pc.race, pc.level, pc.boss_kills, cl.name as clan_name 
+                FROM player_characters pc
+                LEFT JOIN clans cl ON pc.clan_id = cl.id 
+                ORDER BY pc.level DESC, pc.experience DESC 
                 LIMIT %s
             """, (limit,))
             return cursor.fetchall()
