@@ -2407,7 +2407,15 @@ async def build_pier_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await query.answer("❌ Нужно 1000 золота!", show_alert=True)
 
-# --- РУЛЕТКА РЫБАКА (СУРОВЫЙ БАЛАНС) ---
+async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    # Списываем 1 наживку
+    database.remove_item(user_id, 'bait_worm', 1)
+    
+    # --- РУЛЕТКА РЫБАКА (СУРОВЫЙ БАЛАНС) ---
     roll = random.random() # Число от 0.0 до 1.0
     
     if roll < 0.05: # 5% ШАНС ВЫЛОВИТЬ МОНСТРА (Было 15%)
@@ -2462,7 +2470,6 @@ async def build_pier_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return MAIN_MENU
-        
 # --- ГЕНЕРАТОР ЗАДАНИЙ ---
 def generate_daily_quests(rank, reputation=0): # <--- Добавили аргумент reputation
     """Генерирует квесты с учетом репутации"""
