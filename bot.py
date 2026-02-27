@@ -1682,7 +1682,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 8. ТОП ИГРОКОВ
     elif data == 'top_players':
         await show_top_players(query, user_id)
-    # --- НОВЫЙ БЛОК: ТОП КЛАНОВ ---
+        return MAIN_MENU
+        
+    # 8.1. ТОП КЛАНОВ
     elif data == 'top_clans':
         await show_top_clans(query, user_id)
         return MAIN_MENU
@@ -3685,9 +3687,8 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def show_top_players(query, user_id):
     top_players = database.get_top_players(10)
-    top_text = "🏆 <b>ЛЕГЕНДЫ ЭТОГО МИРА</b>\n━━━━━━━━━━━━━━━━\n"
+    top_text = "🏆 *ЛЕГЕНДЫ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
     
-    # Локальный словарь рас
     race_names = {
         'human': 'Человек',
         'elf': 'Эльф',
@@ -3699,53 +3700,49 @@ async def show_top_players(query, user_id):
     }
     
     for i, player in enumerate(top_players, 1):
-        name = html.escape(player['character_name'])
+        # Очищаем имена от спецсимволов, чтобы не ломался Markdown
+        name = player['character_name'].replace('_', '\\_').replace('*', '\\*')
         lvl = player['level']
         race_key = player['race']
         race_name = race_names.get(race_key, 'Неизвестно')
         bosses = player.get('boss_kills', 0)
         
-        # --- ФОРМИРУЕМ ТЕГ КЛАНА ---
         clan_name = player.get('clan_name')
-        # Если игрок в клане, делаем красивый жирный тег, например: [Темные]
-        clan_tag = f"<b>[{html.escape(clan_name)}]</b> " if clan_name else ""
-        # ---------------------------
+        clan_tag = f" *[{clan_name}]* " if clan_name else " "
         
-        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"<b>{i}.</b>"
+        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"*{i}.*"
         
-        # Собираем строчку: 🥇 [Титаны] Арториас
-        top_text += f"{medal} {clan_tag}<b>{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
+        top_text += f"{medal}{clan_tag}*{name}*\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
         
-    # Добавим кнопку возврата для удобства
     kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
     
     await safe_edit(
         query, 
         text=top_text, 
-        media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), 
+        media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='Markdown'), 
         keyboard=InlineKeyboardMarkup(kb)
     )
-    
+
+async def show_top_clans(query, user_id):
     clans = database.get_all_clans()
     
     if not clans:
-        top_text = "🛡 <b>ТОП КЛАНОВ</b>\n\nВ этом мире еще не основано ни одного клана. Станьте первым!"
+        top_text = "🛡 *ТОП КЛАНОВ*\n\nВ этом мире еще не основано ни одного клана. Станьте первым!"
     else:
-        top_text = "🛡 <b>ТОП КЛАНОВ ЭТОГО МИРА</b>\n━━━━━━━━━━━━━━━━\n"
+        top_text = "🛡 *ТОП КЛАНОВ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
         for i, c in enumerate(clans, 1):
-            name = html.escape(c['name'])
+            name = c['name'].replace('_', '\\_').replace('*', '\\*')
             members = c['members_count']
             
-            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"<b>{i}.</b>"
-            top_text += f"{medal} <b>[{name}]</b>\n   └ 👥 Участников: {members}\n\n"
+            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"*{i}.*"
+            top_text += f"{medal} *[{name}]*\n   └ 👥 Участников: {members}\n\n"
             
-    # Добавляем кнопку возврата
     kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
     
     await safe_edit(
         query, 
         text=top_text, 
-        media=InputMediaPhoto(IMAGE_URLS['castle'], caption=top_text, parse_mode='HTML'), 
+        media=InputMediaPhoto(IMAGE_URLS['castle'], caption=top_text, parse_mode='Markdown'), 
         keyboard=InlineKeyboardMarkup(kb)
     )
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
