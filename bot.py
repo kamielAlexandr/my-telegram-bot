@@ -1453,15 +1453,44 @@ def get_location_enemies_keyboard(rank, level):
     kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_battle_menu')])
     return InlineKeyboardMarkup(kb)
 
-def get_battle_action_keyboard(level=1):
-    kb = [
-        [InlineKeyboardButton("⚔️ Атака", callback_data='attack_physical'), InlineKeyboardButton("🔮 Магия", callback_data='attack_magic')],
-        [InlineKeyboardButton("🛡 Блок", callback_data='defend'), InlineKeyboardButton("🏃 Сбежать", callback_data='flee')],
-        [InlineKeyboardButton("🎒 Предметы", callback_data='battle_items')] # <-- НОВАЯ КНОПКА
-    ]
-    # Добавляем кнопку способностей, если уровень >= 10
-    if level >= 10:
-        kb.insert(1, [InlineKeyboardButton("💫 Способности", callback_data='abilities_menu')])
+def get_battle_action_keyboard(session):
+    """Новая клавиатура для системы Очков Действия (AP)"""
+    ap = session['player_ap']
+    queued = len(session['queued_actions'])
+    
+    kb = []
+    
+    # Кнопки действий (активны, только если хватает AP)
+    row1 = []
+    if ap >= 1:
+        row1.append(InlineKeyboardButton("⚔️ Физ (-1 AP)", callback_data='q_phys'))
+        row1.append(InlineKeyboardButton("🔮 Маг (-1 AP)", callback_data='q_mag'))
+    else:
+        row1.append(InlineKeyboardButton("❌ Нет AP", callback_data='ignore'))
+        
+    row2 = []
+    if ap >= 1:
+        row2.append(InlineKeyboardButton("🛡 Блок (-1 AP)", callback_data='q_block'))
+    if ap >= 2:
+        # Та самая механика удвоения: тратим 2 сейчас, получаем +4 в следующем раунде
+        row2.append(InlineKeyboardButton("🧘 Концентрация (-2 AP)", callback_data='q_focus'))
+        
+    if row1: kb.append(row1)
+    if row2: kb.append(row2)
+
+    # Кнопки управления очередью
+    ctrl_row = []
+    if queued > 0:
+        ctrl_row.append(InlineKeyboardButton("↩️ Сбросить очередь", callback_data='q_reset'))
+        ctrl_row.append(InlineKeyboardButton(f"🔥 ВЫПОЛНИТЬ ({queued} действ.)", callback_data='q_execute'))
+    
+    if ctrl_row: kb.append(ctrl_row)
+
+    # Дополнительные кнопки (Способности/Предметы пока оставим как быстрые действия)
+    kb.append([
+        InlineKeyboardButton("🏃 Сбежать", callback_data='flee'),
+        InlineKeyboardButton("🎒 Предметы", callback_data='battle_items')
+    ])
     
     return InlineKeyboardMarkup(kb)
     
@@ -1798,7 +1827,12 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             'slime_stacks': 0,
             'burn_stacks': 0,
             'frost_stacks': 0,
-            'active_buffs': {}
+            'active_buffs': {},
+            # --- НОВЫЕ ПЕРЕМЕННЫЕ AP ---
+            'max_ap': 5,             # Базовое количество AP
+            'player_ap': 5,          # Текущие AP игрока в раунде
+            'bonus_ap_next': 0,      # Бонусные AP на следующий раунд
+            'queued_actions': []     # Очередь команд игрока (Корзина)
         }
         await render_battle(query, user_id)
         return IN_BATTLE
@@ -1814,37 +1848,45 @@ async def render_battle(query, user_id):
     if not s: return 
     
     c, e = s['char'], s['enemy']
-    
-    log_entries = s['log'][-5:]
-    log_str = "\n".join(log_entries)
+    log_str = "\n".join(s['log'][-5:])
     
     player_hp = get_health_bar(c['health'], c['max_health'])
     enemy_hp = get_health_bar(e['health'], e['max_health'])
-    enemy_rank = e.get('rank', '?')
-    enemy_icon = "☠️" if e.get('is_boss') else "👺"
-    unique_id = random.randint(100, 999)
+    enemy_icon = "💀" if e.get('is_boss') else "👺"
     
+    # --- ВИЗУАЛИЗАЦИЯ ОЧЕРЕДИ AP ---
+    ap_icons = "🟢" * s['player_ap'] + "⚪" * (s['max_ap'] + s.get('bonus_ap_next', 0) - s['player_ap'])
+    
+    # Красивый вывод очереди
+    q_visual = []
+    for act in s['queued_actions']:
+        if act == 'phys': q_visual.append("⚔️")
+        elif act == 'mag': q_visual.append("🔮")
+        elif act == 'block': q_visual.append("🛡")
+        elif act == 'focus': q_visual.append("🧘")
+    
+    queue_str = " | ".join(q_visual) if q_visual else "_Пусто_"
+    # -------------------------------
+
     txt = (
-        f"{enemy_icon} *{e['name']}* `[Ранг {enemy_rank}]`\n"
+        f"{enemy_icon} *{e['name']}* `[Ранг {e.get('rank', '?')}]`\n"
         f"{enemy_hp}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *{c['character_name']}* `[{c['level']} ур.]`\n"
+        f"👤 *{c['character_name']}*\n"
         f"{player_hp} | 🌀 MP: {c['mana']}/{c['max_mana']}\n"
+        f"⚡ AP: {ap_icons} ({s['player_ap']} шт.)\n"
+        f"📜 Очередь: {queue_str}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"{log_str}"
-        f"\n`⏱ {datetime.now().strftime('%H:%M:%S')} | {unique_id}`" 
     )
     
     current_image = e['image']
-    last_image = s.get('last_image')
-    
-    if last_image == current_image:
-        await safe_edit(query, text=txt, keyboard=get_battle_action_keyboard(c['level']), media=None)
+    if s.get('last_image') == current_image:
+        await safe_edit(query, text=txt, keyboard=get_battle_action_keyboard(s), media=None)
     else:
         s['last_image'] = current_image
-        media_obj = InputMediaPhoto(current_image, caption=txt, parse_mode='Markdown')
-        await safe_edit(query, text=None, media=media_obj, keyboard=get_battle_action_keyboard(c['level']))
-
+        await safe_edit(query, text=None, media=InputMediaPhoto(current_image, caption=txt, parse_mode='Markdown'), keyboard=get_battle_action_keyboard(s))
+        
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -1863,8 +1905,30 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     action = query.data
 
+    # ==========================================
+    # === СИСТЕМА ОЧЕРЕДИ AP ===
+    # ==========================================
+    if action in ['q_phys', 'q_mag', 'q_block', 'q_focus']:
+        cost = 2 if action == 'q_focus' else 1
+        if s['player_ap'] >= cost:
+            s['player_ap'] -= cost
+            # Отрезаем "q_" спереди, сохраняем действие
+            s['queued_actions'].append(action[2:]) 
+            await render_battle(query, user_id)
+        else:
+            await query.answer("Не хватает AP!", show_alert=True)
+        return IN_BATTLE
+
+    elif action == 'q_reset':
+        # Возвращаем потраченные AP
+        for act in s['queued_actions']:
+            s['player_ap'] += 2 if act == 'focus' else 1
+        s['queued_actions'] = []
+        await render_battle(query, user_id)
+        return IN_BATTLE
+
     # --- 2. МЕНЮ ПРЕДМЕТОВ В БОЮ ---
-    if action == 'battle_items':
+    elif action == 'battle_items':
         items = database.get_inventory(user_id)
         kb = []
         found = False
@@ -1883,44 +1947,42 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, keyboard=InlineKeyboardMarkup(kb))
         return IN_BATTLE
 
-    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА ---
+    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (Мгновенное действие) ---
     elif action.startswith('use_battle_'):
         s['processing'] = True # Блокируем
-        item_key = action.split('_', 2)[2]
-        it = ITEMS_DB.get(item_key)
-        
-        # Списываем 1 шт
-        database.remove_item(user_id, item_key, 1)
-        
-        # Эффекты
-        if it['type'] == 'potion':
-            # Лечение
-            eff = it['effect']
-            if 'hp' in item_key or 'health' in item_key:
-                s['char']['health'] = min(s['char']['max_health'], s['char']['health'] + eff)
-                s['log'].append(f"🧪 Выпито {it['name']} (+{eff} HP)")
-            elif 'mp' in item_key or 'mana' in item_key:
-                s['char']['mana'] = min(s['char']['max_mana'], s['char']['mana'] + eff)
-                s['log'].append(f"🧪 Выпито {it['name']} (+{eff} MP)")
-        
-        elif it['type'] == 'buff_potion':
-            # Бафф
-            b_type = it['buff_type']
-            val = it['effect']
-            dur = it['duration']
+        try:
+            item_key = action.split('_', 2)[2]
+            it = ITEMS_DB.get(item_key)
             
-            # Если нет словаря баффов, создаем
-            if 'active_buffs' not in s: s['active_buffs'] = {}
+            # Списываем 1 шт
+            database.remove_item(user_id, item_key, 1)
             
-            s['active_buffs'][b_type] = {'val': val, 'dur': dur}
-            s['log'].append(f"🧪 {it['name']}! ({it['desc']})")
+            # Эффекты
+            if it['type'] == 'potion':
+                eff = it['effect']
+                if 'hp' in item_key or 'health' in item_key:
+                    s['char']['health'] = min(s['char']['max_health'], s['char']['health'] + eff)
+                    s['log'].append(f"🧪 Выпито {it['name']} (+{eff} HP)")
+                elif 'mp' in item_key or 'mana' in item_key:
+                    s['char']['mana'] = min(s['char']['max_mana'], s['char']['mana'] + eff)
+                    s['log'].append(f"🧪 Выпито {it['name']} (+{eff} MP)")
+            
+            elif it['type'] == 'buff_potion':
+                b_type = it['buff_type']
+                val = it['effect']
+                dur = it['duration']
+                
+                if 'active_buffs' not in s: s['active_buffs'] = {}
+                s['active_buffs'][b_type] = {'val': val, 'dur': dur}
+                s['log'].append(f"🧪 {it['name']}! ({it['desc']})")
 
-        # После питья зелья ход переходит к врагу (или можно сделать не тратящим ход)
-        # Здесь сделаем так, что ход ТРАТИТСЯ (враг атакует)
-        pass # Идем дальше к логике хода
+            await render_battle(query, user_id)
+        finally:
+            s['processing'] = False
+        return IN_BATTLE
 
-    # --- 4. МЕНЮ СПОСОБНОСТЕЙ (НЕ ТРАТИТ ХОД) ---
-    elif query.data == 'abilities_menu':
+    # --- 4. МЕНЮ СПОСОБНОСТЕЙ ---
+    elif action == 'abilities_menu':
         char = s['char']
         race_skills = RACE_ABILITIES.get(char['race'], {})
         kb = []
@@ -1938,293 +2000,296 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, text=None, keyboard=InlineKeyboardMarkup(kb))
         return IN_BATTLE
 
-    elif query.data == 'back_to_fight':
+    elif action == 'back_to_fight':
         await render_battle(query, user_id)
         return IN_BATTLE
 
+    elif action == 'flee':
+        if s['enemy'].get('is_boss') or s['enemy'].get('is_mini_boss'):
+            await query.answer("От босса не сбежать!", show_alert=True)
+            return IN_BATTLE
+        elif random.random() < 0.6:
+            database.update_character_stats(user_id, health=s['char']['health'], mana=s['char']['mana'])
+            del battle_sessions[user_id]
+            txt = "🏃 *Вы сбежали!*"
+            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+            return MAIN_MENU
+        else:
+            s['log'].append("⛓ *ПОБЕГ НЕ УДАЛСЯ!* Враг атакует!")
+            action = 'q_execute' # Принудительно запускаем раунд, если побег не удался
+
     # ==========================================
-    # === НАЧАЛО ХОДА (ДЕЙСТВИЯ, ТРАТЯЩИЕ ХОД) ===
+    # === ИСПОЛЬЗОВАНИЕ СПОСОБНОСТИ ===
     # ==========================================
-    
-    s['processing'] = True
-    try:
-        if not action.startswith('use_battle_'): # Если это не зелье (мы уже ответили выше)
-            await query.answer()
-        
+    elif action.startswith('use_skill_'):
+        skill_key = action.split('_')[2]
         c, e, log = s['char'], s['enemy'], s['log']
-        if 'active_buffs' not in s: s['active_buffs'] = {}
         
-        player_damage = 0
-        enemy_damage_mod = 1.0 
+        skill = None
+        for lvl, sk in RACE_ABILITIES.get(c['race'], {}).items():
+            if sk['key'] == skill_key: skill = sk
         
-        # 1. ОБНОВЛЕНИЕ КУЛДАУНОВ И БАФФОВ
-        # Снижаем КД скиллов
-        for k in list(s['cooldowns'].keys()):
-            if s['cooldowns'][k] > 0: s['cooldowns'][k] -= 1
+        if not skill: return IN_BATTLE
+        
+        if s['cooldowns'].get(skill_key, 0) > 0:
+            await query.answer(f"⏳ Перезарядка! {s['cooldowns'][skill_key]} ход.", show_alert=True)
+            return IN_BATTLE
             
-        # Снижаем длительность баффов
-        expired_buffs = []
-        for b_key, b_data in s['active_buffs'].items():
-            b_data['dur'] -= 1
-            if b_data['dur'] <= 0: expired_buffs.append(b_key)
-        
-        for exp in expired_buffs:
-            del s['active_buffs'][exp]
-            # Можно добавить лог: log.append(f"Эффект {exp} истёк.")
+        if c['mana'] < skill['mana']:
+            await query.answer("💧 Не хватает маны!", show_alert=True)
+            return IN_BATTLE
 
-        # === ДЕЙСТВИЯ ИГРОКА ===
-        
-        # А) Использование способности
-        if action.startswith('use_skill_'):
-            skill_key = action.split('_')[2]
-            skill = None
-            for lvl, sk in RACE_ABILITIES.get(c['race'], {}).items():
-                if sk['key'] == skill_key: skill = sk
-            
-            if not skill: return IN_BATTLE
-            
-            if s['cooldowns'].get(skill_key, 0) > 0:
-                s['processing'] = False
-                await query.answer(f"⏳ Перезарядка! {s['cooldowns'][skill_key]} ход.", show_alert=True)
-                return IN_BATTLE
-            if c['mana'] < skill['mana']:
-                s['processing'] = False
-                await query.answer("💧 Не хватает маны!", show_alert=True)
-                return IN_BATTLE
-
+        # Если мана есть, добавляем способность в очередь, как и обычный удар
+        # Будем считать, что классовые способности стоят 2 AP
+        if s['player_ap'] >= 2:
+            s['player_ap'] -= 2
             c['mana'] -= skill['mana']
             s['cooldowns'][skill_key] = skill['cd']
             
-            # --- ЛОГИКА СКИЛЛОВ (ТЕПЕРЬ С УЧЕТОМ ФЕХТОВАНИЯ) ---
+            s['queued_actions'].append(f"skill_{skill_key}") 
+            await render_battle(query, user_id)
+        else:
+            await query.answer("Не хватает AP! (Нужно 2)", show_alert=True)
+        return IN_BATTLE
+
+
+    # ==========================================
+    # === РАСЧЕТ РАУНДА (EXECUTE) ===
+    # ==========================================
+    if action == 'q_execute':
+        if not s['queued_actions']:
+            await query.answer("Очередь пуста!", show_alert=True)
+            return IN_BATTLE
+            
+        s['processing'] = True
+        try:
+            await query.answer("Скрестились клинки...")
+            c, e, log = s['char'], s['enemy'], s['log']
+            if 'active_buffs' not in s: s['active_buffs'] = {}
+            
+            log.append(f"\n--- Раунд {s['turn']} ---")
+
+            # Обновление кулдаунов и баффов
+            for k in list(s['cooldowns'].keys()):
+                if s['cooldowns'][k] > 0: s['cooldowns'][k] -= 1
+                
+            expired_buffs = []
+            for b_key, b_data in s['active_buffs'].items():
+                b_data['dur'] -= 1
+                if b_data['dur'] <= 0: expired_buffs.append(b_key)
+            for exp in expired_buffs:
+                del s['active_buffs'][exp]
+
+            # 1. ОБРАБОТКА ДЕЙСТВИЙ ИГРОКА
+            total_player_dmg = 0
+            blocks_active = 0
+            focus_used = 0
+            
+            # --- Механика Фехтования ---
             str_val = c['strength'] + s['active_buffs'].get('strength', {}).get('val', 0)
             agi_val = c['agility'] + s['active_buffs'].get('agility', {}).get('val', 0)
-            # Берем ловкость, если она выше силы (со штрафом 10%)
             eff_phys = int(agi_val * 0.9) if agi_val > str_val else str_val
 
-            if skill['type'] == 'heal':
-                heal = int(c['max_health'] * skill['val'])
-                c['health'] = min(c['max_health'], c['health'] + heal)
-                log.append(f"✨ *{skill['name']}* +{heal} HP!")
-            elif skill['type'] == 'dmg':
-                player_damage = int(eff_phys * skill['val'])
-                log.append(f"⚔️ *{skill['name']}* нанес {player_damage}!")
-            elif skill['type'] == 'dmg_agi':
-                player_damage = int(agi_val * skill['val'])
-                log.append(f"🏹 *{skill['name']}* нанес {player_damage}!")
-            elif skill['type'] == 'magic_nuke':
-                int_val = c['intelligence'] + s['active_buffs'].get('intelligence', {}).get('val', 0)
-                player_damage = int(int_val * skill['val'])
-                log.append(f"⚡ *{skill['name']}* ударил на {player_damage}!")
-            elif skill['type'] == 'lifesteal':
-                player_damage = int(eff_phys * skill['val'])
-                heal = int(player_damage * 0.5)
-                c['health'] = min(c['max_health'], c['health'] + heal)
-                log.append(f"🩸 *{skill['name']}* dmg {player_damage}, heal {heal}!")
-            elif skill['type'] == 'buff_def':
-                enemy_damage_mod = 0.1
-                log.append(f"🛡 *{skill['name']}* защита!")
-            elif skill['type'] == 'buff_str':
-                player_damage = int(eff_phys * 2.0)
-                log.append(f"💢 *{skill['name']}* удар {player_damage}!")
-            elif skill['type'] == 'stun_dmg':
-                player_damage = int(eff_phys * skill['val'])
-                if random.random() < 0.5:
-                    enemy_damage_mod = 0.0
-                    log.append(f"🔨 *{skill['name']}* СТАН!")
-                else:
-                    log.append(f"🔨 *{skill['name']}* удар {player_damage}.")
-            elif skill['type'] == 'dmg_exec':
-                base = eff_phys * skill['val']
-                if e['health'] < (e['max_health'] * 0.3): base *= 2
-                player_damage = int(base)
-                log.append(f"🪓 *{skill['name']}* удар {player_damage}!")
-            elif skill['type'] == 'heal_mana':
-                heal = int(c['max_health'] * skill['val'])
-                c['health'] = min(c['max_health'], c['health'] + heal)
-                # Снимаем дебаффы
-                s['slime_stacks'] = 0
-                s['burn_stacks'] = 0
-                s['frost_stacks'] = 0
-                log.append(f"🍃 *{skill['name']}* +{heal} HP и снятие эффектов!")
-            # --------------------------------------------------
+            for act in s['queued_actions']:
+                if act == 'phys':
+                    dmg, is_crit = calculate_damage(c, e, 'physical', s['active_buffs'])
+                    total_player_dmg += dmg
+                    # Яд на оружии
+                    if 'poison_weapon' in s['active_buffs']:
+                         val = s['active_buffs']['poison_weapon']['val']
+                         e['health'] -= val
+                         log.append(f"🧪 Яд нанес {val} урона!")
+                         
+                elif act == 'mag':
+                    active_spell_key = c.get('elf_active_spell')
+                    spell = None
+                    if c['race'] == 'elf' and active_spell_key:
+                        for school in ELF_SPELLS.values():
+                            if active_spell_key in school['spells']:
+                                spell = school['spells'][active_spell_key]; break
+                    
+                    mana_cost = spell['mana'] if spell else 10
+                    if c['mana'] >= mana_cost:
+                        c['mana'] -= mana_cost
+                        if not spell:
+                            dmg, is_crit = calculate_damage(c, e, 'magic', s['active_buffs'])
+                            total_player_dmg += int(dmg * 1.2)
+                        else:
+                            base_mag = (c['intelligence'] + s['active_buffs'].get('intelligence', {}).get('val', 0)) // 2
+                            dmg = int(base_mag * spell['val'])
+                            total_player_dmg += dmg
+                            if spell['type'] == 'drain': 
+                                heal = int(dmg * 0.4)
+                                c['health'] = min(c['max_health'], c['health'] + heal)
+                    else:
+                        log.append("💧 Магия сорвалась (нет маны)")
+                        
+                elif act == 'block':
+                    blocks_active += 1
+                elif act == 'focus':
+                    focus_used += 1
+                    
+                # Обработка классовых навыков из очереди
+                elif act.startswith('skill_'):
+                    sk_key = act.split('_')[1]
+                    skill = None
+                    for lvl, sk in RACE_ABILITIES.get(c['race'], {}).items():
+                        if sk['key'] == sk_key: skill = sk
+                    
+                    if skill:
+                        if skill['type'] == 'heal':
+                            heal = int(c['max_health'] * skill['val'])
+                            c['health'] = min(c['max_health'], c['health'] + heal)
+                            log.append(f"✨ *{skill['name']}* +{heal} HP!")
+                        elif skill['type'] == 'dmg':
+                            total_player_dmg += int(eff_phys * skill['val'])
+                        elif skill['type'] == 'dmg_agi':
+                            total_player_dmg += int(agi_val * skill['val'])
+                        elif skill['type'] == 'magic_nuke':
+                            int_val = c['intelligence'] + s['active_buffs'].get('intelligence', {}).get('val', 0)
+                            total_player_dmg += int(int_val * skill['val'])
+                        elif skill['type'] == 'lifesteal':
+                            pdmg = int(eff_phys * skill['val'])
+                            heal = int(pdmg * 0.5)
+                            total_player_dmg += pdmg
+                            c['health'] = min(c['max_health'], c['health'] + heal)
+                            log.append(f"🩸 *{skill['name']}* Лечение: {heal}!")
+                        elif skill['type'] == 'buff_def':
+                            blocks_active += 3 # Супер защита
+                            log.append(f"🛡 *{skill['name']}* активирован!")
+                        elif skill['type'] == 'buff_str':
+                            total_player_dmg += int(eff_phys * 2.0)
+                        elif skill['type'] == 'stun_dmg':
+                            total_player_dmg += int(eff_phys * skill['val'])
+                            if random.random() < 0.5:
+                                e['is_stunned'] = True
+                                log.append(f"🔨 *{skill['name']}* ОГЛУШЕНИЕ!")
+                        elif skill['type'] == 'dmg_exec':
+                            base = eff_phys * skill['val']
+                            if e['health'] < (e['max_health'] * 0.3): base *= 2
+                            total_player_dmg += int(base)
+                        elif skill['type'] == 'heal_mana':
+                            heal = int(c['max_health'] * skill['val'])
+                            c['health'] = min(c['max_health'], c['health'] + heal)
+                            s['slime_stacks'] = 0
+                            s['burn_stacks'] = 0
+                            s['frost_stacks'] = 0
+                            log.append(f"🍃 *{skill['name']}* +{heal} HP и очищение!")
 
-        # Б) Обычные действия
-        elif action == 'flee':
-            if e.get('is_boss') or e.get('is_mini_boss'):
-                log.append("🚫 *ОТ БОССА НЕ СБЕЖАТЬ!*")
-            elif random.random() < 0.6:
-                database.update_character_stats(user_id, health=c['health'], mana=c['mana'])
-                del battle_sessions[user_id]
-                txt = "🏃 *Вы сбежали!*"
-                await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-                return MAIN_MENU
-            else:
-                log.append("⛓ *ПОБЕГ НЕ УДАЛСЯ!*")
-        
-        elif action == 'defend':
-            log.append("🛡 Блок.")
-            enemy_damage_mod = 0.5
-            
-        elif action == 'attack_physical':
-            # Передаем buffs в расчет
-            dmg, is_crit = calculate_damage(c, e, 'physical', s['active_buffs'])
-            player_damage = dmg
-            crit_txt = "💥 *КРИТ!* " if is_crit else ""
-            log.append(f"{crit_txt}Удар на *{dmg}*!")
-            
-            # Проверка на яд на оружии (бафф)
-            if 'poison_weapon' in s['active_buffs']:
-                 val = s['active_buffs']['poison_weapon']['val']
-                 e['health'] -= val
-                 log.append(f"🧪 Яд на клинке нанес {val} урона!")
+            if total_player_dmg > 0:
+                e['health'] -= total_player_dmg
+                log.append(f"⚔️ Вы нанесли *{total_player_dmg}* урона!")
 
-        elif action == 'attack_magic':
-            active_spell_key = c.get('elf_active_spell')
-            spell = None
-            if c['race'] == 'elf' and active_spell_key:
-                for school in ELF_SPELLS.values():
-                    if active_spell_key in school['spells']:
-                        spell = school['spells'][active_spell_key]; break
-            
-            mana_cost = spell['mana'] if spell else 10
-            if c['mana'] >= mana_cost:
-                c['mana'] -= mana_cost
-                if not spell:
-                    # Обычная магия с учетом баффов
-                    dmg, is_crit = calculate_damage(c, e, 'magic', s['active_buffs'])
-                    player_damage = int(dmg * 1.2)
-                    crit_txt = " (КРИТ!)" if is_crit else ""
-                    log.append(f"🔮 Магия *{player_damage}*{crit_txt}!")
-                else:
-                    # Эльфийская магия (упрощенно копируем логику, добавляем бафф инты)
-                    base_mag = (c['intelligence'] + s['active_buffs'].get('intelligence', {}).get('val', 0)) // 2
-                    # ... тут ваша логика эльфийских заклинаний ...
-                    # Для краткости:
-                    dmg = int(base_mag * spell['val'])
-                    player_damage = dmg
-                    log.append(f"🔥 *{spell['name']}* нанес {dmg}!")
-                    if spell['type'] == 'drain': 
-                        heal = int(dmg * 0.4)
-                        c['health'] = min(c['max_health'], c['health'] + heal)
-            else:
-                log.append("💧 *НЕТ МАНЫ!*")
-                player_damage = max(1, c['strength'] // 4)
-
-        # Применяем урон игрока
-        if player_damage > 0:
-            e['health'] -= player_damage
-
-            # Проверка на Огненный Щит (бафф) - наносит урон атакующему, но тут мы атакуем...
-            # Обычно огненный щит бьет врага, когда ВРАГ бьет нас. Реализуем ниже.
-
-        # --- ПРОВЕРКА ПОБЕДЫ ---
-        if e['health'] <= 0:
-            gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
-            xp_win = e['exp']
-            
-            # Лут
-            dropped_items = []
-            if e.get('drops'):
-                for drop in e['drops']:
-                    if random.random() < 0.4:
-                        item_info = ITEMS_DB.get(drop)
-                        if item_info:
-                            database.buy_item(user_id, drop, 'material', item_info['name'], 0, 0)
-                            dropped_items.append(item_info['name'])
-            
-            # Квесты
-            enemy_key = s.get('enemy_key')
-            if c.get('quest_type') == 'kill' and c.get('quest_target') == enemy_key:
-                if c.get('quest_progress') < c.get('quest_goal'):
-                    database.update_quest_progress(user_id, 1)
-
-            # --- ВАЖНО: ИСПРАВЛЕННЫЙ ПОРЯДОК СОХРАНЕНИЯ ---
-            # Сначала сохраняем здоровье после битвы
-            database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
-            # А ЗАТЕМ выдаем опыт (если будет новый уровень, здоровье восстановится поверх старого)
-            database.add_experience(user_id, xp_win)
-            database.add_gold(user_id, gold_win)
-            # ---------------------------------------------
-            
-            if e.get('is_boss'): database.increment_boss_kills(user_id, False)
-            if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
-            
-            del battle_sessions[user_id]
-            loot_txt = f"\n🎒 Лут: {', '.join(dropped_items)}" if dropped_items else ""
-            win_msg = f"🏆 *ПОБЕДА!*\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}"
-            await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-            return MAIN_MENU
-        # --- 5. ХОД ВРАГА ---
-        
-        # Слизь
-        if s['enemy_key'] == 'slime':
-            s['slime_stacks'] += 1
-            pd = s['slime_stacks'] * 3
-            heal = s['slime_stacks'] * 2
-            e['health'] = min(e['max_health'], e['health'] + heal)
-            c['health'] -= pd
-            log.append(f"🤢 *ЯД!* -{pd} HP")
-
-        # Шаман
-        if s['enemy_key'] == 'goblin_shaman':
-            s['burn_stacks'] = s.get('burn_stacks', 0) + 1
-            fd = s['burn_stacks'] * 4
-            c['health'] -= fd
-            log.append(f"🔥 *ОЖОГ!* -{fd} HP")
-
-        # === МОРОЗНЫЙ ПАУК (НОВОЕ) ===
-        if s['enemy_key'] == 'frost_spider':
-            s['frost_stacks'] = s.get('frost_stacks', 0) + 1
-            fr_dmg = s['frost_stacks'] * 5
-            c['health'] -= fr_dmg
-            log.append(f"❄️ *ХОЛОД!* -{fr_dmg} HP (Стак {s['frost_stacks']})")
-
-        # Атака врага
-        if enemy_damage_mod == 0.0:
-            log.append("💫 Враг в стане!")
-        else:
-            # Спец атаки
-            spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log)
-            if spec_dmg > 0:
-                final = int(spec_dmg * enemy_damage_mod)
-                c['health'] -= final
-                if enemy_damage_mod < 1.0: log.append(f"🛡 Щит снизил урон ({final})")
-            else:
-                # Обычная атака (С УЧЕТОМ БАФФОВ БРОНИ/УВОРОТА)
-                base_dmg, is_dodged = calculate_enemy_damage(e, c, s['active_buffs'])
+            # 2. ПРОВЕРКА ПОБЕДЫ
+            if e['health'] <= 0:
+                gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
+                xp_win = e['exp']
                 
-                if is_dodged:
-                    log.append(f"💨 *УВОРОТ!* {e['name']} промазал!")
-                else:
-                    final = int(base_dmg * enemy_damage_mod)
-                    if enemy_damage_mod < 1.0: log.append(f"🛡 Блок! Урон {final}")
-                    else: log.append(f"💔 {e['name']} нанес *{final}* урона!")
-                    c['health'] -= final
+                dropped_items = []
+                if e.get('drops'):
+                    for drop in e['drops']:
+                        if random.random() < 0.4:
+                            item_info = ITEMS_DB.get(drop)
+                            if item_info:
+                                database.buy_item(user_id, drop, 'material', item_info['name'], 0, 0)
+                                dropped_items.append(item_info['name'])
+                
+                if c.get('quest_type') == 'kill' and c.get('quest_target') == s.get('enemy_key'):
+                    if c.get('quest_progress') < c.get('quest_goal'):
+                        database.update_quest_progress(user_id, 1)
 
-                    # Ответка от Огненного Щита (бафф)
+                database.update_character_stats(user_id, health=c['health'], mana=c['mana'], battle_wins=c.get('battle_wins',0)+1)
+                database.add_experience(user_id, xp_win)
+                database.add_gold(user_id, gold_win)
+                
+                if e.get('is_boss'): database.increment_boss_kills(user_id, False)
+                if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
+                
+                del battle_sessions[user_id]
+                loot_txt = f"\n🎒 Лут: {', '.join(dropped_items)}" if dropped_items else ""
+                win_msg = f"🏆 *ПОБЕДА!*\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}"
+                await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
+
+            # 3. ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ ВРАГА
+            if s['enemy_key'] == 'slime':
+                s['slime_stacks'] += 1
+                pd = s['slime_stacks'] * 3
+                heal = s['slime_stacks'] * 2
+                e['health'] = min(e['max_health'], e['health'] + heal)
+                c['health'] -= pd
+                log.append(f"🤢 *ЯД!* -{pd} HP")
+
+            elif s['enemy_key'] == 'goblin_shaman':
+                s['burn_stacks'] = s.get('burn_stacks', 0) + 1
+                fd = s['burn_stacks'] * 4
+                c['health'] -= fd
+                log.append(f"🔥 *ОЖОГ!* -{fd} HP")
+
+            elif s['enemy_key'] == 'frost_spider':
+                s['frost_stacks'] = s.get('frost_stacks', 0) + 1
+                fr_dmg = s['frost_stacks'] * 5
+                c['health'] -= fr_dmg
+                log.append(f"❄️ *ХОЛОД!* -{fr_dmg} HP (Стак {s['frost_stacks']})")
+
+            if e.get('is_stunned'):
+                log.append("💫 Враг оглушен и пропускает ход!")
+                e['is_stunned'] = False
+            else:
+                enemy_ap = 5
+                total_enemy_dmg = 0
+                enemy_ability_used = False
+
+                while enemy_ap > 0:
+                    if enemy_ap >= 2 and not enemy_ability_used and random.random() < e.get('special_chance', 0.20):
+                        spec_dmg, spec_desc, spec_status = process_enemy_special_attack(e, c, log) 
+                        total_enemy_dmg += spec_dmg
+                        enemy_ap -= 2
+                        enemy_ability_used = True
+                    else:
+                        base_dmg, is_dodged = calculate_enemy_damage(e, c, s['active_buffs'])
+                        if not is_dodged:
+                            total_enemy_dmg += base_dmg
+                        else:
+                            log.append("💨 Вы увернулись от атаки!")
+                        enemy_ap -= 1
+
+                if total_enemy_dmg > 0:
+                    reduction = min(0.9, blocks_active * 0.3) 
+                    final_enemy_dmg = int(total_enemy_dmg * (1.0 - reduction))
+                    c['health'] -= final_enemy_dmg
+                    
+                    if blocks_active > 0:
+                        log.append(f"🛡 Блок спас от {int(reduction*100)}% урона!")
+                    log.append(f"💔 Враг нанес *{final_enemy_dmg}* урона.")
+
                     if 'fire_shield' in s['active_buffs']:
                         val = s['active_buffs']['fire_shield']['val']
                         e['health'] -= val
                         log.append(f"🔥 Огненный щит обжег врага на {val}!")
 
-        # --- ПРОВЕРКА ПОРАЖЕНИЯ ---
-        if c['health'] <= 0:
-            database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
-            del battle_sessions[user_id]
-            death_msg = "💀 *ВЫ ПОГИБЛИ...*"
-            await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-            return MAIN_MENU
+            # 4. ПРОВЕРКА ПОРАЖЕНИЯ
+            if c['health'] <= 0:
+                database.update_character_stats(user_id, health=0, battle_losses=c.get('battle_losses',0)+1)
+                del battle_sessions[user_id]
+                death_msg = "💀 *ВЫ ПОГИБЛИ...*"
+                await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
 
-        # Следующий ход
-        s['turn'] += 1
-        await render_battle(query, user_id)
+            # 5. СЛЕДУЮЩИЙ РАУНД
+            s['player_ap'] = s['max_ap'] + (focus_used * 4) 
+            if focus_used > 0:
+                log.append("🧘 Концентрация: Энергия кипит.")
 
-    finally:
-        if user_id in battle_sessions:
-            battle_sessions[user_id]['processing'] = False
-            
+            s['queued_actions'] = [] 
+            s['turn'] += 1
+            await render_battle(query, user_id)
+
+        finally:
+            if user_id in battle_sessions:
+                battle_sessions[user_id]['processing'] = False
+
     return IN_BATTLE
-
 # ==========================================
 # === СИСТЕМА КЛАНОВ ===
 # ==========================================
@@ -3553,9 +3618,9 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def show_top_players(query, user_id):
     top_players = database.get_top_players(10)
-    top_text = "🏆 *ЛЕГЕНДЫ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
+    top_text = "🏆 <b>ЛЕГЕНДЫ ЭТОГО МИРА</b>\n━━━━━━━━━━━━━━━━\n"
     
-    # Добавляем наш надежный локальный словарь рас
+    # Локальный словарь рас
     race_names = {
         'human': 'Человек',
         'elf': 'Эльф',
@@ -3570,18 +3635,30 @@ async def show_top_players(query, user_id):
         name = html.escape(player['character_name'])
         lvl = player['level']
         race_key = player['race']
-        
-        # Переводим расу через локальный словарь
         race_name = race_names.get(race_key, 'Неизвестно')
-        
         bosses = player.get('boss_kills', 0)
-        # Добавляем тег клана
-        clan_tag = f"[{player['clan_name']}] " if player.get('clan_name') else ""
         
-        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"{i}."
-        top_text += f"{medal} <b>{clan_tag}{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
-    await safe_edit(query, text=top_text, media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), keyboard=get_main_menu_keyboard(user_id))
-async def show_top_clans(query, user_id):
+        # --- ФОРМИРУЕМ ТЕГ КЛАНА ---
+        clan_name = player.get('clan_name')
+        # Если игрок в клане, делаем красивый жирный тег, например: [Темные]
+        clan_tag = f"<b>[{html.escape(clan_name)}]</b> " if clan_name else ""
+        # ---------------------------
+        
+        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"<b>{i}.</b>"
+        
+        # Собираем строчку: 🥇 [Титаны] Арториас
+        top_text += f"{medal} {clan_tag}<b>{name}</b>\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
+        
+    # Добавим кнопку возврата для удобства
+    kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+    
+    await safe_edit(
+        query, 
+        text=top_text, 
+        media=InputMediaPhoto(IMAGE_URLS['village'], caption=top_text, parse_mode='HTML'), 
+        keyboard=InlineKeyboardMarkup(kb)
+    )
+    
     clans = database.get_all_clans()
     
     if not clans:
