@@ -1457,6 +1457,7 @@ def get_battle_action_keyboard(session):
     """Новая клавиатура для системы Очков Действия (AP)"""
     ap = session['player_ap']
     queued = len(session['queued_actions'])
+    char_lvl = session['char']['level'] # Достаем уровень героя из сессии
     
     kb = []
     
@@ -1478,15 +1479,20 @@ def get_battle_action_keyboard(session):
     if row1: kb.append(row1)
     if row2: kb.append(row2)
 
+    # --- ВОЗВРАЩАЕМ КНОПКУ СПОСОБНОСТЕЙ ---
+    if char_lvl >= 10:
+        kb.append([InlineKeyboardButton("💫 Способности (2 AP)", callback_data='abilities_menu')])
+    # -------------------------------------
+
     # Кнопки управления очередью
     ctrl_row = []
     if queued > 0:
         ctrl_row.append(InlineKeyboardButton("↩️ Сбросить очередь", callback_data='q_reset'))
-        ctrl_row.append(InlineKeyboardButton(f"🔥 ВЫПОЛНИТЬ ({queued} действ.)", callback_data='q_execute'))
+        ctrl_row.append(InlineKeyboardButton(f"🔥 ВЫПОЛНИТЬ ({queued} д.)", callback_data='q_execute'))
     
     if ctrl_row: kb.append(ctrl_row)
 
-    # Дополнительные кнопки (Способности/Предметы пока оставим как быстрые действия)
+    # Дополнительные кнопки
     kb.append([
         InlineKeyboardButton("🏃 Сбежать", callback_data='flee'),
         InlineKeyboardButton("🎒 Предметы", callback_data='battle_items')
@@ -1920,9 +1926,21 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         return IN_BATTLE
 
     elif action == 'q_reset':
-        # Возвращаем потраченные AP
+        # Возвращаем потраченные AP, а также ману за отмененные способности
         for act in s['queued_actions']:
-            s['player_ap'] += 2 if act == 'focus' else 1
+            if act == 'focus':
+                s['player_ap'] += 2
+            elif act.startswith('skill_'):
+                s['player_ap'] += 2
+                sk_key = act.split('_')[1]
+                # Ищем скилл, чтобы вернуть ману
+                for lvl, sk in RACE_ABILITIES.get(s['char']['race'], {}).items():
+                    if sk['key'] == sk_key:
+                        s['char']['mana'] += sk['mana']
+                        s['cooldowns'][sk_key] = 0 # Сбрасываем КД обратно
+            else:
+                s['player_ap'] += 1
+                
         s['queued_actions'] = []
         await render_battle(query, user_id)
         return IN_BATTLE
