@@ -1679,9 +1679,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await craft_handler(update, context)
         return CRAFT_MENU
         
-    # 8. ТОП ИГРОКОВ
-    elif data == 'top_players':
-        await show_top_players(query, user_id)
+    # 8. ТОП ИГРОКОВ (С поддержкой страниц)
+    elif data.startswith('top_players'):
+        parts = data.split('_')
+        # Если нажали просто "Топ" из главного меню, то частей 2 (top и players). Значит страница 1.
+        # Если нажали "Вперед", то будет top_players_2, значит частей 3.
+        page = 1
+        if len(parts) > 2 and parts[2].isdigit():
+            page = int(parts[2])
+            
+        await show_top_players(query, user_id, page)
         return MAIN_MENU
         
     # 8.1. ТОП КЛАНОВ
@@ -3685,9 +3692,15 @@ async def inventory_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 
 
-async def show_top_players(query, user_id):
-    top_players = database.get_top_players(10)
-    top_text = "🏆 *ЛЕГЕНДЫ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
+async def show_top_players(query, user_id, page=1):
+    limit = 10
+    offset = (page - 1) * limit
+    top_players = database.get_top_players(limit, offset)
+    
+    top_text = f"🏆 *ЛЕГЕНДЫ ЭТОГО МИРА (Страница {page}/5)*\n━━━━━━━━━━━━━━━━\n"
+    
+    if not top_players:
+        top_text += "\n_Здесь пока никого нет..._"
     
     race_names = {
         'human': 'Человек',
@@ -3700,7 +3713,9 @@ async def show_top_players(query, user_id):
     }
     
     for i, player in enumerate(top_players, 1):
-        # Очищаем имена от спецсимволов, чтобы не ломался Markdown
+        # Настоящий номер в топе (например: 10 + 1 = 11-е место)
+        rank_num = i + offset 
+        
         name = player['character_name'].replace('_', '\\_').replace('*', '\\*')
         lvl = player['level']
         race_key = player['race']
@@ -3708,13 +3723,35 @@ async def show_top_players(query, user_id):
         bosses = player.get('boss_kills', 0)
         
         clan_name = player.get('clan_name')
-        clan_tag = f" *[{clan_name}]* " if clan_name else " "
+        if clan_name:
+            safe_clan_name = clan_name.replace('_', '\\_').replace('*', '\\*')
+            clan_tag = f" *[{safe_clan_name}]* "
+        else:
+            clan_tag = " "
         
-        medal = "🥇" if i==1 else "🥈" if i==2 else "🥉" if i==3 else f"*{i}.*"
+        # Медали только для первой тройки
+        if rank_num == 1: medal = "🥇"
+        elif rank_num == 2: medal = "🥈"
+        elif rank_num == 3: medal = "🥉"
+        else: medal = f"*{rank_num}.*"
         
         top_text += f"{medal}{clan_tag}*{name}*\n   └ 🎭 {race_name} | ⭐ {lvl} ур.\n   └ ☠️ Убито боссов: {bosses}\n\n"
         
-    kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
+    kb = []
+    
+    # --- КНОПКИ ПАГИНАЦИИ (Вперед / Назад) ---
+    nav_row = []
+    if page > 1:
+        nav_row.append(InlineKeyboardButton("⬅️ Назад", callback_data=f'top_players_{page-1}'))
+    
+    # Показываем кнопку "Вперед" только если мы не на 5-й странице и текущая страница полная (есть 10 человек)
+    if page < 5 and len(top_players) == limit:
+        nav_row.append(InlineKeyboardButton("Вперед ➡️", callback_data=f'top_players_{page+1}'))
+        
+    if nav_row:
+        kb.append(nav_row)
+        
+    kb.append([InlineKeyboardButton("🔙 Назад в меню", callback_data='back_to_main')])
     
     await safe_edit(
         query, 
