@@ -1819,42 +1819,80 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.answer("Ошибка: враг не найден.", show_alert=True)
             return BATTLE_MENU
 
-        # Инициализация боя
+        # --- БРОСОК КУБИКА ИНИЦИАТИВЫ (d16) ---
+        p_roll = random.randint(1, 16)
+        e_roll = random.randint(1, 16)
+        
+        log = [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"]
+        log.append(f"🎲 Инициатива (d16): Вы [{p_roll}] ⚡ Враг [{e_roll}]")
+
+        # Инициализация сессии боя
         battle_sessions[user_id] = {
             'char': char, 
             'enemy': enemy, 
             'enemy_key': enemy_key,
-            'log': [f"⚔️ *ВЫЗОВ БРОШЕН!*\n{enemy['description']}"], 
-            'turn': 1,
-            'status_effects': [],
-            'cooldowns': {},
-            'last_image': None,
+            'log': log, 
+            'turn': 1, 
+            'status_effects': [], 
+            'cooldowns': {}, 
+            'last_image': None, 
             'processing': False,
-            'slime_stacks': 0,
-            'burn_stacks': 0,
-            'frost_stacks': 0,
+            'slime_stacks': 0, 
+            'burn_stacks': 0, 
+            'frost_stacks': 0, 
             'active_buffs': {},
-            # --- НОВЫЕ ПЕРЕМЕННЫЕ AP ---
-            'max_ap': 5,             # Базовое количество AP
-            'player_ap': 5,          # Текущие AP игрока в раунде
-            'bonus_ap_next': 0,      # Бонусные AP на следующий раунд
-            'queued_actions': []     # Очередь команд игрока (Корзина)
+            'max_ap': 5,             
+            'player_ap': 5,          
+            'bonus_ap_next': 0,      
+            'queued_actions': []     
         }
+        
+        s = battle_sessions[user_id]
+        
+        # Если враг выбросил больше, он нападает первым!
+        if e_roll > p_roll:
+            log.append(f"👹 {enemy['name']} оказался быстрее и атакует!")
+            enemy_ap = 5
+            total_enemy_dmg = 0
+            enemy_ability_used = False
+            
+            while enemy_ap > 0:
+                if enemy_ap >= 2 and not enemy_ability_used and random.random() < enemy.get('special_chance', 0.20):
+                    spec_dmg, spec_desc, spec_status = process_enemy_special_attack(enemy, char, log) 
+                    total_enemy_dmg += spec_dmg
+                    enemy_ap -= 2
+                    enemy_ability_used = True
+                else:
+                    base_dmg, is_dodged = calculate_enemy_damage(enemy, char) # Баффов в 0 раунде еще нет
+                    if not is_dodged:
+                        total_enemy_dmg += base_dmg
+                    else:
+                        log.append("💨 Вы увернулись от внезапной атаки!")
+                    enemy_ap -= 1
+
+            if total_enemy_dmg > 0:
+                char['health'] -= total_enemy_dmg
+                log.append(f"💔 Враг нанес *{total_enemy_dmg}* урона внезапной атакой.")
+
+            # Проверка, не убил ли враг нас до начала нашего хода
+            if char['health'] <= 0:
+                database.update_character_stats(user_id, health=0, battle_losses=char.get('battle_losses',0)+1)
+                del battle_sessions[user_id]
+                death_msg = "💀 *ВЫ ПОГИБЛИ ДАЖЕ НЕ УСПЕВ ОБНАЖИТЬ МЕЧ...*"
+                await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
+        else:
+            log.append("⚡ Вы перехватили инициативу! Ваш ход.")
+
         await render_battle(query, user_id)
         return IN_BATTLE
-        
-    elif data == 'back_to_battle_menu':
-        char = database.get_character(user_id)
-        await safe_edit(query, text="Куда направимся?", media=InputMediaPhoto(IMAGE_URLS['forest'], caption="Куда направимся?", parse_mode='Markdown'), keyboard=get_battle_menu_keyboard(char))
-        
-    return BATTLE_MENU
 
 async def render_battle(query, user_id):
     s = battle_sessions.get(user_id)
     if not s: return 
     
     c, e = s['char'], s['enemy']
-    log_str = "\n".join(s['log'][-5:])
+    log_str = "\n".join(s['log'][-8:])
     
     player_hp = get_health_bar(c['health'], c['max_health'])
     enemy_hp = get_health_bar(e['health'], e['max_health'])
@@ -2223,9 +2261,20 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 if e.get('is_boss'): database.increment_boss_kills(user_id, False)
                 if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
                 
+                # --- ПОДГОТОВКА СВОДКИ БОЯ ---
+                log_str = "\n".join(s['log'][-7:]) # Собираем последние 7 строк лога
+                
                 del battle_sessions[user_id]
                 loot_txt = f"\n🎒 Лут: {', '.join(dropped_items)}" if dropped_items else ""
-                win_msg = f"🏆 *ПОБЕДА!*\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}"
+                
+                # Новый экран победы с отчетом
+                win_msg = (
+                    f"🏆 *ПОБЕДА!*\n"
+                    f"☠️ {e['name']} повержен.\n"
+                    f"💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}\n\n"
+                    f"📜 *Сводка последнего хода:*\n{log_str}"
+                )
+                
                 await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
                 return MAIN_MENU
 
