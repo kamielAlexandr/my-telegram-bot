@@ -1686,9 +1686,46 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         rank = data.split('_')[1]
         char = database.get_character(user_id)
         loc = LOCATIONS.get(rank, LOCATIONS['E'])
-        txt = f"🌲 *{loc['name']}*\n\n{loc['description']}\n\n⚠️ _Будь осторожен, {char['character_name']}..._"
+        
+        # Генерируем описание местных тварей с учетом уровня игрока
+        enemy_list_text = ""
+        for e_key in loc['enemies']:
+            if e_key in BASE_ENEMIES:
+                e_data = create_enemy(e_key, char['level'])
+                if not e_data: continue
+                
+                name = e_data['name']
+                hp = e_data['max_health']
+                
+                # Считаем средний урон (берем середину между минимальным и максимальным)
+                avg_phys = (e_data['min_physical_damage'] + e_data['max_physical_damage']) // 2
+                avg_mag = (e_data['min_magic_damage'] + e_data['max_magic_damage']) // 2
+                
+                dmg_text = []
+                if avg_phys > 0: dmg_text.append(f"{avg_phys} Физ")
+                if avg_mag > 0: dmg_text.append(f"{avg_mag} Маг")
+                dmg_str = " / ".join(dmg_text) if dmg_text else "0"
+                
+                # Выделяем Боссов и Элиту
+                icon = "💀" if e_data.get('is_boss') else ("👹" if e_data.get('is_mini_boss') else "▫️")
+                name_fmt = f"*{name}*" if e_data.get('is_boss') or e_data.get('is_mini_boss') else name
+                tag = " [БОСС]" if e_data.get('is_boss') else (" [ЭЛИТА]" if e_data.get('is_mini_boss') else "")
+                
+                # Формируем красивую строчку
+                enemy_list_text += f"{icon} {name_fmt}{tag}\n   └ ❤️ {hp} HP | ⚔️ Урон: ~{dmg_str}\n"
+
+        txt = (
+            f"🌲 *{loc['name']}*\n"
+            f"_{loc['description']}_\n\n"
+            f"🩸 *БЕСТИАРИЙ ЛОКАЦИИ (под ваш {char['level']} ур.):*\n"
+            f"{enemy_list_text}\n"
+            f"⚠️ _Оцени свои силы, {char['character_name']}..._"
+        )
+        
+        # Обрезаем текст, если он вдруг превысит лимит Телеграма для подписей к фото (1024 символа)
+        if len(txt) > 1000: txt = txt[:1000] + "..."
+        
         await safe_edit(query, text=txt, media=InputMediaPhoto(loc['image'], caption=txt, parse_mode='Markdown'), keyboard=get_location_enemies_keyboard(rank, char['level']))
-    
     elif data.startswith('battle_'):
         enemy_key = data.split('_', 1)[1]
         char = database.get_character(user_id)
