@@ -149,7 +149,7 @@ def init_db():
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def apply_regeneration(character):
-    """Регенерация HP и MP со временем (5% в минуту)"""
+    """Регенерация HP и MP со временем. Новичкам (1-10 ур) - 15% в минуту, остальным - 5%"""
     try:
         last_regen = character.get('last_regeneration')
         if not last_regen: return character
@@ -167,10 +167,23 @@ def apply_regeneration(character):
             update_character_stats(character['user_id'], last_regeneration=current_time)
             return character
 
+        # === НОВАЯ ЛОГИКА РЕГЕНЕРАЦИИ ПО УРОВНЯМ ===
+        lvl = character.get('level', 1)
         vit = character.get('vitality', 10)
-        regen_percent = 0.05 + (vit * 0.002) # Базовые 5% + 0.2% за каждую единицу живучести
-        hp_regen = int(character['max_health'] * regen_percent * minutes_passed)
-        mp_regen = int(character['max_mana'] * 0.05 * minutes_passed)
+        
+        if lvl <= 10:
+            base_hp_regen = 0.15  # 15% для новичков (1-10 ур)
+            base_mp_regen = 0.15  # 15% маны для новичков
+        else:
+            base_hp_regen = 0.05  # 5% для опытных (11+ ур)
+            base_mp_regen = 0.05  # 5% маны для опытных
+
+        # К базовому % прибавляем бонус от Живучести (0.2% за каждую единицу)
+        hp_regen_percent = base_hp_regen + (vit * 0.002) 
+        
+        hp_regen = int(character['max_health'] * hp_regen_percent * minutes_passed)
+        mp_regen = int(character['max_mana'] * base_mp_regen * minutes_passed)
+        # ===========================================
         
         # Гарантированный минимум регена 1 ед, если прошло время
         if hp_regen == 0 and minutes_passed > 0: hp_regen = minutes_passed
@@ -187,6 +200,7 @@ def apply_regeneration(character):
     except Exception as e:
         print(f"Regen error: {e}")
         return character
+        
 
 def calculate_rank(level):
     if level >= 100: return 'S'
