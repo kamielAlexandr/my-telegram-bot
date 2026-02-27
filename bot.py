@@ -1911,7 +1911,7 @@ async def render_battle(query, user_id):
     if not s: return 
     
     c, e = s['char'], s['enemy']
-    log_str = "\n".join(s['log'][-8:])
+    log_str = "\n".join(s['log'][-8:]) # Оставляем 8 строк лога для бросков кубика
     
     player_hp = get_health_bar(c['health'], c['max_health'])
     enemy_hp = get_health_bar(e['health'], e['max_health'])
@@ -1920,13 +1920,15 @@ async def render_battle(query, user_id):
     # --- ВИЗУАЛИЗАЦИЯ ОЧЕРЕДИ AP ---
     ap_icons = "🟢" * s['player_ap'] + "⚪" * (s['max_ap'] + s.get('bonus_ap_next', 0) - s['player_ap'])
     
-    # Красивый вывод очереди
+    # Красивый вывод очереди (ДОБАВЛЕНЫ ЗЕЛЬЯ И СКИЛЛЫ)
     q_visual = []
     for act in s['queued_actions']:
         if act == 'phys': q_visual.append("⚔️")
         elif act == 'mag': q_visual.append("🔮")
         elif act == 'block': q_visual.append("🛡")
         elif act == 'focus': q_visual.append("🧘")
+        elif act.startswith('skill_'): q_visual.append("💫")
+        elif act.startswith('item_'): q_visual.append("🧪")
     
     queue_str = " | ".join(q_visual) if q_visual else "_Пусто_"
     # -------------------------------
@@ -1935,7 +1937,7 @@ async def render_battle(query, user_id):
         f"{enemy_icon} *{e['name']}* `[Ранг {e.get('rank', '?')}]`\n"
         f"{enemy_hp}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *{c['character_name']}*\n"
+        f"👤 *{c['character_name']}* `[{c['level']} ур.]`\n"
         f"{player_hp} | 🌀 MP: {c['mana']}/{c['max_mana']}\n"
         f"⚡ AP: {ap_icons} ({s['player_ap']} шт.)\n"
         f"📜 Очередь: {queue_str}\n"
@@ -1949,19 +1951,18 @@ async def render_battle(query, user_id):
     else:
         s['last_image'] = current_image
         await safe_edit(query, text=None, media=InputMediaPhoto(current_image, caption=txt, parse_mode='Markdown'), keyboard=get_battle_action_keyboard(s))
-        
+
+
 async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
-    # 1. Проверяем, идет ли бой
     s = battle_sessions.get(user_id)
     if not s: 
         await query.answer()
         await safe_edit(query, text="⌛ *Бой завершен или сессия истекла.*", keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
 
-    # Защита от двойных нажатий
     if s.get('processing'):
         await query.answer("⏳ ...", show_alert=False)
         return IN_BATTLE
@@ -1975,7 +1976,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         cost = 2 if action == 'q_focus' else 1
         if s['player_ap'] >= cost:
             s['player_ap'] -= cost
-            # Отрезаем "q_" спереди, сохраняем действие
             s['queued_actions'].append(action[2:]) 
             await render_battle(query, user_id)
         else:
@@ -1983,18 +1983,19 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         return IN_BATTLE
 
     elif action == 'q_reset':
-        # Возвращаем потраченные AP, а также ману за отмененные способности
+        # Возвращаем потраченные AP и ману
         for act in s['queued_actions']:
             if act == 'focus':
                 s['player_ap'] += 2
             elif act.startswith('skill_'):
                 s['player_ap'] += 2
                 sk_key = act.split('_')[1]
-                # Ищем скилл, чтобы вернуть ману
                 for lvl, sk in RACE_ABILITIES.get(s['char']['race'], {}).items():
                     if sk['key'] == sk_key:
                         s['char']['mana'] += sk['mana']
-                        s['cooldowns'][sk_key] = 0 # Сбрасываем КД обратно
+                        s['cooldowns'][sk_key] = 0
+            elif act.startswith('item_'):
+                s['player_ap'] += 1 # Зелья стоят 1 AP
             else:
                 s['player_ap'] += 1
                 
@@ -2009,10 +2010,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         found = False
         for i in items:
             it = ITEMS_DB.get(i['item_key'])
-            # Показываем только зелья и баффы
             if it and it.get('type') in ['potion', 'buff_potion']:
                  found = True
-                 # Добавляем надпись [-1 AP] на кнопку
                  kb.append([InlineKeyboardButton(f"{it['name']} (x{i['quantity']}) [-1 AP]", callback_data=f"use_battle_{i['item_key']}")])
         
         if not found:
@@ -2023,44 +2022,27 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, keyboard=InlineKeyboardMarkup(kb))
         return IN_BATTLE
 
-    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (Тратит 1 AP) ---
+    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (ТЕПЕРЬ ИДЕТ В ОЧЕРЕДЬ) ---
     elif action.startswith('use_battle_'):
-        # Проверяем, есть ли хотя бы 1 AP для питья зелья
         if s['player_ap'] < 1:
             await query.answer("⚡ Не хватает AP для использования зелья!", show_alert=True)
             return IN_BATTLE
             
-        s['processing'] = True # Блокируем
-        try:
-            item_key = action.split('_', 2)[2]
-            it = ITEMS_DB.get(item_key)
-            
-            # Списываем 1 шт предмета и отнимаем 1 AP
-            database.remove_item(user_id, item_key, 1)
-            s['player_ap'] -= 1
-            
-            # Эффекты
-            if it['type'] == 'potion':
-                eff = it['effect']
-                if 'hp' in item_key or 'health' in item_key:
-                    s['char']['health'] = min(s['char']['max_health'], s['char']['health'] + eff)
-                    s['log'].append(f"🧪 Выпито {it['name']} (+{eff} HP)")
-                elif 'mp' in item_key or 'mana' in item_key:
-                    s['char']['mana'] = min(s['char']['max_mana'], s['char']['mana'] + eff)
-                    s['log'].append(f"🧪 Выпито {it['name']} (+{eff} MP)")
-            
-            elif it['type'] == 'buff_potion':
-                b_type = it['buff_type']
-                val = it['effect']
-                dur = it['duration']
-                
-                if 'active_buffs' not in s: s['active_buffs'] = {}
-                s['active_buffs'][b_type] = {'val': val, 'dur': dur}
-                s['log'].append(f"🧪 {it['name']}! ({it['desc']})")
+        item_key = action.split('_', 2)[2]
+        
+        # Защита: проверяем, хватает ли предметов с учетом уже добавленных в очередь
+        items = database.get_inventory(user_id)
+        owned_qty = sum(i['quantity'] for i in items if i['item_key'] == item_key)
+        queued_qty = sum(1 for act in s['queued_actions'] if act == f"item_{item_key}")
+        
+        if queued_qty >= owned_qty:
+            await query.answer("У вас больше нет этого предмета!", show_alert=True)
+            return IN_BATTLE
 
-            await render_battle(query, user_id)
-        finally:
-            s['processing'] = False
+        # Добавляем в очередь
+        s['player_ap'] -= 1
+        s['queued_actions'].append(f"item_{item_key}")
+        await render_battle(query, user_id) # Сразу возвращаем на экран боя с обновленной очередью
         return IN_BATTLE
 
     # --- 4. МЕНЮ СПОСОБНОСТЕЙ ---
@@ -2098,11 +2080,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             return MAIN_MENU
         else:
             s['log'].append("⛓ *ПОБЕГ НЕ УДАЛСЯ!* Враг атакует!")
-            action = 'q_execute' # Принудительно запускаем раунд, если побег не удался
+            action = 'q_execute' 
 
-    # ==========================================
     # === ИСПОЛЬЗОВАНИЕ СПОСОБНОСТИ ===
-    # ==========================================
     elif action.startswith('use_skill_'):
         skill_key = action.split('_')[2]
         c, e, log = s['char'], s['enemy'], s['log']
@@ -2121,8 +2101,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer("💧 Не хватает маны!", show_alert=True)
             return IN_BATTLE
 
-        # Если мана есть, добавляем способность в очередь, как и обычный удар
-        # Будем считать, что классовые способности стоят 2 AP
         if s['player_ap'] >= 2:
             s['player_ap'] -= 2
             c['mana'] -= skill['mana']
@@ -2176,7 +2154,6 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 if act == 'phys':
                     dmg, is_crit = calculate_damage(c, e, 'physical', s['active_buffs'])
                     total_player_dmg += dmg
-                    # Яд на оружии
                     if 'poison_weapon' in s['active_buffs']:
                          val = s['active_buffs']['poison_weapon']['val']
                          e['health'] -= val
@@ -2211,7 +2188,28 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 elif act == 'focus':
                     focus_used += 1
                     
-                # Обработка классовых навыков из очереди
+                # --- ОБРАБОТКА ВЫПИТЫХ ЗЕЛИЙ В РАУНДЕ ---
+                elif act.startswith('item_'):
+                    item_key = act.split('_', 1)[1]
+                    it = ITEMS_DB.get(item_key)
+                    if it:
+                        # Физически удаляем зелье из БД только в момент исполнения!
+                        database.remove_item(user_id, item_key, 1)
+                        if it['type'] == 'potion':
+                            eff = it['effect']
+                            if 'hp' in item_key or 'health' in item_key:
+                                c['health'] = min(c['max_health'], c['health'] + eff)
+                                log.append(f"🧪 Выпито {it['name']} (+{eff} HP)")
+                            elif 'mp' in item_key or 'mana' in item_key:
+                                c['mana'] = min(c['max_mana'], c['mana'] + eff)
+                                log.append(f"🧪 Выпито {it['name']} (+{eff} MP)")
+                        elif it['type'] == 'buff_potion':
+                            b_type = it['buff_type']
+                            val = it['effect']
+                            dur = it['duration']
+                            s['active_buffs'][b_type] = {'val': val, 'dur': dur}
+                            log.append(f"🧪 {it['name']} активировано!")
+
                 elif act.startswith('skill_'):
                     sk_key = act.split('_')[1]
                     skill = None
@@ -2237,7 +2235,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                             c['health'] = min(c['max_health'], c['health'] + heal)
                             log.append(f"🩸 *{skill['name']}* Лечение: {heal}!")
                         elif skill['type'] == 'buff_def':
-                            blocks_active += 3 # Супер защита
+                            blocks_active += 3
                             log.append(f"🛡 *{skill['name']}* активирован!")
                         elif skill['type'] == 'buff_str':
                             total_player_dmg += int(eff_phys * 2.0)
@@ -2287,20 +2285,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 if e.get('is_boss'): database.increment_boss_kills(user_id, False)
                 if e.get('is_mini_boss'): database.increment_boss_kills(user_id, True)
                 
-                # --- ПОДГОТОВКА СВОДКИ БОЯ ---
-                log_str = "\n".join(s['log'][-7:]) # Собираем последние 7 строк лога
-                
+                log_str = "\n".join(s['log'][-7:])
                 del battle_sessions[user_id]
                 loot_txt = f"\n🎒 Лут: {', '.join(dropped_items)}" if dropped_items else ""
-                
-                # Новый экран победы с отчетом
-                win_msg = (
-                    f"🏆 *ПОБЕДА!*\n"
-                    f"☠️ {e['name']} повержен.\n"
-                    f"💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}\n\n"
-                    f"📜 *Сводка последнего хода:*\n{log_str}"
-                )
-                
+                win_msg = f"🏆 *ПОБЕДА!*\n☠️ {e['name']} повержен.\n💰 +{gold_win}g | 📚 +{xp_win}xp{loot_txt}\n\n📜 *Сводка:* \n{log_str}"
                 await safe_edit(query, text=win_msg, media=InputMediaPhoto(IMAGE_URLS['village'], caption=win_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
                 return MAIN_MENU
 
@@ -2369,7 +2357,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
                 return MAIN_MENU
 
-            # 5. СЛЕДУЮЩИЙ РАУНД (Ограничение AP до 15)
+            # 5. СЛЕДУЮЩИЙ РАУНД
             s['player_ap'] = min(15, s['max_ap'] + (focus_used * 4)) 
             if focus_used > 0:
                 log.append(f"🧘 Концентрация: Энергия кипит (AP: {s['player_ap']}/15).")
