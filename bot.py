@@ -1277,15 +1277,54 @@ def process_enemy_special_attack(enemy, character, log):
         effect = f"🌪 *ВИХРЬ КЛИНКОВ!* Рыцарь наносит {dmg} урона!"
         log.append(effect)
         return dmg, effect, None
+        
     if random.random() < enemy.get('special_chance', 0.15):
         if not enemy.get('abilities'): return 0, "", None
         ability = random.choice(enemy['abilities'])
+        
+        # --- ПЕРЕВОД СПОСОБНОСТЕЙ (И ЗАЩИТА ОТ КРАШЕЙ МАРКДАУНА) ---
+        ability_names = {
+            'basic_attack': 'Мощный выпад',
+            'dirty_trick': 'Грязный трюк',
+            'toxic_growth': 'Токсичный взрыв',
+            'ignite': 'Воспламенение',
+            'power_strike': 'Тяжелый удар',
+            'whirlwind_strike': 'Вихрь клинков',
+            'web_shot': 'Выстрел паутиной',
+            'fear': 'Леденящий ужас',
+            'charge': 'Яростный рывок',
+            'freeze_bite': 'Ледяной укус',
+            'regeneration': 'Регенерация',
+            'root_grab': 'Хватка корней',
+            'shield_bash': 'Удар щитом',
+            'life_drain': 'Похищение жизни',
+            'dark_bolt': 'Стрела тьмы',
+            'raise_dead': 'Призыв мертвых',
+            'royal_decree': 'Королевский указ',
+            'shield_wall': 'Глухая оборона',
+            'blood_drain': 'Иссушение крови',
+            'stone_skin': 'Каменная кожа',
+            'death_coil': 'Лик смерти',
+            'royal_command': 'Приказ императора',
+            'fireball': 'Огненный шар',
+            'charm': 'Дьявольское очарование',
+            'hellfire': 'Адское пламя',
+            'summon_demons': 'Призыв демонов',
+            'apocalypse': 'Апокалипсис',
+            'warp': 'Искажение реальности',
+            'dragon_breath': 'Дыхание дракона',
+            'divine_judgment': 'Божественный суд',
+            'omnipotence': 'Всемогущество'
+        }
+        # Если навыка нет в словаре, просто убираем "_" и пишем с заглавной
+        ability_ru = ability_names.get(ability, ability.replace('_', ' ').title())
+
         if ability == 'poison_spit':
             dmg = random.randint(5, 10)
             effect = f"Яд нанес {dmg} урона!"
             status = 'poisoned'
         else:
-             effect = f"⚠️ {enemy['name']} использует {ability}!"
+             effect = f"⚠️ {enemy['name']} использует: *{ability_ru}*!"
         log.append(effect)
     return dmg, effect, status
 
@@ -1950,22 +1989,28 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             c['mana'] -= skill['mana']
             s['cooldowns'][skill_key] = skill['cd']
             
-            # Логика скиллов (сокращенно)
+            # --- ЛОГИКА СКИЛЛОВ (ТЕПЕРЬ С УЧЕТОМ ФЕХТОВАНИЯ) ---
+            str_val = c['strength'] + s['active_buffs'].get('strength', {}).get('val', 0)
+            agi_val = c['agility'] + s['active_buffs'].get('agility', {}).get('val', 0)
+            # Берем ловкость, если она выше силы (со штрафом 10%)
+            eff_phys = int(agi_val * 0.9) if agi_val > str_val else str_val
+
             if skill['type'] == 'heal':
                 heal = int(c['max_health'] * skill['val'])
                 c['health'] = min(c['max_health'], c['health'] + heal)
                 log.append(f"✨ *{skill['name']}* +{heal} HP!")
             elif skill['type'] == 'dmg':
-                player_damage = int(c['strength'] * skill['val'])
+                player_damage = int(eff_phys * skill['val'])
                 log.append(f"⚔️ *{skill['name']}* нанес {player_damage}!")
             elif skill['type'] == 'dmg_agi':
-                player_damage = int(c['agility'] * skill['val'])
+                player_damage = int(agi_val * skill['val'])
                 log.append(f"🏹 *{skill['name']}* нанес {player_damage}!")
             elif skill['type'] == 'magic_nuke':
-                player_damage = int(c['intelligence'] * skill['val'])
+                int_val = c['intelligence'] + s['active_buffs'].get('intelligence', {}).get('val', 0)
+                player_damage = int(int_val * skill['val'])
                 log.append(f"⚡ *{skill['name']}* ударил на {player_damage}!")
             elif skill['type'] == 'lifesteal':
-                player_damage = int(c['strength'] * skill['val'])
+                player_damage = int(eff_phys * skill['val'])
                 heal = int(player_damage * 0.5)
                 c['health'] = min(c['max_health'], c['health'] + heal)
                 log.append(f"🩸 *{skill['name']}* dmg {player_damage}, heal {heal}!")
@@ -1973,17 +2018,17 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 enemy_damage_mod = 0.1
                 log.append(f"🛡 *{skill['name']}* защита!")
             elif skill['type'] == 'buff_str':
-                player_damage = int(c['strength'] * 2.0)
+                player_damage = int(eff_phys * 2.0)
                 log.append(f"💢 *{skill['name']}* удар {player_damage}!")
             elif skill['type'] == 'stun_dmg':
-                player_damage = int(c['strength'] * skill['val'])
+                player_damage = int(eff_phys * skill['val'])
                 if random.random() < 0.5:
                     enemy_damage_mod = 0.0
                     log.append(f"🔨 *{skill['name']}* СТАН!")
                 else:
                     log.append(f"🔨 *{skill['name']}* удар {player_damage}.")
             elif skill['type'] == 'dmg_exec':
-                base = c['strength'] * skill['val']
+                base = eff_phys * skill['val']
                 if e['health'] < (e['max_health'] * 0.3): base *= 2
                 player_damage = int(base)
                 log.append(f"🪓 *{skill['name']}* удар {player_damage}!")
@@ -1995,6 +2040,7 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 s['burn_stacks'] = 0
                 s['frost_stacks'] = 0
                 log.append(f"🍃 *{skill['name']}* +{heal} HP и снятие эффектов!")
+            # --------------------------------------------------
 
         # Б) Обычные действия
         elif action == 'flee':
