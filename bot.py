@@ -1811,10 +1811,12 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"⚠️ _Оцени свои силы, {char['character_name']}..._"
         )
         
-        # Обрезаем текст, если он вдруг превысит лимит Телеграма для подписей к фото (1024 символа)
+        # Обрезаем текст, если он вдруг превысит лимит
         if len(txt) > 1000: txt = txt[:1000] + "..."
         
         await safe_edit(query, text=txt, media=InputMediaPhoto(loc['image'], caption=txt, parse_mode='Markdown'), keyboard=get_location_enemies_keyboard(rank, char['level']))
+        return BATTLE_MENU
+
     elif data.startswith('battle_'):
         enemy_key = data.split('_', 1)[1]
         char = database.get_character(user_id)
@@ -1872,7 +1874,7 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                     enemy_ap -= 2
                     enemy_ability_used = True
                 else:
-                    base_dmg, is_dodged = calculate_enemy_damage(enemy, char) # Баффов в 0 раунде еще нет
+                    base_dmg, is_dodged = calculate_enemy_damage(enemy, char)
                     if not is_dodged:
                         total_enemy_dmg += base_dmg
                     else:
@@ -1895,6 +1897,14 @@ async def battle_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await render_battle(query, user_id)
         return IN_BATTLE
+
+    # ====== ТОТ САМЫЙ ПРОПАВШИЙ БЛОК НАЗАД ======
+    elif data == 'back_to_battle_menu':
+        char = database.get_character(user_id)
+        txt = "Куда направимся, путник?"
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['forest'], caption=txt, parse_mode='Markdown'), keyboard=get_battle_menu_keyboard(char))
+        
+    return BATTLE_MENU
 
 async def render_battle(query, user_id):
     s = battle_sessions.get(user_id)
@@ -2002,7 +2012,8 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             # Показываем только зелья и баффы
             if it and it.get('type') in ['potion', 'buff_potion']:
                  found = True
-                 kb.append([InlineKeyboardButton(f"{it['name']} (x{i['quantity']})", callback_data=f"use_battle_{i['item_key']}")])
+                 # Добавляем надпись [-1 AP] на кнопку
+                 kb.append([InlineKeyboardButton(f"{it['name']} (x{i['quantity']}) [-1 AP]", callback_data=f"use_battle_{i['item_key']}")])
         
         if not found:
             await query.answer("У вас нет зелий!", show_alert=True)
@@ -2012,15 +2023,21 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await safe_edit(query, keyboard=InlineKeyboardMarkup(kb))
         return IN_BATTLE
 
-    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (Мгновенное действие) ---
+    # --- 3. ИСПОЛЬЗОВАНИЕ ПРЕДМЕТА (Тратит 1 AP) ---
     elif action.startswith('use_battle_'):
+        # Проверяем, есть ли хотя бы 1 AP для питья зелья
+        if s['player_ap'] < 1:
+            await query.answer("⚡ Не хватает AP для использования зелья!", show_alert=True)
+            return IN_BATTLE
+            
         s['processing'] = True # Блокируем
         try:
             item_key = action.split('_', 2)[2]
             it = ITEMS_DB.get(item_key)
             
-            # Списываем 1 шт
+            # Списываем 1 шт предмета и отнимаем 1 AP
             database.remove_item(user_id, item_key, 1)
+            s['player_ap'] -= 1
             
             # Эффекты
             if it['type'] == 'potion':
@@ -2352,10 +2369,10 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
                 return MAIN_MENU
 
-            # 5. СЛЕДУЮЩИЙ РАУНД
-            s['player_ap'] = s['max_ap'] + (focus_used * 4) 
+            # 5. СЛЕДУЮЩИЙ РАУНД (Ограничение AP до 15)
+            s['player_ap'] = min(15, s['max_ap'] + (focus_used * 4)) 
             if focus_used > 0:
-                log.append("🧘 Концентрация: Энергия кипит.")
+                log.append(f"🧘 Концентрация: Энергия кипит (AP: {s['player_ap']}/15).")
 
             s['queued_actions'] = [] 
             s['turn'] += 1
@@ -3302,7 +3319,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return SHOP_MENU
 
         if itype in ['artifact', 'acc']:
-            acc_count = sum(1 for i in items if ITEMS_DB.get(i['item_key'], {}).get('type') in ['artifact', 'acc'])
+            # Теперь мы считаем реальное количество предметов (quantity), а не просто ячейки
+            acc_count = sum(i['quantity'] for i in items if ITEMS_DB.get(i['item_key'], {}).get('type') in ['artifact', 'acc'])
             if acc_count >= 20:
                 await query.answer("⛔ Слот аксессуаров полон! (Макс 20 шт.)", show_alert=True)
                 return SHOP_MENU
