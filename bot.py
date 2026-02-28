@@ -3823,11 +3823,15 @@ async def show_top_clans(query, user_id):
     else:
         top_text = "🛡 *ТОП КЛАНОВ ЭТОГО МИРА*\n━━━━━━━━━━━━━━━━\n"
         for i, c in enumerate(clans, 1):
+            # Очищаем названия от спецсимволов для Markdown
             name = c['name'].replace('_', '\\_').replace('*', '\\*')
+            owner_name = c.get('owner_name', 'Неизвестный').replace('_', '\\_').replace('*', '\\*')
             members = c['members_count']
             
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"*{i}.*"
-            top_text += f"{medal} *[{name}]*\n   └ 👥 Участников: {members}\n\n"
+            
+            # Собираем красивую строчку с лидером и участниками
+            top_text += f"{medal} *[{name}]*\n   ├ 👑 Владыка: {owner_name}\n   └ 👥 Участников: {members}\n\n"
             
     kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
     
@@ -3837,6 +3841,8 @@ async def show_top_clans(query, user_id):
         media=InputMediaPhoto(IMAGE_URLS['castle'], caption=top_text, parse_mode='Markdown'), 
         keyboard=InlineKeyboardMarkup(kb)
     )
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "🆘 *Книга Знаний*\n\n"
