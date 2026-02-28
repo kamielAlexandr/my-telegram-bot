@@ -1946,12 +1946,13 @@ def get_all_clans():
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
-            # Считаем количество участников в каждом клане
+            # Считаем количество участников и приклеиваем имя лидера (owner_name)
             c.execute("""
-                SELECT cl.*, COUNT(pc.id) as members_count 
+                SELECT cl.*, COUNT(pc.id) as members_count, owner_pc.character_name as owner_name 
                 FROM clans cl 
                 LEFT JOIN player_characters pc ON pc.clan_id = cl.id 
-                GROUP BY cl.id 
+                LEFT JOIN player_characters owner_pc ON cl.owner_id = owner_pc.user_id
+                GROUP BY cl.id, owner_pc.character_name
                 ORDER BY members_count DESC 
                 LIMIT 20
             """)
