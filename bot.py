@@ -2653,10 +2653,9 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     database.remove_item(user_id, 'bait_worm', 1)
     
     # --- РУЛЕТКА РЫБАКА (СУРОВЫЙ БАЛАНС) ---
-    roll = random.random() # Число от 0.0 до 1.0
+    roll = random.random() 
     
-    if roll < 0.05: # 5% ШАНС ВЫЛОВИТЬ МОНСТРА (Было 15%)
-        # Кракен теперь элита. Шанс на Кракена 20%, на Утопленника 80%
+    if roll < 0.05: # 5% ШАНС ВЫЛОВИТЬ МОНСТРА 
         if random.random() < 0.20:
             enemy_key = 'swamp_kraken'
         else:
@@ -2664,21 +2663,70 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
         enemy = create_enemy(enemy_key, char['level'])
         
-        # Насильно закидываем в бой
+        # --- БРОСОК КУБИКА КАК В ОБЫЧНОМ БОЮ ---
+        p_roll = random.randint(1, 16)
+        e_roll = random.randint(1, 16)
+        
+        log = [f"🌊 *УДОЧКА РЕЗКО ДЕРНУЛАСЬ!*\nИз темной воды на вас выпрыгнуло чудовище!\n{enemy['description']}"]
+        log.append(f"🎲 Инициатива (d16): Вы [{p_roll}] ⚡ Враг [{e_roll}]")
+
+        # Насильно закидываем в бой (ТЕПЕРЬ С ОЧКАМИ ДЕЙСТВИЯ!)
         battle_sessions[user_id] = {
             'char': char, 
             'enemy': enemy, 
             'enemy_key': enemy_key,
-            'log': [f"🌊 *УДОЧКА РЕЗКО ДЕРНУЛАСЬ!*\nИз темной воды на вас выпрыгнуло чудовище!\n{enemy['description']}"], 
+            'log': log, 
             'turn': 1, 'status_effects': [], 'cooldowns': {}, 'last_image': None, 'processing': False,
-            'slime_stacks': 0, 'burn_stacks': 0, 'frost_stacks': 0, 'active_buffs': {}
+            'slime_stacks': 0, 'burn_stacks': 0, 'frost_stacks': 0, 'active_buffs': {},
+            # --- НОВЫЕ ПЕРЕМЕННЫЕ AP ---
+            'max_ap': 5,             
+            'player_ap': 5,          
+            'bonus_ap_next': 0,      
+            'queued_actions': []     
         }
+        
+        s = battle_sessions[user_id]
+
+        # Если монстр выбросил больше на кубике, он бьет сразу из-под воды!
+        if e_roll > p_roll:
+            log.append(f"👹 {enemy['name']} оказался быстрее и атакует!")
+            enemy_ap = 5
+            total_enemy_dmg = 0
+            enemy_ability_used = False
+            
+            while enemy_ap > 0:
+                if enemy_ap >= 2 and not enemy_ability_used and random.random() < enemy.get('special_chance', 0.20):
+                    spec_dmg, spec_desc, spec_status = process_enemy_special_attack(enemy, char, log) 
+                    total_enemy_dmg += spec_dmg
+                    enemy_ap -= 2
+                    enemy_ability_used = True
+                else:
+                    base_dmg, is_dodged = calculate_enemy_damage(enemy, char)
+                    if not is_dodged:
+                        total_enemy_dmg += base_dmg
+                    else:
+                        log.append("💨 Вы увернулись от внезапной атаки!")
+                    enemy_ap -= 1
+
+            if total_enemy_dmg > 0:
+                char['health'] -= total_enemy_dmg
+                log.append(f"💔 Враг нанес *{total_enemy_dmg}* урона внезапной атакой.")
+
+            # Проверка, не убил ли нас Кракен с одного удара
+            if char['health'] <= 0:
+                database.update_character_stats(user_id, health=0, battle_losses=char.get('battle_losses',0)+1)
+                del battle_sessions[user_id]
+                death_msg = "💀 *Тварь утащила вас на дно...*"
+                await safe_edit(query, text=death_msg, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', ''), caption=death_msg, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+                return MAIN_MENU
+        else:
+            log.append("⚡ Вы успели отскочить от брызг! Ваш ход.")
+
         await query.answer("УДОЧКА ДЕРНУЛАСЬ! К БОЮ!", show_alert=True)
         await render_battle(query, user_id)
         return IN_BATTLE
         
-    elif roll < 0.10: # 5% ШАНС НА СУНДУК (Было 10%)
-        # Жестко режем золото в сундуках (теперь 30-100 вместо 100-300)
+    elif roll < 0.10: # 5% ШАНС НА СУНДУК
         gold_found = random.randint(30, 100)
         database.add_gold(user_id, gold_found)
         database.buy_item(user_id, 'small_hp', 'potion', '🧪 Малое лечебное', 0, 30)
@@ -2688,7 +2736,7 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return MAIN_MENU
         
-    elif roll < 0.40: # 30% ШАНС НА МУСОР (Было 20%) - рыбаки чаще терпят неудачу
+    elif roll < 0.40: # 30% ШАНС НА МУСОР
         database.buy_item(user_id, 'trash_boot', 'material', '👢 Дырявый сапог', 0, 0)
         txt = "👢 **Мусор...**\nВы вытянули чей-то старый дырявый сапог."
         kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
@@ -2696,7 +2744,6 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return MAIN_MENU
         
     else: # 60% ШАНС ВЫЛОВИТЬ РЫБУ
-        # Золотой карп попадается только в 3% случаев успешного улова (было 10%)
         if random.random() < 0.03:
             database.buy_item(user_id, 'fish_golden', 'material', '🐡 Золотой карп', 0, 0)
             txt = "✨ **РЕДКИЙ УЛОВ!**\nВы поймали 🐡 Золотого карпа! Его можно дорого продать."
@@ -2707,6 +2754,8 @@ async def catch_fish_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         kb = [[InlineKeyboardButton("🎣 Забросить еще раз", callback_data='fishing_menu')]]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['pier'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return MAIN_MENU
+
+
 # --- ГЕНЕРАТОР ЗАДАНИЙ ---
 def generate_daily_quests(rank, reputation=0): # <--- Добавили аргумент reputation
     """Генерирует квесты с учетом репутации"""
