@@ -2064,6 +2064,17 @@ def get_honey_collection_time(user_id):
             c.execute("SELECT last_honey_collection FROM player_characters WHERE user_id = %s", (user_id,))
             res = c.fetchone()
             return res[0] if res else None
+    except Exception as e:
+        print(f"Honey GET error: {e}")
+        # ЭКСТРЕННАЯ МИГРАЦИЯ: Если колонки нет, создаем её прямо сейчас
+        try:
+            conn.rollback()
+            with conn.cursor() as c2:
+                c2.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_honey_collection TIMESTAMP")
+                conn.commit()
+        except:
+            pass
+        return None
     finally:
         conn.close()
 
@@ -2075,5 +2086,8 @@ def update_honey_collection_time(user_id):
             c.execute("UPDATE player_characters SET last_honey_collection = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
             conn.commit()
             return True
+    except Exception as e:
+        print(f"Honey UPDATE error: {e}")
+        return False
     finally:
         conn.close()
