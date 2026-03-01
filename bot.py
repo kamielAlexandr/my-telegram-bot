@@ -4136,33 +4136,37 @@ async def collect_honey_handler(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     user_id = query.from_user.id
     
-    last_time = database.get_honey_collection_time(user_id)
-    now = datetime.now()
-    
-    cooldown_seconds = 14400 # 4 часа в секундах
-    
-    if last_time:
-        if isinstance(last_time, str):
-            last_time = datetime.fromisoformat(last_time)
-        elapsed = (now - last_time).total_seconds()
-    else:
-        elapsed = cooldown_seconds + 1 # Если собирает первый раз
+    try:
+        last_time = database.get_honey_collection_time(user_id)
+        now = datetime.now()
         
-    if elapsed >= cooldown_seconds:
-        # Выдаем мёд
-        amount = random.randint(1, 3)
-        database.buy_item(user_id, 'honey_hp', 'potion', '🍯 Дикий мёд', 0, 0, amount=amount)
-        database.update_honey_collection_time(user_id)
+        cooldown_seconds = 14400 # 4 часа в секундах
         
-        await query.answer(f"🍯 Вы собрали свежий мёд: {amount} шт!", show_alert=True)
-        await farm_menu_handler(update, context)
-    else:
-        # Считаем остаток времени
-        left_seconds = cooldown_seconds - elapsed
-        hours = int(left_seconds // 3600)
-        minutes = int((left_seconds % 3600) // 60)
-        await query.answer(f"⏳ Пчелы еще собирают нектар. Осталось: {hours}ч {minutes}м.", show_alert=True)
-
+        if last_time:
+            if isinstance(last_time, str):
+                last_time = datetime.fromisoformat(last_time)
+            elapsed = (now - last_time).total_seconds()
+        else:
+            elapsed = cooldown_seconds + 1 # Если собирает первый раз
+            
+        if elapsed >= cooldown_seconds:
+            # Выдаем мёд (указываем эффект 50, чтобы он лечил)
+            amount = random.randint(1, 3)
+            database.buy_item(user_id, 'honey_hp', 'potion', '🍯 Дикий мёд', 0, 50, amount=amount)
+            database.update_honey_collection_time(user_id)
+            
+            await query.answer(f"🍯 Вы собрали свежий мёд: {amount} шт!", show_alert=True)
+            await farm_menu_handler(update, context)
+        else:
+            # Считаем остаток времени
+            left_seconds = cooldown_seconds - elapsed
+            hours = int(left_seconds // 3600)
+            minutes = int((left_seconds % 3600) // 60)
+            await query.answer(f"⏳ Пчелы еще собирают нектар. Осталось: {hours}ч {minutes}м.", show_alert=True)
+            
+    except Exception as e:
+        print(f"Honey Error: {e}")
+        await query.answer("🔧 Ошибка сбора мёда. Перезапустите меню.", show_alert=True)
 
 async def harvest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
