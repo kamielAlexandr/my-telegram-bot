@@ -128,7 +128,8 @@ def init_db():
                 # В списке columns_to_add:
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0",
-                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS guild_reputation INTEGER DEFAULT 0"
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS guild_reputation INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_honey_collection TIMESTAMP"
             ]
             
             for sql in columns_to_add:
@@ -764,18 +765,30 @@ def build_building(user_id, building_name):
     """Строит здание (выдает невидимый предмет)"""
     conn = get_connection()
     if not conn: return
+    
+    names = {
+        'building_alchemy': 'Лавка Травника',
+        'building_farm': 'Ферма',
+        'building_kitchen': 'Кухня',
+        'building_pier': 'Причал',
+        'building_apiary': 'Пасека'
+    }
+    b_name = names.get(building_name, 'Постройка')
+    
     try:
         with conn.cursor() as c:
-            # ИСПРАВЛЕНО: Сохраняем реальное имя постройки (building_name), а не 'building'
             c.execute("""
                 INSERT INTO player_inventory (user_id, item_key, item_type, item_name, quantity, effect_amount) 
                 VALUES (%s, %s, 'building', %s, 1, 0) 
-            """, (user_id, building_name, building_name))
+            """, (user_id, building_name, b_name))
             conn.commit()
     except Exception as e:
         print(f"Build error: {e}")
     finally:
         conn.close()
+
+
+
 def init_companion_table():
     """Создает таблицу для экспедиций, если её нет"""
     conn = get_connection()
@@ -2041,5 +2054,26 @@ def transfer_item(sender_id, target_id, item_key, amount, item_info):
     except Exception as e:
         conn.rollback()
         return False, str(e)
+    finally:
+        conn.close()
+def get_honey_collection_time(user_id):
+    conn = get_connection()
+    if not conn: return None
+    try:
+        with conn.cursor() as c:
+            c.execute("SELECT last_honey_collection FROM player_characters WHERE user_id = %s", (user_id,))
+            res = c.fetchone()
+            return res[0] if res else None
+    finally:
+        conn.close()
+
+def update_honey_collection_time(user_id):
+    conn = get_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as c:
+            c.execute("UPDATE player_characters SET last_honey_collection = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
+            conn.commit()
+            return True
     finally:
         conn.close()
