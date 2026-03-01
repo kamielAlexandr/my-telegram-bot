@@ -178,7 +178,7 @@ ITEMS_DB = {
     'roast_boar': {'name': '🍖 Окорок вепря', 'desc': 'Жирное мясо, дающее силы.', 'price': 80, 'type': 'food', 'effect': 60, 'cat': 'food', 'rank': 'C'},
     'elven_wine': {'name': '🍷 Кровь Лозы', 'desc': 'Вино, настоянное на лунном свете.', 'price': 150, 'type': 'food', 'effect': 100, 'cat': 'food', 'rank': 'B'},
     'ambrosia': {'name': '🏺 Амброзия', 'desc': 'Пища богов.', 'price': 500, 'type': 'food', 'effect': 300, 'cat': 'food', 'rank': 'A'},
-    
+    'honey_hp': {'name': '🍯 Дикий мёд', 'desc': 'Сладкое золото. +50 HP', 'price': 60, 'type': 'potion', 'effect': 50, 'cat': 'food', 'rank': 'D'},
     'small_hp': {'name': '🧪 Слабый отвар', 'desc': 'Пахнет тиной.', 'price': 50, 'type': 'potion', 'effect': 30, 'cat': 'food', 'rank': 'E'},
     'medium_hp': {'name': '🧪 Зелье Крови', 'desc': 'Бурлящая алая жидкость.', 'price': 100, 'type': 'potion', 'effect': 70, 'cat': 'food', 'rank': 'D'},
     'large_hp': {'name': '🧪 Эссенция Жизни', 'desc': 'Чистая жизненная сила.', 'price': 250, 'type': 'potion', 'effect': 150, 'cat': 'food', 'rank': 'B'},
@@ -4065,7 +4065,7 @@ async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
-    # 1. Проверяем постройку
+    # 1. Проверяем постройку фермы
     if not database.check_building(user_id, 'building_farm'):
         txt = "🌾 **ЗАБРОШЕННОЕ ПОЛЕ**\nЗдесь можно разбить грядки и нанять Фермера.\n💰 Цена: 2000g"
         kb = [[InlineKeyboardButton("🔨 Построить Ферму (2000g)", callback_data='build_farm')],
@@ -4075,28 +4075,23 @@ async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Статус фермы
     status = database.get_farm_status(user_id)
+    kb = []
+    txt = ""
     
     if status['state'] == 'idle':
         txt = "🌾 **ФЕРМА СВОБОДНА**\nЧто прикажете посадить, милорд?"
-        kb = []
         ranks = ['E', 'D', 'C', 'B', 'A', 'S']
-        
         for crop_key, conf in FARM_CONFIG.items():
             if ranks.index(char['rank']) >= ranks.index(conf['req_rank']):
                 kb.append([InlineKeyboardButton(f"🌱 Посадить {conf['name']} ({conf['time_minutes']} мин)", callback_data=f"plant_{crop_key}")])
             else:
                 kb.append([InlineKeyboardButton(f"🔒 {conf['name']} (Нужен ранг {conf['req_rank']})", callback_data="ignore")])
-        
-        kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
-        
     else:
-        # Урожай зреет
         start_time = status['start_time']
         if isinstance(start_time, str): start_time = datetime.fromisoformat(start_time)
             
         crop = FARM_CONFIG.get(status['crop_key'])
-        if not crop: # Защита от ошибок базы
+        if not crop: 
              database.finish_farming(user_id)
              await query.answer("Урожай погиб. Поле снова свободно.")
              return MAIN_MENU
@@ -4105,15 +4100,69 @@ async def farm_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if elapsed_minutes >= crop['time_minutes']:
             txt = f"✅ **Урожай созрел!**\nВаша {crop['name']} готова к сбору."
-            kb = [[InlineKeyboardButton("🧺 СОБРАТЬ УРОЖАЙ", callback_data='harvest_crop')]]
-            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+            kb.append([InlineKeyboardButton("🧺 СОБРАТЬ УРОЖАЙ", callback_data='harvest_crop')])
         else:
             left = int(crop['time_minutes'] - elapsed_minutes)
             txt = f"⏳ **Растения зреют...**\nПосажено: {crop['name']}\nОсталось: {left} мин."
-            kb = [[InlineKeyboardButton("🔄 Обновить", callback_data='farm_menu')],
-                  [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
-            await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+            kb.append([InlineKeyboardButton("🔄 Обновить грядки", callback_data='farm_menu')])
+
+    # --- БЛОК ПАСЕКИ (Показывается всегда, независимо от грядок) ---
+    has_apiary = database.check_building(user_id, 'building_apiary')
+    if not has_apiary:
+        kb.append([InlineKeyboardButton("🐝 Построить Пасеку (5000g)", callback_data='build_apiary')])
+    else:
+        kb.append([InlineKeyboardButton("🍯 Собрать мёд", callback_data='collect_honey')])
+    # -------------------------------------------------------------
+
+    kb.append([InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')])
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
     return MAIN_MENU
+
+# --- НОВЫЕ ФУНКЦИИ ПАСЕКИ ---
+async def build_apiary_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    if char['gold'] >= 5000:
+        database.add_gold(user_id, -5000)
+        database.build_building(user_id, 'building_apiary')
+        await query.answer("✅ Пасека построена! Пчелы начали трудиться.", show_alert=True)
+        await farm_menu_handler(update, context)
+    else:
+        await query.answer("❌ Нужно 5000 золота!", show_alert=True)
+
+async def collect_honey_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    last_time = database.get_honey_collection_time(user_id)
+    now = datetime.now()
+    
+    cooldown_seconds = 14400 # 4 часа в секундах
+    
+    if last_time:
+        if isinstance(last_time, str):
+            last_time = datetime.fromisoformat(last_time)
+        elapsed = (now - last_time).total_seconds()
+    else:
+        elapsed = cooldown_seconds + 1 # Если собирает первый раз
+        
+    if elapsed >= cooldown_seconds:
+        # Выдаем мёд
+        amount = random.randint(1, 3)
+        database.buy_item(user_id, 'honey_hp', 'potion', '🍯 Дикий мёд', 0, 0, amount=amount)
+        database.update_honey_collection_time(user_id)
+        
+        await query.answer(f"🍯 Вы собрали свежий мёд: {amount} шт!", show_alert=True)
+        await farm_menu_handler(update, context)
+    else:
+        # Считаем остаток времени
+        left_seconds = cooldown_seconds - elapsed
+        hours = int(left_seconds // 3600)
+        minutes = int((left_seconds % 3600) // 60)
+        await query.answer(f"⏳ Пчелы еще собирают нектар. Осталось: {hours}ч {minutes}м.", show_alert=True)
+
 
 async def harvest_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -4570,6 +4619,8 @@ def main():
                 CallbackQueryHandler(clan_hub_handler, pattern='^clans_menu$'),
                 CallbackQueryHandler(farm_menu_handler, pattern='^farm_menu$'),
                 CallbackQueryHandler(build_farm_handler, pattern='^build_farm$'),
+                CallbackQueryHandler(build_apiary_handler, pattern='^build_apiary$'),
+                CallbackQueryHandler(collect_honey_handler, pattern='^collect_honey$'),
                 CallbackQueryHandler(plant_handler, pattern='^plant_'),
                 CallbackQueryHandler(harvest_handler, pattern='^harvest_crop$'),
                 
