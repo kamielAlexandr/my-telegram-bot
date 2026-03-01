@@ -1590,7 +1590,15 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'elf_magic_menu' or data.startswith('school_') or data.startswith('set_spell_'):
         await elf_magic_menu_handler(update, context)
         return MAIN_MENU
-
+    # 2.5 АЛХИМИЯ - КАТЕГОРИИ
+    if data == 'alchemy_main':
+        await show_alchemy_menu(query, user_id)
+        return MAIN_MENU
+        
+    elif data.startswith('alch_cat_'):
+        rank = data.split('_')[2]
+        await render_alchemy_category(query, user_id, rank)
+        return MAIN_MENU
     # 3. ПРОФИЛЬ ГЕРОЯ
     if data == 'profile':
         char = database.get_character(user_id)
@@ -3992,34 +4000,73 @@ async def build_alchemy_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("❌ Не хватает золота (нужно 5000g)", show_alert=True)
 
 async def show_alchemy_menu(source, user_id):
-    """Показывает меню рецептов алхимии"""
-    # source может быть update или query
+    """Главное меню алхимии с выбором ранга"""
+    char = database.get_character(user_id)
+    txt = (
+        "🌿 **ЛАВКА ТРАВНИКА**\n"
+        "_«Секреты трав открываются лишь терпеливым...»_\n\n"
+        f"💰 Золото: {char['gold']}g\n"
+        "Выберите уровень рецептов:"
+    )
+    
+    kb = [
+        [InlineKeyboardButton("🆕 Ранг E (Обычные)", callback_data='alch_cat_E')],
+        [InlineKeyboardButton("🟢 Ранг D (Улучшенные)", callback_data='alch_cat_D')],
+        [InlineKeyboardButton("🔵 Ранг C (Редкие)", callback_data='alch_cat_C')],
+        [InlineKeyboardButton("🟣 Ранг B (Мистические)", callback_data='alch_cat_B')],
+        [InlineKeyboardButton("🟠 Ранг A (Адские)", callback_data='alch_cat_A')],
+        [InlineKeyboardButton("⚡ Ранг S (Эпические)", callback_data='alch_cat_S')],
+        [InlineKeyboardButton("🔙 В деревню", callback_data='back_to_main')]
+    ]
+    
+    if isinstance(source, Update):
+        await source.message.reply_photo(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await safe_edit(source, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+
+async def render_alchemy_category(query, user_id, rank):
+    """Отрисовка рецептов выбранного ранга"""
     items = database.get_inventory(user_id)
     inv_dict = {i['item_key']: i['quantity'] for i in items}
+    char = database.get_character(user_id)
     
-    txt = "🌿 **ЛАВКА ТРАВНИКА**\n_«Травы шепчут мне секреты силы...»_\n━━━━━━━━━━━━━━━━\n"
-    
+    txt = f"⚗️ **РЕЦЕПТЫ (РАНГ {rank})**\n_Ваше золото: {char['gold']}g_\n━━━━━━━━━━━━━━━━\n"
     kb = []
+    found = False
+    
     for key, recipe in ALCHEMY_RECIPES.items():
         res_item = ITEMS_DB.get(recipe['result'])
-        if not res_item: continue
-        
-        txt += f"🧪 *{res_item['name']}*\n   _{res_item['desc']}_\n"
+        # Фильтруем рецепты по рангу (если ранг не указан, считаем его 'E')
+        if not res_item or res_item.get('rank', 'E') != rank:
+            continue
+            
+        found = True
+        txt += f"🧪 *{res_item['name']}* (💰 {recipe['cost']}g)\n   _{res_item['desc']}_\n"
         
         mats_str = []
+        can_brew = True
         for mat, amt in recipe['mats'].items():
             m_name = ITEMS_DB.get(mat, {'name': mat})['name']
             u_amt = inv_dict.get(mat, 0)
             mark = "✅" if u_amt >= amt else "❌"
+            if u_amt < amt: can_brew = False
             mats_str.append(f"{mark} {u_amt}/{amt} {m_name}")
         
         txt += "   " + ", ".join(mats_str) + "\n\n"
-        kb.append([InlineKeyboardButton(f"⚗️ Варить {res_item['name']}", callback_data=f"brew_{key}")])
+        
+        # Кнопка зелёная, только если хватает ресурсов И золота
+        if can_brew and char['gold'] >= recipe['cost']:
+            kb.append([InlineKeyboardButton(f"⚗️ Варить {res_item['name']}", callback_data=f"brew_{key}")])
+        else:
+            kb.append([InlineKeyboardButton(f"❌ {res_item['name']} (Не хватает)", callback_data="ignore")])
+            
+    if not found:
+        txt += "Для этого ранга пока нет известных рецептов.\n"
+        
+    kb.append([InlineKeyboardButton("🔙 Назад к рангам", callback_data='alchemy_main')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
 
-    if isinstance(source, Update):
-        await source.message.reply_text(txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        await safe_edit(source, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
 
 async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -4031,7 +4078,6 @@ async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not recipe: return
     
-    # Проверка ресурсов (аналог крафта)
     items = database.get_inventory(user_id)
     inv_dict = {i['item_key']: i['quantity'] for i in items}
     char = database.get_character(user_id)
@@ -4053,8 +4099,10 @@ async def brew_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     database.buy_item(user_id, recipe['result'], res_item['type'], res_item['name'], 0, res_item.get('effect', 0))
     
     await query.answer(f"⚗️ Сварено: {res_item['name']}")
-    await show_alchemy_menu(query, user_id)
-
+    
+    # Возвращаемся в ту же категорию!
+    rank = res_item.get('rank', 'E')
+    await render_alchemy_category(query, user_id, rank)
 
 # ==========================================
 # === ФЕРМЕР И ПОВАР ===
