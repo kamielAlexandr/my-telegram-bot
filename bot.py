@@ -3231,30 +3231,85 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await render_sell_menu(query, user_id)
         return SHOP_MENU
 
-    # 4. ОБРАБОТКА ПРОДАЖИ
-    elif data.startswith('sell_item_'):
-        # --- АНТИ-СПАМ ЗАЩИТА В ИНТЕРФЕЙСЕ ---
+    # ==========================================
+    # 4. МЕНЮ ВЫБОРА КОЛИЧЕСТВА ДЛЯ ПРОДАЖИ
+    # ==========================================
+    elif data.startswith('sell_item_') and not data.startswith('sell_exec_'):
+        item_key = data.split('_', 2)[2]
+        items = database.get_inventory(user_id)
+        
+        # Ищем предмет в инвентаре
+        item_data = next((i for i in items if i['item_key'] == item_key), None)
+        if not item_data or item_data['quantity'] <= 0:
+            await query.answer("У вас нет этого предмета!", show_alert=True)
+            return SHOP_MENU
+            
+        item_info = ITEMS_DB.get(item_key)
+        if not item_info: return SHOP_MENU
+        
+        sell_price = max(1, item_info.get('price', 10) // 2)
+        max_qty = item_data['quantity']
+        
+        txt = (
+            f"⚖️ *Торговец оценивает ваш товар*\n"
+            f"📦 Предмет: *{item_info['name']}*\n"
+            f"📊 В наличии: {max_qty} шт.\n"
+            f"🪙 Цена за 1 шт: {sell_price}g\n\n"
+            f"Сколько хотите продать?"
+        )
+        
+        kb = [
+            [InlineKeyboardButton(f"1 шт (+{sell_price}g)", callback_data=f"sell_exec_{item_key}_1")]
+        ]
+        if max_qty >= 5:
+            kb.append([InlineKeyboardButton(f"5 шт (+{sell_price * 5}g)", callback_data=f"sell_exec_{item_key}_5")])
+        if max_qty >= 10:
+            kb.append([InlineKeyboardButton(f"10 шт (+{sell_price * 10}g)", callback_data=f"sell_exec_{item_key}_10")])
+        if max_qty > 1:
+            kb.append([InlineKeyboardButton(f"💰 Продать ВСЁ ({max_qty} шт за {sell_price * max_qty}g)", callback_data=f"sell_exec_{item_key}_all")])
+            
+        kb.append([InlineKeyboardButton("🔙 Отмена", callback_data='shop_sell_menu')])
+        
+        # Если у вас нет IMAGE_URLS['shop'], будет использована 'village'
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('shop', IMAGE_URLS.get('village', '')), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        return SHOP_MENU
+
+    # ==========================================
+    # 4.1. ФАКТИЧЕСКОЕ ВЫПОЛНЕНИЕ ПРОДАЖИ
+    # ==========================================
+    elif data.startswith('sell_exec_'):
         if context.user_data.get('is_selling'):
             await query.answer("⏳ Торговец пересчитывает монеты...", show_alert=False)
             return SHOP_MENU
             
         context.user_data['is_selling'] = True
         try:
-            item_key = data.split('_', 2)[2]
-            item_info = ITEMS_DB.get(item_key)
+            parts = data.split('_')
+            qty_str = parts[-1]
+            item_key = "_".join(parts[2:-1])
             
-            if not item_info:
-                await query.answer("Ошибка предмета.", show_alert=True)
-                await render_sell_menu(query, user_id) 
+            items = database.get_inventory(user_id)
+            item_data = next((i for i in items if i['item_key'] == item_key), None)
+            
+            if not item_data or item_data['quantity'] <= 0:
+                await query.answer("Предмет уже закончился!", show_alert=True)
+                await render_sell_menu(query, user_id)
                 return SHOP_MENU
                 
+            max_qty = item_data['quantity']
+            sell_qty = max_qty if qty_str == 'all' else int(qty_str)
+            if sell_qty > max_qty: sell_qty = max_qty
+            
+            item_info = ITEMS_DB.get(item_key)
+            if not item_info: return SHOP_MENU
+            
             stat_changes = {}
             eff = item_info.get('effect', 0)
             
+            # Собираем данные о снятии статов (как было у вас)
             if eff > 0:
                 itype = item_info['type']
-                if itype == 'weapon': 
-                    stat_changes['strength'] = -eff
+                if itype == 'weapon': stat_changes['strength'] = -eff
                 elif itype == 'magic_weapon':
                     stat_changes['intelligence'] = -eff
                     stat_changes['max_mana'] = -(eff * 3)
@@ -3265,7 +3320,7 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 elif itype == 'heavy_armor':
                     stat_changes['max_health'] = -eff
                     stat_changes['health'] = -eff
-                    stat_changes['physical_resistance'] = -(eff / 200.0) # Возвращаем снятие защиты!
+                    stat_changes['physical_resistance'] = -(eff / 200.0) 
                 elif itype == 'light_armor':
                     stat_changes['max_health'] = -int(eff * 0.6)
                     stat_changes['health'] = -int(eff * 0.6)
@@ -3273,22 +3328,32 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 elif itype == 'magic_armor':
                     stat_changes['max_mana'] = -(eff * 2)
                     stat_changes['mana'] = -(eff * 2)
-                    stat_changes['magic_resistance'] = -(eff / 200.0) # Возвращаем снятие маг защиты!
+                    stat_changes['magic_resistance'] = -(eff / 200.0) 
                 elif itype in ['artifact', 'acc']:
                     stat_changes['intelligence'] = -eff
                     stat_changes['max_mana'] = -(eff * 5)
                     stat_changes['mana'] = -(eff * 5)
 
-            sell_price = max(1, item_info['price'] // 2)
-            success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
+            sell_price = max(1, item_info.get('price', 10) // 2)
+            success_count = 0
             
-            if success:
-                await query.answer(f"💰 Продано: {item_info['name']} (+{sell_price}g)", show_alert=True)
-                await render_sell_menu(query, user_id)
+            # Выполняем продажу N раз, чтобы статы корректно снялись за каждую штуку
+            for _ in range(sell_qty):
+                success, msg = database.execute_sell(user_id, item_key, sell_price, stat_changes)
+                if success:
+                    success_count += 1
+                else:
+                    break # Если произошла ошибка в БД, прерываем цикл
+            
+            if success_count > 0:
+                total_profit = success_count * sell_price
+                await query.answer(f"💰 Продано {success_count} шт. (+{total_profit}g)", show_alert=True)
             else:
-                await query.answer(f"❌ {msg}", show_alert=True)
+                await query.answer("❌ Ошибка при продаже.", show_alert=True)
+                
+            await render_sell_menu(query, user_id)
+            
         finally:
-            # Снимаем блокировку, чтобы можно было продать следующий предмет
             context.user_data['is_selling'] = False
             
         return SHOP_MENU
@@ -3356,7 +3421,6 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return SHOP_MENU
 
         if itype in ['artifact', 'acc']:
-            # Теперь мы считаем реальное количество предметов (quantity), а не просто ячейки
             acc_count = sum(i['quantity'] for i in items if ITEMS_DB.get(i['item_key'], {}).get('type') in ['artifact', 'acc'])
             if acc_count >= 20:
                 await query.answer("⛔ Слот аксессуаров полон! (Макс 20 шт.)", show_alert=True)
