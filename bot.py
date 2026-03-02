@@ -15,6 +15,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
     ContextTypes, ConversationHandler, MessageHandler, filters, PreCheckoutQueryHandler
 )
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, LabeledPrice, BotCommand, ReplyKeyboardMarkup
 import database
 
 # Настройка логирования
@@ -988,28 +989,49 @@ async def herbalist_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     return MAIN_MENU
 
-async def start_expedition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    char = database.get_character(user.id)
     
-    try:
-        # data = send_exp_E
-        rank = query.data.split('_')[2]
+    # --- НОВАЯ НИЖНЯЯ КЛАВИАТУРА БЫСТРОГО ДОСТУПА ---
+    quick_kb = ReplyKeyboardMarkup([['/start', '/alchemy', '/reset']], resize_keyboard=True, is_persistent=True)
+    
+    # Отправляем техническое сообщение, чтобы закрепить нижние кнопки
+    if update.message:
+        await update.message.reply_text("⚔️ Вход в мир Темного Фентези...", reply_markup=quick_kb)
+    
+    if char:
+        txt = (
+            f"С возвращением, {char['character_name']}!\n"
+            f"Темные времена настали, надеюсь ты готов к новым испытаниям.\n\n"
+            f"🔔 *Следи за обновлениями в канале:*\n"
+            f"👉 [Путь героя | Dark Fantasy](https://t.me/hero_spath)"
+        )
         
-        # Проверка валидности ранга
-        if rank not in EXPEDITION_CONFIG:
-            await query.answer(f"❌ Ошибка: неверный ранг {rank}", show_alert=True)
-            return
+        # Если update.message существует, отвечаем на него, иначе шлем в чат напрямую
+        if update.message:
+            await update.message.reply_photo(
+                IMAGE_URLS['village'], 
+                caption=txt, 
+                parse_mode='Markdown', 
+                reply_markup=get_main_menu_keyboard(user.id)
+            )
+        else:
+            await context.bot.send_photo(
+                chat_id=user.id,
+                photo=IMAGE_URLS['village'], 
+                caption=txt, 
+                parse_mode='Markdown', 
+                reply_markup=get_main_menu_keyboard(user.id)
+            )
+        return MAIN_MENU
+    else:
+        if update.message:
+            await update.message.reply_text("Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
+        else:
+            await context.bot.send_message(chat_id=user.id, text="Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
+        return CHOOSE_RACE
         
-        # Запускаем экспедицию
-        database.start_expedition(user_id, rank)
-        
-        await query.answer(f"✅ Травник ушел в {EXPEDITION_CONFIG[rank]['name']}!")
-        await herbalist_menu_handler(update, context)
-        
-    except Exception as e:
-        logger.error(f"Ошибка экспедиции для user {user_id}: {e}")
-        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 async def claim_loot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -4777,7 +4799,13 @@ async def enter_buy_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Очищаем временную память
     context.user_data.pop('buy_item_key', None)
     return MAIN_MENU
-
+# --- НАСТРОЙКА БЫСТРОГО МЕНЮ TELEGRAM ---
+async def setup_bot_commands(application: Application):
+    await application.bot.set_my_commands([
+        BotCommand("start", "🏠 В деревню (Главное меню)"),
+        BotCommand("alchemy", "⚗️ Лавка Травника"),
+        BotCommand("reset", "💀 Реинкарнация (Сброс героя)")
+    ])
 def main():
     # 1. Инициализируем БД и таблицы
     database.init_db()
@@ -4788,7 +4816,7 @@ def main():
     if hasattr(database, 'init_farm_table'):
         database.init_farm_table()
     
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(setup_bot_commands).build()
     
     # Оставляем только команду /alchemy глобальной
     app.add_handler(CommandHandler('alchemy', alchemy_command))
