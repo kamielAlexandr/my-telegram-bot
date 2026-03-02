@@ -41,6 +41,12 @@ IMAGE_URLS = {
     'vampire_hero': 'https://i.pinimg.com/736x/f7/cc/5d/f7cc5d151ba496829019f5d0c473fe4f.jpg',
     'lizardman': 'https://i.pinimg.com/736x/71/78/8e/71788e6d14f77626848d21b322800be0.jpg',
     'frogman': 'https://i.pinimg.com/736x/c3/d7/f6/c3d7f623bca415d0e111c867f3cb4cac.jpg',
+    # НОВЫЕ РАСЫ:
+    'leprechaun': 'https://i.pinimg.com/736x/18/60/2b/18602bb207c8e57cadf56a676c98e657.jpg',
+    'undead': 'https://i.pinimg.com/736x/1f/c3/40/1fc34080cade4fe342cf4417d843cd61.jpg',
+
+
+    
     
     'wolf': 'https://i.pinimg.com/736x/9f/8e/25/9f8e2507aceaa217060d249c308e2a13.jpg',
     'goblin': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRv_JCAj5bxf0VGHSS_-brpxVZfOz-T-CUR7w&s',
@@ -137,7 +143,18 @@ RACE_ABILITIES = {
         10: {'key': 'fr1', 'name': '👅 Хлыст-язык', 'mana': 15, 'cd': 2, 'type': 'dmg_agi', 'val': 2.0, 'desc': 'Быстрый удар (зависит от Ловкости).'},
         25: {'key': 'fr2', 'name': '🤢 Токсичная слизь', 'mana': 35, 'cd': 4, 'type': 'magic_nuke', 'val': 2.5, 'desc': 'Магический ядовитый взрыв (250%).'},
         40: {'key': 'fr3', 'name': '🌊 Целебная трясина', 'mana': 50, 'cd': 5, 'type': 'heal', 'val': 0.8, 'desc': 'Восстанавливает 80% здоровья.'}
+    },
+    'leprechaun': {
+        10: {'key': 'lep1', 'name': '🍀 Иллюзия', 'mana': 15, 'cd': 3, 'type': 'buff_def', 'val': 0.8, 'desc': 'Ложный силуэт. Снижает урон.'},
+        25: {'key': 'lep2', 'name': '🪙 Монетный шквал', 'mana': 35, 'cd': 3, 'type': 'dmg_agi', 'val': 2.2, 'desc': 'Бьет врага магией от Ловкости.'},
+        40: {'key': 'lep3', 'name': '🌈 Золотая лихорадка', 'mana': 60, 'cd': 5, 'type': 'heal_mana', 'val': 0.7, 'desc': 'Восстанавливает 70% ХП и лечит яды.'}
+    },
+    'undead': {
+        10: {'key': 'und1', 'name': '🦴 Костяной панцирь', 'mana': 20, 'cd': 4, 'type': 'buff_def', 'val': 1.0, 'desc': 'Игнорирует 1 атаку (Блок).'},
+        25: {'key': 'und2', 'name': '☠️ Могильный холод', 'mana': 35, 'cd': 3, 'type': 'stun_dmg', 'val': 1.8, 'desc': 'Урон (180%) + шанс заморозить (оглушить).'},
+        40: {'key': 'und3', 'name': '🧟‍♂️ Восстание из мертвых', 'mana': 50, 'cd': 5, 'type': 'lifesteal', 'val': 3.5, 'desc': 'Разрывает плоть врага (350%) и восстанавливает себе ХП.'}
     }
+    
 }
 ELF_MAGIC_TYPES = {
     'solar': {'name': '☀️ Магия Солнца', 'desc': 'Испепеляющий жар.'},
@@ -1571,7 +1588,9 @@ def get_race_selection_keyboard():
         [InlineKeyboardButton("🪓 Орк", callback_data="race_orc")],
         [InlineKeyboardButton("🦇 Вампир", callback_data="race_vampire")], # <--- НАШ ВАМПИР!
         [InlineKeyboardButton("🦎 Ящеролюд", callback_data="race_lizardman")],
-        [InlineKeyboardButton("🐸 Жаболюд", callback_data="race_frogman")]
+        [InlineKeyboardButton("🐸 Жаболюд", callback_data="race_frogman")],
+        [InlineKeyboardButton("🍀 Лепрекон (+5% Золота)", callback_data="race_leprechaun")],
+        [InlineKeyboardButton("💀 Нежить (Много ХП)", callback_data="race_undead")]
     ]
     return InlineKeyboardMarkup(kb)
 # --- HANDLERS ---
@@ -1642,7 +1661,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'orc': 'Орк',
             'vampire': 'Вампир',
             'lizardman': 'Ящеролюд',
-            'frogman': 'Жаболюд'
+            'frogman': 'Жаболюд',
+            'leprechaun': 'Лепрекон', # НОВОЕ
+            'undead': 'Нежить'        # НОВОЕ
         }
         race_name = race_names.get(race_key, race_key.capitalize())
 
@@ -2300,6 +2321,9 @@ async def battle_action_handler(update: Update, context: ContextTypes.DEFAULT_TY
             # 2. ПРОВЕРКА ПОБЕДЫ
             if e['health'] <= 0:
                 gold_win = int(e['gold'] * random.uniform(0.9, 1.2))
+                # --- ПАССИВКА ЛЕПРЕКОНА ---
+                if c['race'] == 'leprechaun':
+                    gold_win = int(gold_win * 1.05)
                 xp_win = e['exp']
                 
                 dropped_items = []
@@ -2583,7 +2607,9 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 🔥 БАЛАНС НАГРАД (Зависит от уровня, а не от нанесенного урона)
     gold_reward = random.randint(30, 80) + (lvl * 3)
     xp_reward = random.randint(50, 150) + (lvl * 10)
-    
+    # --- ПАССИВКА ЛЕПРЕКОНА ---
+    if char['race'] == 'leprechaun':
+        gold_reward = int(gold_reward * 1.05)
     try:
         is_dead, left_hp = database.execute_raid_damage(clan['id'], damage)
         database.update_raid_attack_time(user_id)
@@ -3426,6 +3452,8 @@ async def shop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not item_info: return SHOP_MENU
         
         sell_price = max(1, item_info.get('price', 10) // 2)
+        if char['race'] == 'leprechaun':
+                sell_price = int(sell_price * 1.05)
         max_qty = item_data['quantity']
         
         txt = (
