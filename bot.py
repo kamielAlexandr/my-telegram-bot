@@ -4034,7 +4034,9 @@ async def show_top_players(query, user_id, page=1):
         'orc': 'Орк',
         'vampire': 'Вампир',
         'lizardman': 'Ящеролюд',
-        'frogman': 'Жаболюд'
+        'frogman': 'Жаболюд',
+        'leprechaun': 'Лепрекон', # <--- ДОБАВИЛИ
+        'undead': 'Нежить'
     }
     
     for i, player in enumerate(top_players, 1):
