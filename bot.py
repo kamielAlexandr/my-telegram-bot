@@ -4977,6 +4977,8 @@ def main():
             ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
             
             MAIN_MENU: [
+                # --- ЖЕЛЕЗОБЕТОННЫЙ ПЕРЕХВАТ КОМАНДЫ ---
+                CommandHandler('slums', slums_command),
                 CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'),
                 CallbackQueryHandler(build_alchemy_handler, pattern='^build_alchemy$'),
                 CallbackQueryHandler(brew_handler, pattern='^brew_'),
