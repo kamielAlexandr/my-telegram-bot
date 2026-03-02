@@ -2116,20 +2116,46 @@ def update_honey_collection_time(user_id):
         conn.close()
 def get_raid_attack_time(user_id):
     conn = get_connection()
+    if not conn: return None
     try:
         with conn.cursor() as c:
             c.execute("SELECT last_raid_attack FROM player_characters WHERE user_id = %s", (user_id,))
             res = c.fetchone()
             return res[0] if res else None
+    except Exception as e:
+        print(f"Raid GET error: {e}")
+        # ЭКСТРЕННАЯ МИГРАЦИЯ: Если колонки нет, создаем её на лету
+        try:
+            conn.rollback()
+            with conn.cursor() as c2:
+                c2.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_raid_attack TIMESTAMP")
+                conn.commit()
+        except:
+            pass
+        return None
     finally:
         conn.close()
 
 def update_raid_attack_time(user_id):
     conn = get_connection()
+    if not conn: return False
     try:
         with conn.cursor() as c:
             c.execute("UPDATE player_characters SET last_raid_attack = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
             conn.commit()
+            return True
+    except Exception as e:
+        print(f"Raid UPDATE error: {e}")
+        # Если ошибка при записи, пытаемся создать колонку и записать снова
+        try:
+            conn.rollback()
+            with conn.cursor() as c2:
+                c2.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_raid_attack TIMESTAMP")
+                c2.execute("UPDATE player_characters SET last_raid_attack = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
+                conn.commit()
+                return True
+        except:
+            return False
     finally:
         conn.close()
 
