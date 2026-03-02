@@ -126,6 +126,10 @@ def init_db():
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_refresh_date DATE",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_magic_type VARCHAR(20)",
                 # В списке columns_to_add:
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS guild_reputation INTEGER DEFAULT 0",
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_honey_collection TIMESTAMP",
+                # --- НОВАЯ СТРОЧКА ДЛЯ РЕЙДОВ ---
+                "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS last_raid_attack TIMESTAMP",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS elf_active_spell VARCHAR(50)",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS quests_completed_today INTEGER DEFAULT 0",
                 "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS guild_reputation INTEGER DEFAULT 0",
@@ -1895,27 +1899,41 @@ def init_clans_table():
     if not conn: return
     try:
         with conn.cursor() as c:
-            # Создаем таблицу кланов
             c.execute("""
                 CREATE TABLE IF NOT EXISTS clans (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(30) NOT NULL UNIQUE,
                     owner_id BIGINT NOT NULL,
                     icon_id TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    raid_level INTEGER DEFAULT 1,
+                    raid_hp INTEGER DEFAULT 0,
+                    raid_max_hp INTEGER DEFAULT 0,
+                    raid_points INTEGER DEFAULT 0
                 )
             """)
-            # Пытаемся добавить колонку клана к игроку
             try:
                 c.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS clan_id INTEGER DEFAULT NULL")
             except:
-                conn.rollback() # Игнорируем ошибку, если колонка уже есть
+                conn.rollback() 
+            
+            # Миграция для старых баз: добавим новые колонки, если таблица уже есть
+            try:
+                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_level INTEGER DEFAULT 1")
+                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_hp INTEGER DEFAULT 0")
+                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_max_hp INTEGER DEFAULT 0")
+                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_points INTEGER DEFAULT 0")
+            except:
+                conn.rollback()
+
             conn.commit()
-            print("✅ Система кланов инициализирована.")
+            print("✅ Система кланов (и рейдов) инициализирована.")
     except Exception as e:
         print(f"Clan init error: {e}")
     finally:
         conn.close()
+
+
 
 def create_clan(user_id, name, icon_id):
     conn = get_connection()
@@ -1959,14 +1977,14 @@ def get_all_clans():
     if not conn: return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as c:
-            # Считаем количество участников и приклеиваем имя лидера (owner_name)
+            # Сортируем сначала по очкам рейда, потом по количеству участников
             c.execute("""
                 SELECT cl.*, COUNT(pc.id) as members_count, owner_pc.character_name as owner_name 
                 FROM clans cl 
                 LEFT JOIN player_characters pc ON pc.clan_id = cl.id 
                 LEFT JOIN player_characters owner_pc ON cl.owner_id = owner_pc.user_id
                 GROUP BY cl.id, owner_pc.character_name
-                ORDER BY members_count DESC 
+                ORDER BY raid_points DESC, members_count DESC 
                 LIMIT 20
             """)
             return c.fetchall()
@@ -2089,5 +2107,49 @@ def update_honey_collection_time(user_id):
     except Exception as e:
         print(f"Honey UPDATE error: {e}")
         return False
+    finally:
+        conn.close()
+def get_raid_attack_time(user_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            c.execute("SELECT last_raid_attack FROM player_characters WHERE user_id = %s", (user_id,))
+            res = c.fetchone()
+            return res[0] if res else None
+    finally:
+        conn.close()
+
+def update_raid_attack_time(user_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            c.execute("UPDATE player_characters SET last_raid_attack = CURRENT_TIMESTAMP WHERE user_id = %s", (user_id,))
+            conn.commit()
+    finally:
+        conn.close()
+
+def execute_raid_damage(clan_id, damage):
+    """Атомарно вычитает HP босса и возвращает (убит ли босс, оставшееся HP)"""
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            c.execute("UPDATE clans SET raid_hp = GREATEST(0, raid_hp - %s) WHERE id = %s RETURNING raid_hp", (damage, clan_id))
+            left_hp = c.fetchone()[0]
+            
+            is_dead = left_hp <= 0
+            if is_dead:
+                # Если убили, даем очки клану и сбрасываем босса для следующего призыва
+                c.execute("UPDATE clans SET raid_points = raid_points + (raid_level * 10), raid_level = raid_level + 1, raid_hp = 0, raid_max_hp = 0 WHERE id = %s", (clan_id,))
+            conn.commit()
+            return is_dead, left_hp
+    finally:
+        conn.close()
+        
+def summon_raid_boss(clan_id, max_hp):
+    conn = get_connection()
+    try:
+        with conn.cursor() as c:
+            c.execute("UPDATE clans SET raid_hp = %s, raid_max_hp = %s WHERE id = %s", (max_hp, max_hp, clan_id))
+            conn.commit()
     finally:
         conn.close()
