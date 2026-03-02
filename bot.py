@@ -1032,7 +1032,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=user.id, text="Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
         return CHOOSE_RACE
         
-
+async def start_expedition_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # Разбираем callback_data, например send_exp_E
+        rank = query.data.split('_')[2]
+        
+        # Проверка валидности ранга
+        if rank not in EXPEDITION_CONFIG:
+            await query.answer(f"❌ Ошибка: неверный ранг {rank}", show_alert=True)
+            return
+        
+        # Запускаем экспедицию
+        database.start_expedition(user_id, rank)
+        
+        await query.answer(f"✅ Травник ушел в {EXPEDITION_CONFIG[rank]['name']}!")
+        await herbalist_menu_handler(update, context)
+        
+    except Exception as e:
+        logger.error(f"Ошибка экспедиции для user {user_id}: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+        
 async def claim_loot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -1550,29 +1572,6 @@ def get_race_selection_keyboard():
     return InlineKeyboardMarkup(kb)
 # --- HANDLERS ---
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    char = database.get_character(user.id)
-    
-    if char:
-        # Обновленный текст с ссылкой
-        txt = (
-            f"С возвращением, {char['character_name']}!\n"
-            f"Темные времена настали, надеюсь ты готов к новым испытаниям.\n\n"
-            f"🔔 *Следи за обновлениями в канале:*\n"
-            f"👉 [Путь героя | Dark Fantasy](https://t.me/hero_spath)"
-        )
-        
-        await update.message.reply_photo(
-            IMAGE_URLS['village'], 
-            caption=txt, 
-            parse_mode='Markdown', # Важно для работы ссылки
-            reply_markup=get_main_menu_keyboard(user.id)
-        )
-        return MAIN_MENU
-    else:
-        await update.message.reply_text("Мир погрузился во тьму. Выберите, кем вы родились в этот проклятый век:", reply_markup=get_race_selection_keyboard())
-        return CHOOSE_RACE
 
 async def choose_race(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
