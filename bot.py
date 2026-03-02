@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Состояния
 # Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY = range(16)
-
+# Состояния
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY, SLUMS_BET_ENTER = range(17)
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
@@ -92,8 +92,10 @@ IMAGE_URLS = {
     'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg',
     'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg',
     'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg',
+    # Трущобы
+    'slums': 'https://i.pinimg.com/1200x/c7/93/29/c793297a7a8d56b46ea4b64f9bfcd063.jpg',
     #Клан босс
-    'raid_boss': 'https://i.pinimg.com/736x/b7/8f/fc/b78ffcfa0209e587e1416d4db43e4adb.jpg'
+    'raid_boss': 'https://i.pinimg.com/736x/c5/4f/44/c54f44d381b5a6d5e61b6f2152c3b4a2.jpg'
 
     
 }
@@ -993,8 +995,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     char = database.get_character(user.id)
     
+    
     # --- НОВАЯ НИЖНЯЯ КЛАВИАТУРА БЫСТРОГО ДОСТУПА ---
-    quick_kb = ReplyKeyboardMarkup([['/start', '/alchemy', '/reset']], resize_keyboard=True, is_persistent=True)
+    quick_kb = ReplyKeyboardMarkup([['/start', '/slums'], ['/alchemy', '/reset']], resize_keyboard=True, is_persistent=True)
     
     # Отправляем техническое сообщение, чтобы закрепить нижние кнопки
     if update.message:
@@ -1397,6 +1400,7 @@ def get_main_menu_keyboard(user_id):
         [InlineKeyboardButton("🛍 Торговец", callback_data='shop'), InlineKeyboardButton("🛠 Крафт", callback_data='craft_menu')],
         [InlineKeyboardButton("📜 Гильдия", callback_data='guild_menu'),
          InlineKeyboardButton("💎 Банк (Донат)", callback_data='donate_menu')], 
+        
         [
             InlineKeyboardButton("🏆 Топ героев", callback_data='top_players'),
             InlineKeyboardButton("🛡 Топ кланов", callback_data='top_clans')
@@ -4798,9 +4802,117 @@ async def enter_buy_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Очищаем временную память
     context.user_data.pop('buy_item_key', None)
     return MAIN_MENU
+# ==========================================
+# === ТРУЩОБЫ (АЗАРТНАЯ ИГРА) ===
+# ==========================================
+
+async def slums_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    char = database.get_character(user_id)
+    
+    if not char:
+        return
+
+    txt = (
+        "🏚 *ТРУЩОБЫ ГРЕШНИКОВ*\n\n"
+        "Грязь, вонь и крики оборванцев. В темном переулке на ящике сидит человек в капюшоне. "
+        "Он ловко перекатывает костяной шарик под тремя черепами.\n\n"
+        f"👤 *Шулер:* _«Подходи, герой! Угадай, где шарик, и я умножу твою ставку в 50 раз! Всё абсолютно честно!»_\n\n"
+        f"💰 Ваше золото: {char['gold']}g"
+    )
+
+    kb = [
+        [InlineKeyboardButton("🎲 Сыграть в черепа (Ставка)", callback_data='slums_bet_start')],
+        [InlineKeyboardButton("🔙 Уйти от греха подальше", callback_data='back_to_main')]
+    ]
+
+    # Если вызвано командой /slums
+    if update.message:
+        await update.message.reply_photo(
+            photo=IMAGE_URLS.get('slums', IMAGE_URLS['village']), 
+            caption=txt, 
+            parse_mode='Markdown', 
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+    # Если вызвано кнопкой возврата
+    elif update.callback_query:
+        try: await update.callback_query.answer()
+        except: pass
+        await safe_edit(
+            update.callback_query, 
+            text=txt, 
+            media=InputMediaPhoto(IMAGE_URLS.get('slums', IMAGE_URLS['village']), caption=txt, parse_mode='Markdown'), 
+            keyboard=InlineKeyboardMarkup(kb)
+        )
+        
+    return MAIN_MENU
+
+async def slums_bet_start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    user_id = query.from_user.id
+
+    await context.bot.send_message(
+        chat_id=user_id, 
+        text="💰 Сколько золота вы хотите поставить на кон?\n\n_Напишите сумму в чат (или введите 0 для отмены):_", 
+        parse_mode='Markdown'
+    )
+    return SLUMS_BET_ENTER
+
+async def enter_slums_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    char = database.get_character(user_id)
+
+    try:
+        bet = int(update.message.text.strip())
+    except:
+        await update.message.reply_text("Шулер хмурится: _«Я принимаю только золотые монеты. Назови нормальное число!»_", parse_mode='Markdown')
+        return SLUMS_BET_ENTER
+
+    if bet <= 0:
+        await update.message.reply_text("Вы махнули рукой и отошли от бочки.", reply_markup=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    if char['gold'] < bet:
+        await update.message.reply_text(f"Шулер смеется: _«У тебя нет столько монет, оборванец! В карманах всего {char['gold']}g!»_\nВведите число поменьше:", parse_mode='Markdown')
+        return SLUMS_BET_ENTER
+
+    # Списываем ставку сразу
+    database.add_gold(user_id, -bet)
+
+    # --- ЖЕСТОКАЯ РУЛЕТКА (ШАНС 1 ИЗ 100) ---
+    roll = random.randint(1, 100)
+
+    # Загадываем число 42. Только если выпадет 42 - игрок побеждает.
+    if roll == 42: 
+        win_amount = bet * 50
+        database.add_gold(user_id, win_amount)
+        txt = (
+            f"🎉 *НЕВЕРОЯТНО!*\n\n"
+            f"Вы уверенно тыкаете пальцем в правый череп. Шулер бледнеет, поднимает его, и там... костяной шарик!\n"
+            f"Он с проклятиями отсчитывает вам огромный выигрыш.\n\n"
+            f"💰 **+{win_amount}g!**"
+        )
+    else:
+        txt = (
+            f"💀 *ОБМАН!*\n\n"
+            f"Вы поднимаете центральный череп... Пусто.\n"
+            f"Шулер мерзко хихикает и сгребает ваше золото себе за пазуху: _«Не повезло, друг! Попробуешь еще?»_\n\n"
+            f"💸 **-{bet}g**"
+        )
+
+    await update.message.reply_photo(
+        photo=IMAGE_URLS.get('slums', IMAGE_URLS['village']), 
+        caption=txt, 
+        parse_mode='Markdown', 
+        reply_markup=get_main_menu_keyboard(user_id)
+    )
+    return MAIN_MENU
 # --- НАСТРОЙКА БЫСТРОГО МЕНЮ TELEGRAM ---
 async def setup_bot_commands(application: Application):
     await application.bot.set_my_commands([
+        BotCommand("slums", "🏚 Трущобы (Азартная игра)"),
         BotCommand("start", "🏠 В деревню (Главное меню)"),
         BotCommand("alchemy", "⚗️ Лавка Травника"),
         BotCommand("reset", "💀 Реинкарнация (Сброс героя)")
@@ -4827,7 +4939,9 @@ def main():
     app.add_handler(CallbackQueryHandler(cancel_rebirth_handler, pattern='^cancel_rebirth$'))
     # --- ДИАЛОГИ (Здесь исправлена маршрутизация кнопок) ---
     conv = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler('start', start),
+                     CommandHandler('slums', slums_command)
+                     ],
         states={
             CHOOSE_RACE: [CallbackQueryHandler(choose_race, pattern='^race_')],
             ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
@@ -4851,7 +4965,12 @@ def main():
                 CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'),
                 CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'),
                 CallbackQueryHandler(cook_handler, pattern='^cook_'),
-
+                # --- КНОПКИ ТРУЩОБ ---
+               # --- ТРУЩОБЫ ---
+                CommandHandler('slums', slums_command),
+                CallbackQueryHandler(slums_command, pattern='^slums_menu$'), # на случай возврата назад
+                CallbackQueryHandler(slums_bet_start_handler, pattern='^slums_bet_start$'),
+                # ---------------------
                 CallbackQueryHandler(fishing_menu_handler, pattern='^fishing_menu$'),
                 CallbackQueryHandler(build_pier_handler, pattern='^build_pier$'),
                 CallbackQueryHandler(catch_fish_handler, pattern='^catch_fish$'),
@@ -4890,8 +5009,11 @@ def main():
             CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
             # --- НОВАЯ СТРОКА (Магазин) ---
             SHOP_BUY_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_buy_quantity)],
+            # --- СТАВКА В ТРУЩОБАХ ---
+            SLUMS_BET_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_slums_bet)],
         },
-        fallbacks=[CommandHandler('start', start)]
+        fallbacks=[CommandHandler('start', start),
+                  CommandHandler('slums', slums_command)]
     )
     
     app.add_handler(conv)
