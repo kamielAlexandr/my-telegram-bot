@@ -92,7 +92,7 @@ IMAGE_URLS = {
     'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg',
     'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg',
     #Клан босс
-    'raid_boss': 'https://i.pinimg.com/1200x/bc/d0/09/bcd009247eb9104c99cd068ee18cc2ba.jpg'
+    'raid_boss': 'https://i.pinimg.com/736x/b7/8f/fc/b78ffcfa0209e587e1416d4db43e4adb.jpg'
 
     
 }
