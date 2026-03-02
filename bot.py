@@ -2495,9 +2495,6 @@ async def clan_raid_hub_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
-    
     user_id = query.from_user.id
     char = database.get_character(user_id)
     clan = database.get_clan_by_id(char.get('clan_id'))
@@ -2521,9 +2518,6 @@ async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
-    
     user_id = query.from_user.id
     char = database.get_character(user_id)
     clan = database.get_clan_by_id(char.get('clan_id'))
@@ -2552,7 +2546,6 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     lvl = char.get('level', 1)
     
     # Адекватная формула: (Стат * 10) + (Уровень * 50) 
-    # Например: на 50 уровне со статом 100 урон будет около 3500. Для 1 000 000 ХП понадобится весь клан!
     base_dmg = (best_stat * 10) + (lvl * 50)
     damage = int(base_dmg * random.uniform(0.8, 1.2)) # Разброс урона +- 20%
     
@@ -2562,8 +2555,7 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         damage *= 2
         is_crit = True
     
-    # 🔥 БАЛАНС НАГРАД (Зависит от уровня, а не от миллионного урона)
-    # На 50 ур: ~180 золота и ~600 опыта раз в 4 часа. Это отличный бонус, но он не сломает игру.
+    # 🔥 БАЛАНС НАГРАД (Зависит от уровня, а не от нанесенного урона)
     gold_reward = random.randint(30, 80) + (lvl * 3)
     xp_reward = random.randint(50, 150) + (lvl * 10)
     
@@ -2588,6 +2580,8 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("Ошибка атаки. Попробуйте еще раз.", show_alert=True)
         
     return await clan_raid_hub_handler(update, context)
+
+
 
 
 async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
