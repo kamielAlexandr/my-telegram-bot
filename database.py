@@ -43,6 +43,19 @@ RACES = {
         "strength": 6, "agility": 14, "intelligence": 9, "vitality": 6, # Экстремальная ловкость
         "health_multiplier": 6, 
         "mana_multiplier": 4,
+    },
+    # --- НОВЫЕ РАСЫ ---
+    "leprechaun": {
+        "name": "Лепрекон",
+        "strength": 5, "agility": 12, "intelligence": 11, "vitality": 6, # Слаб физически, но хитер
+        "health_multiplier": 6, 
+        "mana_multiplier": 5,
+    },
+    "undead": {
+        "name": "Нежить",
+        "strength": 12, "agility": 4, "intelligence": 7, "vitality": 15, # Медленный, но огромный запас ХП
+        "health_multiplier": 11, 
+        "mana_multiplier": 2,
     }
 }
 def get_connection():
@@ -238,7 +251,8 @@ def create_character(user_id, username, char_name, race):
     if race == 'lizardman': p_res = 0.12 
     # У Жаболюда скользкая кожа и иммунитет к болотной магии
     if race == 'frogman': m_res = 0.10
-        
+    # Нежить не чувствует боли (огромный бонус к защите от физ. урона со старта)
+    if race == 'undead': p_res = 0.15    
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id FROM player_characters WHERE user_id = %s", (user_id,))
