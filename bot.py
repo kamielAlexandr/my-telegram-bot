@@ -2510,13 +2510,14 @@ async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("Титан уже призван!", show_alert=True)
         return CLAN_MENU
 
-    # Формула HP: Каждый уровень босса дает ему +25,000 HP.
+    # 🔥 СУРОВЫЙ БАЛАНС: 1 МИЛЛИОН HP за каждый уровень босса!
     raid_level = clan.get('raid_level', 1)
-    max_hp = raid_level * 25000 
+    max_hp = raid_level * 1000000 
     database.summon_raid_boss(clan['id'], max_hp)
     
-    await query.answer("🔮 Титан восстал из Бездны! Соберите клан!", show_alert=True)
+    await query.answer("🔮 Титан восстал из Бездны! Созывайте клан!", show_alert=True)
     return await clan_raid_hub_handler(update, context)
+
 
 async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2546,30 +2547,48 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.answer(f"⏳ Вы истощены! Герой восстановит силы через {h}ч {m}м.", show_alert=True)
             return CLAN_MENU
 
-    # РАСЧЕТ УРОНА
+    # 🔥 СУРОВЫЙ БАЛАНС УРОНА
     best_stat = max(char.get('strength', 0), char.get('intelligence', 0), char.get('agility', 0))
-    damage = best_stat * random.randint(15, 30) * char.get('level', 1)
+    lvl = char.get('level', 1)
     
-    if random.random() < 0.15: damage *= 2
+    # Адекватная формула: (Стат * 10) + (Уровень * 50) 
+    # Например: на 50 уровне со статом 100 урон будет около 3500. Для 1 000 000 ХП понадобится весь клан!
+    base_dmg = (best_stat * 10) + (lvl * 50)
+    damage = int(base_dmg * random.uniform(0.8, 1.2)) # Разброс урона +- 20%
+    
+    # Крит. шанс 15% (х2 урон)
+    is_crit = False
+    if random.random() < 0.15: 
+        damage *= 2
+        is_crit = True
+    
+    # 🔥 БАЛАНС НАГРАД (Зависит от уровня, а не от миллионного урона)
+    # На 50 ур: ~180 золота и ~600 опыта раз в 4 часа. Это отличный бонус, но он не сломает игру.
+    gold_reward = random.randint(30, 80) + (lvl * 3)
+    xp_reward = random.randint(50, 150) + (lvl * 10)
     
     try:
         is_dead, left_hp = database.execute_raid_damage(clan['id'], damage)
         database.update_raid_attack_time(user_id)
         
-        gold_reward = damage // 10
-        xp_reward = damage // 5
         database.add_gold(user_id, gold_reward)
         database.add_experience(user_id, xp_reward)
         
+        crit_txt = "💥 КРИТИЧЕСКИЙ УДАР!\n" if is_crit else "⚔️ "
+        
         if is_dead:
-            await query.answer(f"💥 СМЕРТЕЛЬНЫЙ УДАР!\nВы нанесли {damage} урона и добили Титана!\n+{gold_reward}g и {xp_reward} XP", show_alert=True)
+            await query.answer(f"{crit_txt}Вы нанесли {damage} урона и ДОБИЛИ Титана!\n+{gold_reward}g и {xp_reward} XP", show_alert=True)
         else:
-            await query.answer(f"⚔️ Вы нанесли {damage} урона!\n+{gold_reward}g и {xp_reward} XP", show_alert=True)
+            # Форматируем оставшееся HP для красоты: 1000000 -> 1,000,000
+            formatted_hp = f"{left_hp:,}".replace(',', ' ')
+            await query.answer(f"{crit_txt}Вы нанесли {damage} урона!\n+{gold_reward}g и {xp_reward} XP\nОсталось: {formatted_hp} HP", show_alert=True)
+            
     except Exception as e:
         print(f"Raid attack error: {e}")
         await query.answer("Ошибка атаки. Попробуйте еще раз.", show_alert=True)
         
     return await clan_raid_hub_handler(update, context)
+
 
 async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
