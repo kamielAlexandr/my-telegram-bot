@@ -1912,22 +1912,27 @@ def init_clans_table():
                     raid_points INTEGER DEFAULT 0
                 )
             """)
-            try:
-                c.execute("ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS clan_id INTEGER DEFAULT NULL")
-            except:
-                conn.rollback() 
-            
-            # Миграция для старых баз: добавим новые колонки, если таблица уже есть
-            try:
-                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_level INTEGER DEFAULT 1")
-                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_hp INTEGER DEFAULT 0")
-                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_max_hp INTEGER DEFAULT 0")
-                c.execute("ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_points INTEGER DEFAULT 0")
-            except:
-                conn.rollback()
-
             conn.commit()
-            print("✅ Система кланов (и рейдов) инициализирована.")
+
+        # Разделяем каждую колонку в отдельный блок try...except, 
+        # чтобы ошибка в одной не мешала добавиться остальным!
+        columns_to_add = [
+            "ALTER TABLE player_characters ADD COLUMN IF NOT EXISTS clan_id INTEGER DEFAULT NULL",
+            "ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_level INTEGER DEFAULT 1",
+            "ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_hp INTEGER DEFAULT 0",
+            "ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_max_hp INTEGER DEFAULT 0",
+            "ALTER TABLE clans ADD COLUMN IF NOT EXISTS raid_points INTEGER DEFAULT 0"
+        ]
+        
+        for sql in columns_to_add:
+            try:
+                with conn.cursor() as c:
+                    c.execute(sql)
+                    conn.commit()
+            except Exception:
+                conn.rollback() # Игнорируем, если колонка уже есть
+
+        print("✅ Система кланов (и рейдов) инициализирована.")
     except Exception as e:
         print(f"Clan init error: {e}")
     finally:
