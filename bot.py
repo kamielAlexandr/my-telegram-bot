@@ -90,7 +90,11 @@ IMAGE_URLS = {
     'inventory': 'https://freepngimg.com/thumb/backpack/22202-6-backpack-painting.png',
     'craft': 'https://abrakadabra.fun/uploads/posts/2022-01/1643486640_1-abrakadabra-fun-p-kuznitsa-art-1.jpg',
     'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg',
-    'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg'
+    'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg',
+    #Клан босс
+    'raid_boss': 'https://i.pinimg.com/1200x/bc/d0/09/bcd009247eb9104c99cd068ee18cc2ba.jpg'
+
+    
 }
 # --- СПОСОБНОСТИ РАС ---
 # type: heal (лечение), dmg (урон), buff (усиление)
@@ -2411,6 +2415,7 @@ async def clan_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         kb = [
+            [InlineKeyboardButton("👹 КЛАНОВЫЙ РЕЙД", callback_data='clan_raid_hub')],
             [InlineKeyboardButton("🎁 Отправить подарок", callback_data='clan_gift_start')],
             [InlineKeyboardButton("🚪 Покинуть клан", callback_data='leave_clan')],
             [InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]
@@ -2438,6 +2443,116 @@ async def clan_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['castle'], caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         return CLAN_MENU
+async def clan_raid_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    
+    clan_id = char.get('clan_id')
+    if not clan_id: return MAIN_MENU
+    
+    clan = database.get_clan_by_id(clan_id)
+    
+    kb = []
+    if clan['raid_hp'] > 0:
+        # --- БОСС ЖИВ ---
+        hp_bar = get_health_bar(clan['raid_hp'], clan['raid_max_hp'], 20)
+        txt = (
+            f"👹 *ОХОТА НА ТИТАНА* (Уровень {clan['raid_level']})\n\n"
+            f"Огромное чудовище крушит земли вашего клана. Объедините силы, чтобы уничтожить его!\n\n"
+            f"❤️ Здоровье Титана:\n{hp_bar}\n\n"
+            f"_Награда за победу: +{clan['raid_level'] * 10} Очков Клана_"
+        )
+        kb.append([InlineKeyboardButton("⚔️ АТАКОВАТЬ ТИТАНА", callback_data='raid_attack')])
+    else:
+        # --- БОСС МЕРТВ ИЛИ НЕ ПРИЗВАН ---
+        txt = (
+            f"🏆 *ТИТАН ПОВЕРЖЕН!*\n\n"
+            f"Земли вашего клана в безопасности. Текущий уровень рейда: {clan['raid_level']}.\n"
+            f"Слава клана: {clan.get('raid_points', 0)} 🏆\n\n"
+        )
+        if clan['owner_id'] == user_id:
+            txt += "_Вы как Владыка можете призвать нового, более сильного Титана._"
+            kb.append([InlineKeyboardButton("🔮 Призвать Титана", callback_data='raid_summon')])
+        else:
+            txt += "_Ожидайте, пока Владыка призовет следующего Титана._"
+
+    kb.append([InlineKeyboardButton("🔄 Обновить", callback_data='clan_raid_hub')])
+    kb.append([InlineKeyboardButton("🔙 В клан", callback_data='back_to_clan_hub')])
+    
+    await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('raid_boss', IMAGE_URLS['hell_gate']), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+    return CLAN_MENU
+
+async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    clan = database.get_clan_by_id(char.get('clan_id'))
+    
+    if not clan or clan['owner_id'] != user_id:
+        await query.answer("Только Владыка может призывать Титанов!", show_alert=True)
+        return CLAN_MENU
+        
+    if clan['raid_hp'] > 0:
+        await query.answer("Титан уже призван!", show_alert=True)
+        return CLAN_MENU
+
+    # Формула HP: Каждый уровень босса дает ему +25,000 HP.
+    max_hp = clan['raid_level'] * 25000 
+    database.summon_raid_boss(clan['id'], max_hp)
+    
+    await query.answer("🔮 Титан восстал из Бездны! Соберите клан!", show_alert=True)
+    return await clan_raid_hub_handler(update, context)
+
+async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    char = database.get_character(user_id)
+    clan = database.get_clan_by_id(char.get('clan_id'))
+    
+    if not clan or clan['raid_hp'] <= 0:
+        await query.answer("Цель уже мертва!", show_alert=True)
+        return await clan_raid_hub_handler(update, context)
+
+    # ПРОВЕРКА КУЛДАУНА (Раз в 4 часа)
+    last_attack = database.get_raid_attack_time(user_id)
+    now = datetime.now()
+    cooldown_secs = 14400 # 4 часа
+    
+    if last_attack:
+        if isinstance(last_attack, str): last_attack = datetime.fromisoformat(last_attack)
+        elapsed = (now - last_attack).total_seconds()
+        if elapsed < cooldown_secs:
+            left = cooldown_secs - elapsed
+            h = int(left // 3600)
+            m = int((left % 3600) // 60)
+            await query.answer(f"⏳ Вы истощены! Герой восстановит силы через {h}ч {m}м.", show_alert=True)
+            return CLAN_MENU
+
+    # РАСЧЕТ УРОНА (Берем лучший стат игрока и умножаем на случайное число)
+    best_stat = max(char['strength'], char['intelligence'], char['agility'])
+    damage = best_stat * random.randint(15, 30) * char['level']
+    
+    # Крит. шанс 15% (х2 урон)
+    if random.random() < 0.15: damage *= 2
+    
+    # Применяем урон
+    is_dead, left_hp = database.execute_raid_damage(clan['id'], damage)
+    database.update_raid_attack_time(user_id)
+    
+    # Выдаем личную награду
+    gold_reward = damage // 10
+    xp_reward = damage // 5
+    database.add_gold(user_id, gold_reward)
+    database.add_experience(user_id, xp_reward)
+    
+    if is_dead:
+        await query.answer(f"💥 СМЕРТЕЛЬНЫЙ УДАР! Вы нанесли {damage} урона и добили Титана!\nПолучено: {gold_reward}g и {xp_reward} XP", show_alert=True)
+    else:
+        await query.answer(f"⚔️ Вы нанесли {damage} урона!\nПолучено: {gold_reward}g и {xp_reward} XP", show_alert=True)
+        
+    return await clan_raid_hub_handler(update, context)
+
 
 async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -3903,7 +4018,7 @@ async def show_top_clans(query, user_id):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"*{i}.*"
             
             # Собираем красивую строчку с лидером и участниками
-            top_text += f"{medal} *[{name}]*\n   ├ 👑 Владыка: {owner_name}\n   └ 👥 Участников: {members}\n\n"
+            top_text += f"{medal} *[{name}]* 🏆 {c.get('raid_points', 0)} очков\n   ├ 👑 Владыка: {owner_name}\n   └ 👥 Участников: {members}\n\n"
             
     kb = [[InlineKeyboardButton("🔙 Назад", callback_data='back_to_main')]]
     
@@ -4698,7 +4813,14 @@ def main():
             CRAFT_MENU: [CallbackQueryHandler(craft_handler)],
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
-            CLAN_MENU: [CallbackQueryHandler(clan_action_handler)],
+            CLAN_MENU: [
+                       # --- НОВЫЕ КНОПКИ РЕЙДА ---
+                CallbackQueryHandler(clan_raid_hub_handler, pattern='^clan_raid_hub$'),
+                CallbackQueryHandler(raid_summon_handler, pattern='^raid_summon$'),
+                CallbackQueryHandler(raid_attack_handler, pattern='^raid_attack$'),
+                CallbackQueryHandler(clan_action_handler)
+            
+            ],
             CLAN_CREATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_clan_name)],
             CLAN_CREATE_ICON: [
                 MessageHandler(filters.PHOTO, enter_clan_icon),
