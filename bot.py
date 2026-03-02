@@ -2445,6 +2445,9 @@ async def clan_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CLAN_MENU
 async def clan_raid_hub_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    try: await query.answer() # Снимаем часики загрузки!
+    except: pass
+    
     user_id = query.from_user.id
     char = database.get_character(user_id)
     
@@ -2452,24 +2455,31 @@ async def clan_raid_hub_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if not clan_id: return MAIN_MENU
     
     clan = database.get_clan_by_id(clan_id)
+    if not clan: return MAIN_MENU
+    
+    # --- БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ ДАННЫХ (Защита от KeyError) ---
+    raid_hp = clan.get('raid_hp', 0)
+    raid_max_hp = clan.get('raid_max_hp', 0)
+    raid_level = clan.get('raid_level', 1)
+    raid_points = clan.get('raid_points', 0)
     
     kb = []
-    if clan['raid_hp'] > 0:
+    if raid_hp > 0:
         # --- БОСС ЖИВ ---
-        hp_bar = get_health_bar(clan['raid_hp'], clan['raid_max_hp'], 20)
+        hp_bar = get_health_bar(raid_hp, raid_max_hp, 20)
         txt = (
-            f"👹 *ОХОТА НА ТИТАНА* (Уровень {clan['raid_level']})\n\n"
+            f"👹 *ОХОТА НА ТИТАНА* (Уровень {raid_level})\n\n"
             f"Огромное чудовище крушит земли вашего клана. Объедините силы, чтобы уничтожить его!\n\n"
             f"❤️ Здоровье Титана:\n{hp_bar}\n\n"
-            f"_Награда за победу: +{clan['raid_level'] * 10} Очков Клана_"
+            f"_Награда за победу: +{raid_level * 10} Очков Клана_"
         )
         kb.append([InlineKeyboardButton("⚔️ АТАКОВАТЬ ТИТАНА", callback_data='raid_attack')])
     else:
         # --- БОСС МЕРТВ ИЛИ НЕ ПРИЗВАН ---
         txt = (
             f"🏆 *ТИТАН ПОВЕРЖЕН!*\n\n"
-            f"Земли вашего клана в безопасности. Текущий уровень рейда: {clan['raid_level']}.\n"
-            f"Слава клана: {clan.get('raid_points', 0)} 🏆\n\n"
+            f"Земли вашего клана в безопасности. Текущий уровень рейда: {raid_level}.\n"
+            f"Слава клана: {raid_points} 🏆\n\n"
         )
         if clan['owner_id'] == user_id:
             txt += "_Вы как Владыка можете призвать нового, более сильного Титана._"
@@ -2485,6 +2495,9 @@ async def clan_raid_hub_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    try: await query.answer()
+    except: pass
+    
     user_id = query.from_user.id
     char = database.get_character(user_id)
     clan = database.get_clan_by_id(char.get('clan_id'))
@@ -2493,12 +2506,13 @@ async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("Только Владыка может призывать Титанов!", show_alert=True)
         return CLAN_MENU
         
-    if clan['raid_hp'] > 0:
+    if clan.get('raid_hp', 0) > 0:
         await query.answer("Титан уже призван!", show_alert=True)
         return CLAN_MENU
 
     # Формула HP: Каждый уровень босса дает ему +25,000 HP.
-    max_hp = clan['raid_level'] * 25000 
+    raid_level = clan.get('raid_level', 1)
+    max_hp = raid_level * 25000 
     database.summon_raid_boss(clan['id'], max_hp)
     
     await query.answer("🔮 Титан восстал из Бездны! Соберите клан!", show_alert=True)
@@ -2506,11 +2520,14 @@ async def raid_summon_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    try: await query.answer()
+    except: pass
+    
     user_id = query.from_user.id
     char = database.get_character(user_id)
     clan = database.get_clan_by_id(char.get('clan_id'))
     
-    if not clan or clan['raid_hp'] <= 0:
+    if not clan or clan.get('raid_hp', 0) <= 0:
         await query.answer("Цель уже мертва!", show_alert=True)
         return await clan_raid_hub_handler(update, context)
 
@@ -2529,30 +2546,30 @@ async def raid_attack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             await query.answer(f"⏳ Вы истощены! Герой восстановит силы через {h}ч {m}м.", show_alert=True)
             return CLAN_MENU
 
-    # РАСЧЕТ УРОНА (Берем лучший стат игрока и умножаем на случайное число)
-    best_stat = max(char['strength'], char['intelligence'], char['agility'])
-    damage = best_stat * random.randint(15, 30) * char['level']
+    # РАСЧЕТ УРОНА
+    best_stat = max(char.get('strength', 0), char.get('intelligence', 0), char.get('agility', 0))
+    damage = best_stat * random.randint(15, 30) * char.get('level', 1)
     
-    # Крит. шанс 15% (х2 урон)
     if random.random() < 0.15: damage *= 2
     
-    # Применяем урон
-    is_dead, left_hp = database.execute_raid_damage(clan['id'], damage)
-    database.update_raid_attack_time(user_id)
-    
-    # Выдаем личную награду
-    gold_reward = damage // 10
-    xp_reward = damage // 5
-    database.add_gold(user_id, gold_reward)
-    database.add_experience(user_id, xp_reward)
-    
-    if is_dead:
-        await query.answer(f"💥 СМЕРТЕЛЬНЫЙ УДАР! Вы нанесли {damage} урона и добили Титана!\nПолучено: {gold_reward}g и {xp_reward} XP", show_alert=True)
-    else:
-        await query.answer(f"⚔️ Вы нанесли {damage} урона!\nПолучено: {gold_reward}g и {xp_reward} XP", show_alert=True)
+    try:
+        is_dead, left_hp = database.execute_raid_damage(clan['id'], damage)
+        database.update_raid_attack_time(user_id)
+        
+        gold_reward = damage // 10
+        xp_reward = damage // 5
+        database.add_gold(user_id, gold_reward)
+        database.add_experience(user_id, xp_reward)
+        
+        if is_dead:
+            await query.answer(f"💥 СМЕРТЕЛЬНЫЙ УДАР!\nВы нанесли {damage} урона и добили Титана!\n+{gold_reward}g и {xp_reward} XP", show_alert=True)
+        else:
+            await query.answer(f"⚔️ Вы нанесли {damage} урона!\n+{gold_reward}g и {xp_reward} XP", show_alert=True)
+    except Exception as e:
+        print(f"Raid attack error: {e}")
+        await query.answer("Ошибка атаки. Попробуйте еще раз.", show_alert=True)
         
     return await clan_raid_hub_handler(update, context)
-
 
 async def clan_action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
