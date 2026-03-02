@@ -4814,12 +4814,14 @@ def main():
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
             CLAN_MENU: [
-                       # --- НОВЫЕ КНОПКИ РЕЙДА ---
+                # 1. СНАЧАЛА ИДУТ НОВЫЕ КНОПКИ РЕЙДА (с pattern)
                 CallbackQueryHandler(clan_raid_hub_handler, pattern='^clan_raid_hub$'),
                 CallbackQueryHandler(raid_summon_handler, pattern='^raid_summon$'),
                 CallbackQueryHandler(raid_attack_handler, pattern='^raid_attack$'),
+                
+                # 2. И ТОЛЬКО В САМОМ НИЗУ ИДЕТ СТАРЫЙ ОБРАБОТЧИК (без pattern)
+                # Он поймает все остальные кнопки (подарки, выход и т.д.)
                 CallbackQueryHandler(clan_action_handler)
-            
             ],
             CLAN_CREATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_clan_name)],
             CLAN_CREATE_ICON: [
