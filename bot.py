@@ -4864,6 +4864,8 @@ async def slums_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown', 
             reply_markup=InlineKeyboardMarkup(kb)
         )
+        return MAIN_MENU # <--- ВОТ ЭТОГО НЕ ХВАТАЛО!
+        
     # Если вызвано кнопкой возврата
     elif update.callback_query:
         try: await update.callback_query.answer()
@@ -4874,8 +4876,9 @@ async def slums_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             media=InputMediaPhoto(IMAGE_URLS.get('slums', IMAGE_URLS['village']), caption=txt, parse_mode='Markdown'), 
             keyboard=InlineKeyboardMarkup(kb)
         )
-        
-    return MAIN_MENU
+        return MAIN_MENU
+
+
 
 async def slums_bet_start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -4948,7 +4951,6 @@ async def setup_bot_commands(application: Application):
         BotCommand("reset", "💀 Реинкарнация (Сброс героя)")
     ])
 def main():
-    # 1. Инициализируем БД и таблицы
     database.init_db()
     database.init_clans_table()
     database.migrate_expeditions_table() 
@@ -4959,26 +4961,22 @@ def main():
     
     app = Application.builder().token(TOKEN).post_init(setup_bot_commands).build()
     
-    # Оставляем только команду /alchemy глобальной
     app.add_handler(CommandHandler('alchemy', alchemy_command))
-    # НОВОЕ: Команда для перерождения
     app.add_handler(CommandHandler('reset', rebirth_command))
     
-    # НОВОЕ: Обработчики кнопок "Да/Нет" для перерождения
     app.add_handler(CallbackQueryHandler(confirm_rebirth_handler, pattern='^confirm_rebirth$'))
     app.add_handler(CallbackQueryHandler(cancel_rebirth_handler, pattern='^cancel_rebirth$'))
-    # --- ДИАЛОГИ (Здесь исправлена маршрутизация кнопок) ---
+
     conv = ConversationHandler(
-        entry_points=[CommandHandler('start', start),
-                     CommandHandler('slums', slums_command)
-                     ],
+        entry_points=[
+            CommandHandler('start', start),
+            CommandHandler('slums', slums_command)
+        ],
         states={
             CHOOSE_RACE: [CallbackQueryHandler(choose_race, pattern='^race_')],
             ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
             
-            # === ИСПРАВЛЕННЫЙ БЛОК ГЛАВНОГО МЕНЮ ===
             MAIN_MENU: [
-                # Сначала бот проверяет специфичные кнопки зданий
                 CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'),
                 CallbackQueryHandler(build_alchemy_handler, pattern='^build_alchemy$'),
                 CallbackQueryHandler(brew_handler, pattern='^brew_'),
@@ -4995,22 +4993,15 @@ def main():
                 CallbackQueryHandler(kitchen_menu_handler, pattern='^kitchen_menu$'),
                 CallbackQueryHandler(build_kitchen_handler, pattern='^build_kitchen$'),
                 CallbackQueryHandler(cook_handler, pattern='^cook_'),
-                # --- КНОПКИ ТРУЩОБ ---
-               # --- ТРУЩОБЫ ---
-                CommandHandler('slums', slums_command),
-                CallbackQueryHandler(slums_command, pattern='^slums_menu$'), # на случай возврата назад
+                CallbackQueryHandler(slums_command, pattern='^slums_menu$'),
                 CallbackQueryHandler(slums_bet_start_handler, pattern='^slums_bet_start$'),
-                # ---------------------
                 CallbackQueryHandler(fishing_menu_handler, pattern='^fishing_menu$'),
                 CallbackQueryHandler(build_pier_handler, pattern='^build_pier$'),
                 CallbackQueryHandler(catch_fish_handler, pattern='^catch_fish$'),
                 CallbackQueryHandler(donate_menu_handler, pattern='^donate_menu$'),
                 CallbackQueryHandler(send_gold_invoice, pattern='^buy_gold_'),
-                # Если кнопка не подошла под списки выше, она уходит в главный обработчик
-                # (Профиль, Инвентарь, Битва и т.д.)
                 CallbackQueryHandler(main_menu_handler)
             ],
-            # =========================================
             
             BATTLE_MENU: [CallbackQueryHandler(battle_menu_handler)],
             IN_BATTLE: [CallbackQueryHandler(battle_action_handler)],
@@ -5020,13 +5011,9 @@ def main():
             LEVEL_UP: [CallbackQueryHandler(level_up_handler)],
             INVENTORY_MENU: [CallbackQueryHandler(inventory_menu_handler)],
             CLAN_MENU: [
-                # 1. СНАЧАЛА ИДУТ НОВЫЕ КНОПКИ РЕЙДА (с pattern)
                 CallbackQueryHandler(clan_raid_hub_handler, pattern='^clan_raid_hub$'),
                 CallbackQueryHandler(raid_summon_handler, pattern='^raid_summon$'),
                 CallbackQueryHandler(raid_attack_handler, pattern='^raid_attack$'),
-                
-                # 2. И ТОЛЬКО В САМОМ НИЗУ ИДЕТ СТАРЫЙ ОБРАБОТЧИК (без pattern)
-                # Он поймает все остальные кнопки (подарки, выход и т.д.)
                 CallbackQueryHandler(clan_action_handler)
             ],
             CLAN_CREATE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_clan_name)],
@@ -5034,30 +5021,26 @@ def main():
                 MessageHandler(filters.PHOTO, enter_clan_icon),
                 MessageHandler(filters.ALL & ~filters.COMMAND, enter_clan_icon)
             ],
-            # --- НОВЫЕ СТРОКИ ---
             CLAN_GIFT_GOLD_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_gold)],
             CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
-            # --- НОВАЯ СТРОКА (Магазин) ---
             SHOP_BUY_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_buy_quantity)],
-            # --- СТАВКА В ТРУЩОБАХ ---
             SLUMS_BET_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_slums_bet)],
         },
-        fallbacks=[CommandHandler('start', start),
-                  CommandHandler('slums', slums_command)]
+        fallbacks=[
+            CommandHandler('start', start),
+            CommandHandler('slums', slums_command)
+        ]
     )
     
     app.add_handler(conv)
-    
     app.add_handler(CommandHandler('help', help_command))
-    # --- ОБРАБОТЧИКИ ОПЛАТЫ ---
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
-    # --------------------------
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_text))
     app.add_handler(CallbackQueryHandler(unknown_callback))
     
     print("⚔️ Бот Темного Фентези перезапущен! Нажмите /start")
     app.run_polling()
-
+    
 if __name__ == '__main__':
     main()
