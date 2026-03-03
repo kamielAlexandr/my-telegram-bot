@@ -99,9 +99,9 @@ IMAGE_URLS = {
     'guild': 'https://www.worldanvil.com/uploads/images/9a7f5886e9dde2f96801a33e70e75345.jpg',
     'bank': 'https://i.pinimg.com/736x/4e/3e/c9/4e3ec9a87a689b1acd1f5da91d6d1fc2.jpg',
     # Трущобы
-    'slums': 'https://i.pinimg.com/1200x/c7/93/29/c793297a7a8d56b46ea4b64f9bfcd063.jpg',
+    'slums': 'https://i.pinimg.com/736x/c5/4f/44/c54f44d381b5a6d5e61b6f2152c3b4a2.jpg',
     #Клан босс
-    'raid_boss': 'https://i.pinimg.com/736x/c5/4f/44/c54f44d381b5a6d5e61b6f2152c3b4a2.jpg'
+    'raid_boss':' https://i.pinimg.com/736x/e0/b1/00/e0b10095bd7c485d0ea0c5ea8f74587d.jpg'
 
     
 }
