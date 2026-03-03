@@ -101,7 +101,7 @@ IMAGE_URLS = {
     # Трущобы
     'slums': 'https://i.pinimg.com/736x/c5/4f/44/c54f44d381b5a6d5e61b6f2152c3b4a2.jpg',
     #Клан босс
-    'raid_boss':' https://i.pinimg.com/736x/e0/b1/00/e0b10095bd7c485d0ea0c5ea8f74587d.jpg'
+    'raid_boss':'https://i.pinimg.com/736x/75/c8/05/75c805793008563d6b8f6ebff52adacc.jpg'
 
     
 }
