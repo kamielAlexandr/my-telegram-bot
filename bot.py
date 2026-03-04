@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY, SLUMS_BET_ENTER, CHANGE_RACE_CONFIRM, CHANGE_RACE_SELECT = range(19)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY, SLUMS_BET_ENTER = range(17)
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
@@ -4950,10 +4950,6 @@ async def setup_bot_commands(application: Application):
         BotCommand("reset", "💀 Реинкарнация")
     ])
 
-# ==========================================
-# === СМЕНА РАСЫ (ТЕМНЫЙ РИТУАЛ) ===
-# ==========================================
-
 def get_change_race_keyboard():
     kb = [
         [InlineKeyboardButton("⚔️ Человек", callback_data="newrace_human")],
@@ -4972,22 +4968,18 @@ def get_change_race_keyboard():
 async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     char = database.get_character(user_id)
-    if not char: return
+    if not char: return MAIN_MENU
 
-    # --- НОВОЕ: ПРОВЕРКА УРОВНЯ (Минимум 100) ---
+    # Проверка уровня
     if char['level'] < 100:
-        msg = f"🔒 Тёмный маг смеется: «Твоё тело слишком слабо для Ритуала, оно просто разорвётся! Возвращайся, когда достигнешь 100 уровня!»\n\n_(Ваш уровень: {char['level']}/100)_"
-        
-        if update.message: 
-            await update.message.reply_text(msg, parse_mode='Markdown')
-        else: 
-            await update.callback_query.answer(msg, show_alert=True)
+        msg = f"🔒 Тёмный маг смеется: «Твоё тело слишком слабо для Ритуала, оно просто разорвётся! Возвращайся на 100 уровне!»\n\n_(Ваш уровень: {char['level']}/100)_"
+        if update.message: await update.message.reply_text(msg, parse_mode='Markdown')
+        else: await update.callback_query.answer(msg, show_alert=True)
         return MAIN_MENU
-    # --------------------------------------------
 
-    # Проверка на наличие 500 000 золота
+    # Проверка золота
     if char['gold'] < 500000:
-        msg = f"Тёмный маг пренебрежительно фыркает. Ритуал изменения плоти стоит 500 000g! У вас лишь {char['gold']}g."
+        msg = f"Тёмный маг пренебрежительно фыркает. Ритуал стоит 500 000g! У вас лишь {char['gold']}g."
         if update.message: await update.message.reply_text(msg)
         else: await update.callback_query.answer(msg, show_alert=True)
         return MAIN_MENU
@@ -4995,9 +4987,9 @@ async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     txt = (
         "🩸 **РИТУАЛ ИЗМЕНЕНИЯ ПЛОТИ** 🩸\n\n"
         "Темный маг готов перестроить ваше тело. Вы станете существом другой расы, "
-        "но **сохраните абсолютно все свои текущие характеристики (силу, ловкость и т.д.), уровень, инвентарь и золото**.\n\n"
+        "но **сохраните абсолютно все свои текущие характеристики, уровень, инвентарь и золото**.\n\n"
         "💰 **Стоимость ритуала:** 500 000 золота.\n\n"
-        "Вы абсолютно уверены, что хотите провести ритуал?"
+        "Вы абсолютно уверены?"
     )
     kb = [
         [InlineKeyboardButton("✅ Да, я готов заплатить!", callback_data='confirm_changerace')],
@@ -5007,50 +4999,50 @@ async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message:
         await update.message.reply_photo(IMAGE_URLS.get('hell_gate', IMAGE_URLS['dungeon']), caption=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
     else:
+        try: await update.callback_query.answer()
+        except: pass
         await safe_edit(update.callback_query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('hell_gate', IMAGE_URLS['dungeon']), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         
-    return CHANGE_RACE_CONFIRM
+    return MAIN_MENU # Всегда остаемся в главном меню!
+
 async def changerace_confirm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    try: await query.answer()
+    except: pass
     user_id = query.from_user.id
     data = query.data
 
     if data == 'cancel_changerace':
-        await query.answer("Ритуал отменен.")
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
         return MAIN_MENU
     
     if data == 'confirm_changerace':
         txt = "🩸 Кровь кипит... Выберите сосуд для вашей души (Новую расу):"
-        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['dungeon'], caption=txt, parse_mode='Markdown'), keyboard=get_change_race_keyboard())
-        return CHANGE_RACE_SELECT
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('dungeon', IMAGE_URLS['village']), caption=txt, parse_mode='Markdown'), keyboard=get_change_race_keyboard())
+        return MAIN_MENU
 
 async def changerace_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    try: await query.answer()
+    except: pass
     user_id = query.from_user.id
     data = query.data
 
-    if data == 'cancel_changerace':
-        await query.answer("Ритуал отменен.")
-        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
-        return MAIN_MENU
-
-    # Получаем расу (например из newrace_elf берем elf)
-    new_race = data.split('_')[1]
+    new_race = data.split('_')[1] # вырезаем расу (newrace_elf -> elf)
     
-    # Списываем деньги и меняем
     success, msg = database.change_race(user_id, new_race, 500000)
 
     if success:
-        await query.answer("Трансмутация завершена!", show_alert=True)
         race_names = {'human': 'Человек', 'elf': 'Эльф', 'dwarf': 'Дварф', 'orc': 'Орк', 'vampire': 'Вампир', 'lizardman': 'Ящеролюд', 'frogman': 'Жаболюд', 'leprechaun': 'Лепрекон', 'undead': 'Нежить'}
         txt = f"🔮 **Ритуал завершен!**\nВы пожертвовали 500 000g.\nТеперь вы **{race_names.get(new_race, new_race)}**."
         await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
     else:
-        await query.answer(msg, show_alert=True)
+        await context.bot.send_message(chat_id=user_id, text=f"❌ {msg}")
         await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
     
     return MAIN_MENU
+
+
 def main():
     database.init_db()
     database.init_clans_table()
@@ -5081,6 +5073,10 @@ def main():
             ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
             
             MAIN_MENU: [
+                # --- ЖЕЛЕЗОБЕТОННЫЙ ПЕРЕХВАТ КОМАНДЫ ---
+                CommandHandler('changerace', changerace_command),
+                CallbackQueryHandler(changerace_confirm_handler, pattern='^(confirm_changerace|cancel_changerace)$'),
+                CallbackQueryHandler(changerace_select_handler, pattern='^newrace_'),
                 # --- ЖЕЛЕЗОБЕТОННЫЙ ПЕРЕХВАТ КОМАНДЫ ---
                 CommandHandler('slums', slums_command),
                 CallbackQueryHandler(herbalist_menu_handler, pattern='^herbalist_menu$'),
@@ -5132,8 +5128,7 @@ def main():
             CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
             SHOP_BUY_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_buy_quantity)],
             SLUMS_BET_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_slums_bet)],
-            CHANGE_RACE_CONFIRM: [CallbackQueryHandler(changerace_confirm_handler)],
-            CHANGE_RACE_SELECT: [CallbackQueryHandler(changerace_select_handler)]
+
             
         },
         fallbacks=[
