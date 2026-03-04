@@ -3,7 +3,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import json
-# --- КОНСТАНТЫ РАС ---
+
+
 # --- КОНСТАНТЫ РАС ---
 RACES = {
     "human": {
@@ -2196,5 +2197,32 @@ def summon_raid_boss(clan_id, max_hp):
         with conn.cursor() as c:
             c.execute("UPDATE clans SET raid_hp = %s, raid_max_hp = %s WHERE id = %s", (max_hp, max_hp, clan_id))
             conn.commit()
+    finally:
+        conn.close()
+def change_race(user_id, new_race, cost):
+    """Списывает золото и меняет расу персонажа, оставляя статы прежними"""
+    conn = get_connection()
+    if not conn: return False, "Ошибка БД"
+    try:
+        with conn.cursor() as c:
+            # 1. Проверяем золото и текущую расу
+            c.execute("SELECT gold, race FROM player_characters WHERE user_id = %s", (user_id,))
+            res = c.fetchone()
+            if not res: return False, "Герой не найден"
+            if res[0] < cost: return False, "Не хватает золота!"
+            if res[1] == new_race: return False, "Вы уже принадлежите к этой расе!"
+
+            # 2. Обновляем расу и списываем золото
+            c.execute("UPDATE player_characters SET race = %s, gold = gold - %s WHERE user_id = %s", (new_race, cost, user_id))
+            
+            # 3. Если игрок ПЕРЕСТАЕТ быть эльфом, очищаем его магию
+            if res[1] == 'elf' and new_race != 'elf':
+                c.execute("UPDATE player_characters SET elf_active_spell = NULL, elf_magic_type = NULL WHERE user_id = %s", (user_id,))
+            
+            conn.commit()
+            return True, "Ритуал прошел успешно!"
+    except Exception as e:
+        print(f"Change race error: {e}")
+        return False, str(e)
     finally:
         conn.close()
