@@ -24,9 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 # Состояния
-# Состояния
-# Состояния
-CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY, SLUMS_BET_ENTER = range(17)
+CHOOSE_RACE, ENTER_NAME, MAIN_MENU, BATTLE_MENU, IN_BATTLE, SHOP_MENU, LEVEL_UP, INVENTORY_MENU, CRAFT_MENU, GUILD_MENU, CLAN_MENU, CLAN_CREATE_NAME, CLAN_CREATE_ICON, CLAN_GIFT_GOLD_ENTER, CLAN_GIFT_ITEM_ENTER, SHOP_BUY_QUANTITY, SLUMS_BET_ENTER, CHANGE_RACE_CONFIRM, CHANGE_RACE_SELECT = range(19)
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 battle_sessions = {}
 
@@ -4945,11 +4943,104 @@ async def enter_slums_bet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- НАСТРОЙКА БЫСТРОГО МЕНЮ TELEGRAM ---
 async def setup_bot_commands(application: Application):
     await application.bot.set_my_commands([
-        BotCommand("slums", "🏚 Трущобы (Азартная игра)"),
-        BotCommand("start", "🏠 В деревню (Главное меню)"),
+        BotCommand("start", "🏠 В деревню"),
+        BotCommand("changerace", "🔮 Сменить расу (500к)"),
+        BotCommand("slums", "🏚 Трущобы"),
         BotCommand("alchemy", "⚗️ Лавка Травника"),
-        BotCommand("reset", "💀 Реинкарнация (Сброс героя)")
+        BotCommand("reset", "💀 Реинкарнация")
     ])
+
+# ==========================================
+# === СМЕНА РАСЫ (ТЕМНЫЙ РИТУАЛ) ===
+# ==========================================
+
+def get_change_race_keyboard():
+    kb = [
+        [InlineKeyboardButton("⚔️ Человек", callback_data="newrace_human")],
+        [InlineKeyboardButton("🏹 Эльф", callback_data="newrace_elf")],
+        [InlineKeyboardButton("🛡️ Дварф", callback_data="newrace_dwarf")],
+        [InlineKeyboardButton("🪓 Орк", callback_data="newrace_orc")],
+        [InlineKeyboardButton("🦇 Вампир", callback_data="newrace_vampire")], 
+        [InlineKeyboardButton("🦎 Ящеролюд", callback_data="newrace_lizardman")],
+        [InlineKeyboardButton("🐸 Жаболюд", callback_data="newrace_frogman")],
+        [InlineKeyboardButton("🍀 Лепрекон", callback_data="newrace_leprechaun")],
+        [InlineKeyboardButton("💀 Нежить", callback_data="newrace_undead")],
+        [InlineKeyboardButton("🔙 Отмена", callback_data="cancel_changerace")]
+    ]
+    return InlineKeyboardMarkup(kb)
+
+async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    char = database.get_character(user_id)
+    if not char: return
+
+    # Проверка на наличие 500 000 золота
+    if char['gold'] < 500000:
+        msg = f"Тёмный маг пренебрежительно фыркает. Ритуал изменения плоти стоит 500 000g! У вас лишь {char['gold']}g."
+        if update.message: await update.message.reply_text(msg)
+        else: await update.callback_query.answer(msg, show_alert=True)
+        return MAIN_MENU
+
+    txt = (
+        "🩸 **РИТУАЛ ИЗМЕНЕНИЯ ПЛОТИ** 🩸\n\n"
+        "Темный маг готов перестроить ваше тело. Вы станете существом другой расы, "
+        "но **сохраните абсолютно все свои текущие характеристики (силу, ловкость и т.д.), уровень, инвентарь и золото**.\n\n"
+        "💰 **Стоимость ритуала:** 500 000 золота.\n\n"
+        "Вы абсолютно уверены, что хотите провести ритуал?"
+    )
+    kb = [
+        [InlineKeyboardButton("✅ Да, я готов заплатить!", callback_data='confirm_changerace')],
+        [InlineKeyboardButton("❌ Нет, я передумал", callback_data='cancel_changerace')]
+    ]
+    
+    if update.message:
+        await update.message.reply_photo(IMAGE_URLS.get('hell_gate', IMAGE_URLS['dungeon']), caption=txt, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await safe_edit(update.callback_query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('hell_gate', IMAGE_URLS['dungeon']), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
+        
+    return CHANGE_RACE_CONFIRM
+
+async def changerace_confirm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if data == 'cancel_changerace':
+        await query.answer("Ритуал отменен.")
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+    
+    if data == 'confirm_changerace':
+        txt = "🩸 Кровь кипит... Выберите сосуд для вашей души (Новую расу):"
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['dungeon'], caption=txt, parse_mode='Markdown'), keyboard=get_change_race_keyboard())
+        return CHANGE_RACE_SELECT
+
+async def changerace_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if data == 'cancel_changerace':
+        await query.answer("Ритуал отменен.")
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+        return MAIN_MENU
+
+    # Получаем расу (например из newrace_elf берем elf)
+    new_race = data.split('_')[1]
+    
+    # Списываем деньги и меняем
+    success, msg = database.change_race(user_id, new_race, 500000)
+
+    if success:
+        await query.answer("Трансмутация завершена!", show_alert=True)
+        race_names = {'human': 'Человек', 'elf': 'Эльф', 'dwarf': 'Дварф', 'orc': 'Орк', 'vampire': 'Вампир', 'lizardman': 'Ящеролюд', 'frogman': 'Жаболюд', 'leprechaun': 'Лепрекон', 'undead': 'Нежить'}
+        txt = f"🔮 **Ритуал завершен!**\nВы пожертвовали 500 000g.\nТеперь вы **{race_names.get(new_race, new_race)}**."
+        await safe_edit(query, text=txt, media=InputMediaPhoto(IMAGE_URLS['village'], caption=txt, parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+    else:
+        await query.answer(msg, show_alert=True)
+        await safe_edit(query, text="В деревне", media=InputMediaPhoto(IMAGE_URLS['village'], caption="В деревне", parse_mode='Markdown'), keyboard=get_main_menu_keyboard(user_id))
+    
+    return MAIN_MENU
 def main():
     database.init_db()
     database.init_clans_table()
@@ -4963,14 +5054,17 @@ def main():
     
     app.add_handler(CommandHandler('alchemy', alchemy_command))
     app.add_handler(CommandHandler('reset', rebirth_command))
+# ДОБАВЛЯЕМ КОМАНДУ
+    app.add_handler(CommandHandler('changerace', changerace_command))
     
     app.add_handler(CallbackQueryHandler(confirm_rebirth_handler, pattern='^confirm_rebirth$'))
     app.add_handler(CallbackQueryHandler(cancel_rebirth_handler, pattern='^cancel_rebirth$'))
-
+    
     conv = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
-            CommandHandler('slums', slums_command)
+            CommandHandler('slums', slums_command),
+            CommandHandler('changerace', changerace_command)
         ],
         states={
             CHOOSE_RACE: [CallbackQueryHandler(choose_race, pattern='^race_')],
@@ -5003,6 +5097,7 @@ def main():
                 CallbackQueryHandler(donate_menu_handler, pattern='^donate_menu$'),
                 CallbackQueryHandler(send_gold_invoice, pattern='^buy_gold_'),
                 CallbackQueryHandler(main_menu_handler)
+                
             ],
             
             BATTLE_MENU: [CallbackQueryHandler(battle_menu_handler)],
@@ -5027,10 +5122,14 @@ def main():
             CLAN_GIFT_ITEM_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_gift_item)],
             SHOP_BUY_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_buy_quantity)],
             SLUMS_BET_ENTER: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_slums_bet)],
+            CHANGE_RACE_CONFIRM: [CallbackQueryHandler(changerace_confirm_handler)],
+            CHANGE_RACE_SELECT: [CallbackQueryHandler(changerace_select_handler)]
+            
         },
         fallbacks=[
             CommandHandler('start', start),
-            CommandHandler('slums', slums_command)
+            CommandHandler('slums', slums_command),
+            CommandHandler('changerace', changerace_command)
         ]
     )
     
