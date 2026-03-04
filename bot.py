@@ -31,17 +31,17 @@ battle_sessions = {}
 # --- ВИЗУАЛ (DARK FANTASY) ---
 IMAGE_URLS = {
     #E
-    'human': 'https://i.pinimg.com/736x/9b/f6/20/9bf6203bb54a7b095840f55fa780a365.jpg',
-    'elf': 'https://i.pinimg.com/736x/c5/b1/e6/c5b1e645ceadf9c42e8ab51393981bb9.jpg',
-    'dwarf': 'https://i.pinimg.com/736x/ef/b2/a2/efb2a24d7f7897ba9841764d8fb88c69.jpg',
-    'orc': 'https://i.pinimg.com/736x/9d/03/22/9d0322080cea97cfd1e4667f835592dd.jpg',
+    'human': 'https://i.pinimg.com/736x/4f/e4/b8/4fe4b873484c5e7a7fbaf2b6dc56f1ed.jpg',
+    'elf': 'https://i.pinimg.com/736x/13/aa/18/13aa181de3084add4d45ebade1ca8f34.jpg',
+    'dwarf': 'https://i.pinimg.com/736x/f5/af/3c/f5af3c88c2b6e7e799202cecee5e07b2.jpg',
+    'orc': 'https://i.pinimg.com/736x/b4/4d/76/b44d76f686fcf7c56407e1ad6e1cc5ea.jpg',
     # НОВАЯ КАРТИНКА ДЛЯ ГЕРОЯ-ВАМПИРА:
     'vampire_hero': 'https://i.pinimg.com/736x/f7/cc/5d/f7cc5d151ba496829019f5d0c473fe4f.jpg',
-    'lizardman': 'https://i.pinimg.com/736x/71/78/8e/71788e6d14f77626848d21b322800be0.jpg',
-    'frogman': 'https://i.pinimg.com/736x/c3/d7/f6/c3d7f623bca415d0e111c867f3cb4cac.jpg',
+    'lizardman': 'https://i.pinimg.com/736x/90/8d/63/908d637a7eefd3bea1c2ab778e8122fa.jpg',
+    'frogman': 'https://i.pinimg.com/1200x/88/4a/b5/884ab5cae23fa3050a9aaa9fcf51ff3f.jpg',
     # НОВЫЕ РАСЫ:
-    'leprechaun': 'https://i.pinimg.com/736x/18/60/2b/18602bb207c8e57cadf56a676c98e657.jpg',
-    'undead': 'https://i.pinimg.com/736x/1f/c3/40/1fc34080cade4fe342cf4417d843cd61.jpg',
+    'leprechaun': 'https://i.pinimg.com/736x/a5/d7/cc/a5d7cc78345437d6858151812ab44675.jpg',
+    'undead': 'https://i.pinimg.com/736x/9f/0e/e8/9f0ee85deaf5d78dc1571f677f37104b.jpg',
 
 
     
