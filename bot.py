@@ -4974,6 +4974,17 @@ async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     char = database.get_character(user_id)
     if not char: return
 
+    # --- НОВОЕ: ПРОВЕРКА УРОВНЯ (Минимум 100) ---
+    if char['level'] < 100:
+        msg = f"🔒 Тёмный маг смеется: «Твоё тело слишком слабо для Ритуала, оно просто разорвётся! Возвращайся, когда достигнешь 100 уровня!»\n\n_(Ваш уровень: {char['level']}/100)_"
+        
+        if update.message: 
+            await update.message.reply_text(msg, parse_mode='Markdown')
+        else: 
+            await update.callback_query.answer(msg, show_alert=True)
+        return MAIN_MENU
+    # --------------------------------------------
+
     # Проверка на наличие 500 000 золота
     if char['gold'] < 500000:
         msg = f"Тёмный маг пренебрежительно фыркает. Ритуал изменения плоти стоит 500 000g! У вас лишь {char['gold']}g."
@@ -4999,7 +5010,6 @@ async def changerace_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await safe_edit(update.callback_query, text=txt, media=InputMediaPhoto(IMAGE_URLS.get('hell_gate', IMAGE_URLS['dungeon']), caption=txt, parse_mode='Markdown'), keyboard=InlineKeyboardMarkup(kb))
         
     return CHANGE_RACE_CONFIRM
-
 async def changerace_confirm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
